@@ -25,9 +25,11 @@ import { fetchWalletPortfolio, fetchTokenMetadata } from '../services/portfolio'
 import TokenLogo from './TokenLogo'
 import PulseTokenExplorer from './PulseTokenExplorer'
 import WalletConnectModal from './WalletConnectModal'
+import { useUserProfile } from '../context/UserProfileContext'
 
 export default function PortfolioView({ onSelectTokenForChart }) {
   const { address: connectedAddress, isConnected } = useAccount()
+  const { preferences } = useUserProfile()
   const [subTab, setSubTab] = useState('portfolio') // 'portfolio' | 'explorer'
 
   // Stored watch wallets: array of { address, label }
@@ -287,6 +289,7 @@ export default function PortfolioView({ onSelectTokenForChart }) {
   }
 
   const formatUsd = (val) => {
+    if (preferences.privacyMode) return '$••••••'
     const num = parseFloat(val || 0)
     if (num >= 1e9) return `$${(num / 1e9).toFixed(2)}B`
     if (num >= 1e6) return `$${(num / 1e6).toFixed(2)}M`
@@ -295,6 +298,7 @@ export default function PortfolioView({ onSelectTokenForChart }) {
   }
 
   const formatBalance = (val) => {
+    if (preferences.privacyMode) return '••••••'
     const num = Number(val || 0)
     if (num === 0) return '0.00'
     if (num < 0.0001) return num.toFixed(6)

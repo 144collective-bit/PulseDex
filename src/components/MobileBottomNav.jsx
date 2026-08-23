@@ -4,13 +4,17 @@ import {
   Radio,
   PieChart,
   Star,
+  User,
 } from 'lucide-react'
+import { useUserProfile } from '../context/UserProfileContext'
 
 export default function MobileBottomNav({
   activeTab,
   setActiveTab,
   watchlistCount = 0,
 }) {
+  const { openProfileModal, activeAvatarDef, profile } = useUserProfile()
+
   return (
     <nav className="mobile-bottom-nav font-mono">
       <button
@@ -65,6 +69,34 @@ export default function MobileBottomNav({
           )}
         </div>
         <span className="mobile-nav-label">Watchlist</span>
+      </button>
+
+      <button
+        className="mobile-nav-item mobile-profile-nav-item"
+        onClick={openProfileModal}
+      >
+        <div className="mobile-nav-icon-wrapper">
+          <div
+            className="mobile-nav-avatar-mini"
+            style={{
+              background: activeAvatarDef?.bg || 'linear-gradient(135deg, #00ff9d, #0066ff)',
+            }}
+          >
+            {profile.customAvatarUrl ? (
+              <img
+                src={profile.customAvatarUrl}
+                alt={profile.displayName}
+                className="mobile-nav-avatar-img"
+                onError={(e) => {
+                  e.target.style.display = 'none'
+                }}
+              />
+            ) : (
+              <span>{activeAvatarDef?.icon || '⚡'}</span>
+            )}
+          </div>
+        </div>
+        <span className="mobile-nav-label">Profile</span>
       </button>
     </nav>
   )

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useAccount, useConnect, useDisconnect } from 'wagmi'
+import { useAccount, useDisconnect } from 'wagmi'
 import {
   Search,
   Flame,
@@ -12,9 +12,15 @@ import {
   LogOut,
   Zap,
   Radio,
+  User,
+  EyeOff,
+  UserPlus,
+  LogIn,
 } from 'lucide-react'
 import { searchPulsePairs, getNativePlsPrice, getPulseGasPrice } from '../services/dexscreener'
 import TokenLogo from './TokenLogo'
+import { useUserProfile } from '../context/UserProfileContext'
+import { useAuth } from '../context/AuthContext'
 export default function Navbar({
   activeTab,
   setActiveTab,
@@ -24,6 +30,8 @@ export default function Navbar({
 }) {
   const { address, isConnected } = useAccount()
   const { disconnect } = useDisconnect()
+  const { profile, activeAvatarDef, openProfileModal, preferences } = useUserProfile()
+  const { currentUser, isAuthenticated, openAuthModal, signOut } = useAuth()
 
   const [plsPrice, setPlsPrice] = useState(0.00001455)
   const [gasPrice, setGasPrice] = useState('150')
@@ -32,11 +40,14 @@ export default function Navbar({
   const [isSearching, setIsSearching] = useState(false)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [showWalletMenu, setShowWalletMenu] = useState(false)
+  const [showUserMenu, setShowUserMenu] = useState(false)
 
   const [mobileSearchExpanded, setMobileSearchExpanded] = useState(false)
 
   const searchRef = useRef(null)
   const mobileInputRef = useRef(null)
+  const userMenuRef = useRef(null)
+  const walletMenuRef = useRef(null)
 
   // Fetch PLS price & Gas periodically
   useEffect(() => {
@@ -70,11 +81,17 @@ export default function Navbar({
     return () => clearTimeout(timer)
   }, [searchQuery])
 
-  // Close search dropdown on click outside
+  // Close search and menus on click outside
   useEffect(() => {
     function handleClickOutside(event) {
       if (searchRef.current && !searchRef.current.contains(event.target)) {
         setIsSearchOpen(false)
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setShowUserMenu(false)
+      }
+      if (walletMenuRef.current && !walletMenuRef.current.contains(event.target)) {
+        setShowWalletMenu(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -244,7 +261,7 @@ export default function Navbar({
           )}
         </div>
 
-        {/* Right Action: Mobile Search Trigger + Connect Wallet */}
+        {/* Right Action: Mobile Search Trigger + Auth / Profile + Connect Wallet */}
         <div className="nav-right">
           {/* Mobile Search Icon Button */}
           <button
@@ -255,8 +272,123 @@ export default function Navbar({
             <Search size={17} />
           </button>
 
+          {/* User Profile / Auth Button */}
+          {isAuthenticated ? (
+            <div className="user-profile-menu-wrapper" ref={userMenuRef}>
+              <button
+                className="btn-secondary nav-profile-trigger-btn is-authenticated"
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                title={`User Profile: ${profile.displayName} (@${currentUser?.username || profile.username})`}
+              >
+                <div
+                  className="nav-avatar-mini"
+                  style={{
+                    background: activeAvatarDef?.bg || 'linear-gradient(135deg, #00ff9d, #0066ff)',
+                    boxShadow: `0 0 8px ${activeAvatarDef?.glowColor || '#00ff9d'}88`,
+                  }}
+                >
+                  {profile.customAvatarUrl ? (
+                    <img
+                      src={profile.customAvatarUrl}
+                      alt={profile.displayName}
+                      className="nav-avatar-mini-img"
+                      onError={(e) => {
+                        e.target.style.display = 'none'
+                      }}
+                    />
+                  ) : (
+                    <span className="nav-avatar-mini-icon">{activeAvatarDef?.icon || '⚡'}</span>
+                  )}
+                </div>
+                <div className="nav-profile-name-col desktop-only font-mono">
+                  <span className="nav-profile-name">{currentUser?.displayName || profile.displayName}</span>
+                  <span className="nav-profile-sub-handle text-muted">@{currentUser?.username || profile.username}</span>
+                </div>
+                <span className="verified-user-badge" title="Authenticated User">✓</span>
+                <ChevronDown size={12} className="text-muted ml-1" />
+                {preferences.privacyMode && (
+                  <span className="nav-privacy-dot" title="Privacy Mode Active">
+                    <EyeOff size={11} className="text-pulse-yellow" />
+                  </span>
+                )}
+              </button>
+
+              {/* Authenticated User Dropdown Menu */}
+              {showUserMenu && (
+                <div className="user-profile-dropdown glass-panel font-mono">
+                  <div className="user-dropdown-header">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-white text-xs">{currentUser?.displayName || profile.displayName}</span>
+                      {currentUser?.twitterVerified && (
+                        <span className="twitter-verified-chip text-xs">𝕏 Verified</span>
+                      )}
+                    </div>
+                    <span className="text-muted text-xs">@{currentUser?.username || profile.username}</span>
+                  </div>
+
+                  <div className="user-dropdown-divider"></div>
+
+                  <button
+                    className="user-dropdown-item"
+                    onClick={() => {
+                      setShowUserMenu(false)
+                      openProfileModal()
+                    }}
+                  >
+                    <User size={14} className="text-pulse-cyan" />
+                    <span>Profile & DEX Preferences</span>
+                  </button>
+
+                  <button
+                    className="user-dropdown-item"
+                    onClick={() => {
+                      setShowUserMenu(false)
+                      openAuthModal('signin')
+                    }}
+                  >
+                    <LogIn size={14} className="text-pulse-green" />
+                    <span>Switch Account</span>
+                  </button>
+
+                  <div className="user-dropdown-divider"></div>
+
+                  <button
+                    className="user-dropdown-item text-pulse-red"
+                    onClick={() => {
+                      setShowUserMenu(false)
+                      signOut()
+                    }}
+                  >
+                    <LogOut size={14} />
+                    <span>Log Out</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="guest-auth-btn-group">
+              <button
+                className="btn-secondary btn-sm font-mono guest-signin-btn"
+                onClick={() => openAuthModal('signin')}
+                title="Sign In with Username or Web3 Wallet"
+              >
+                <LogIn size={13} className="text-pulse-cyan" />
+                <span className="desktop-only">Sign In</span>
+              </button>
+              <button
+                className="btn-primary btn-sm font-mono guest-signup-btn btn-glow-pulse"
+                onClick={() => openAuthModal('signup')}
+                title="Create a PulseDex Account"
+              >
+                <UserPlus size={13} />
+                <span>Sign Up</span>
+              </button>
+            </div>
+          )}
+
+          {/* Connect Web3 Wallet */}
           {isConnected ? (
-            <div className="wallet-connected-wrapper">
+            <div className="wallet-connected-wrapper" ref={walletMenuRef}>
               <button
                 className="btn-secondary wallet-btn"
                 onClick={() => setShowWalletMenu(!showWalletMenu)}
@@ -278,6 +410,28 @@ export default function Navbar({
                     <button
                       className="wallet-drop-item"
                       onClick={() => {
+                        openProfileModal()
+                        setShowWalletMenu(false)
+                      }}
+                    >
+                      <User size={15} className="text-pulse-green" />
+                      <span>User Profile & Settings</span>
+                    </button>
+                    {!isAuthenticated && (
+                      <button
+                        className="wallet-drop-item text-pulse-cyan"
+                        onClick={() => {
+                          openAuthModal('signup')
+                          setShowWalletMenu(false)
+                        }}
+                      >
+                        <UserPlus size={15} />
+                        <span>Sign Up with this Wallet</span>
+                      </button>
+                    )}
+                    <button
+                      className="wallet-drop-item"
+                      onClick={() => {
                         setActiveTab('portfolio')
                         setShowWalletMenu(false)
                       }}
@@ -294,6 +448,18 @@ export default function Navbar({
                       <ExternalLink size={15} />
                       <span>View on PulseScan</span>
                     </a>
+                    {isAuthenticated && (
+                      <button
+                        className="wallet-drop-item text-pulse-yellow"
+                        onClick={() => {
+                          signOut()
+                          setShowWalletMenu(false)
+                        }}
+                      >
+                        <LogOut size={15} />
+                        <span>Log Out Account</span>
+                      </button>
+                    )}
                     <button
                       className="wallet-drop-item text-pulse-red"
                       onClick={() => {
@@ -302,7 +468,7 @@ export default function Navbar({
                       }}
                     >
                       <LogOut size={15} />
-                      <span>Disconnect</span>
+                      <span>Disconnect Wallet</span>
                     </button>
                   </div>
                 </div>

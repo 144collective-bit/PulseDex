@@ -19,6 +19,10 @@ import PortfolioView from './components/PortfolioView'
 import WatchlistView from './components/WatchlistView'
 import TrenchesView from './components/TrenchesView'
 import WalletConnectModal from './components/WalletConnectModal'
+import UserProfileModal from './components/UserProfileModal'
+import AuthModal from './components/AuthModal'
+import { AuthProvider } from './context/AuthContext'
+import { UserProfileProvider } from './context/UserProfileContext'
 
 import './App.css'
 
@@ -247,6 +251,12 @@ function MainApp() {
         isOpen={showWalletModal}
         onClose={() => setShowWalletModal(false)}
       />
+
+      {/* Global User Profile & Settings Modal */}
+      <UserProfileModal />
+
+      {/* Global Auth Sign Up / Sign In Modal */}
+      <AuthModal />
     </div>
   )
 }
@@ -255,7 +265,11 @@ export default function App() {
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <MainApp />
+        <AuthProvider>
+          <UserProfileProvider>
+            <MainApp />
+          </UserProfileProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </WagmiProvider>
   )

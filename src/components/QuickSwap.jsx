@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   ArrowDownUp,
   Zap,
@@ -7,14 +7,23 @@ import {
   Layers,
 } from 'lucide-react'
 import TokenLogo from './TokenLogo'
+import { useUserProfile } from '../context/UserProfileContext'
 
 export default function QuickSwap({ pair }) {
+  const { preferences, triggerSound } = useUserProfile()
   const [fromAmount, setFromAmount] = useState('100000')
-  const [slippage, setSlippage] = useState('1')
-  const [customSlippage, setCustomSlippage] = useState('')
+  const [slippage, setSlippage] = useState(preferences?.slippage || '0.5')
+  const [customSlippage, setCustomSlippage] = useState(preferences?.customSlippage || '')
   const [showSettings, setShowSettings] = useState(false)
   const [activeSubTab, setActiveSubTab] = useState('swap') // 'swap' | 'route'
   const [isReversed, setIsReversed] = useState(false)
+
+  useEffect(() => {
+    if (preferences) {
+      setSlippage(preferences.slippage || '0.5')
+      setCustomSlippage(preferences.customSlippage || '')
+    }
+  }, [preferences])
 
   const base = pair?.baseToken || { symbol: 'PLSX' }
   const quote = pair?.quoteToken || { symbol: 'PLS' }
