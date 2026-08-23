@@ -29,7 +29,10 @@ export default function Navbar({ activeTab, setActiveTab, onSelectPair, watchlis
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [showWalletMenu, setShowWalletMenu] = useState(false)
 
+  const [mobileSearchExpanded, setMobileSearchExpanded] = useState(false)
+
   const searchRef = useRef(null)
+  const mobileInputRef = useRef(null)
 
   // Fetch PLS price & Gas periodically
   useEffect(() => {
@@ -78,7 +81,15 @@ export default function Navbar({ activeTab, setActiveTab, onSelectPair, watchlis
     onSelectPair(pair)
     setIsSearchOpen(false)
     setSearchQuery('')
+    setMobileSearchExpanded(false)
     setActiveTab('screener')
+  }
+
+  const openMobileSearch = () => {
+    setMobileSearchExpanded(true)
+    setTimeout(() => {
+      if (mobileInputRef.current) mobileInputRef.current.focus()
+    }, 100)
   }
 
   return (
@@ -93,7 +104,7 @@ export default function Navbar({ activeTab, setActiveTab, onSelectPair, watchlis
           </div>
 
           <div className="stat-pill">
-            <span className="stat-label">PLS Price:</span>
+            <span className="stat-label">PLS:</span>
             <span className="stat-value font-mono">
               ${plsPrice < 0.0001 ? plsPrice.toFixed(8) : plsPrice.toFixed(6)}
             </span>
@@ -107,7 +118,7 @@ export default function Navbar({ activeTab, setActiveTab, onSelectPair, watchlis
 
           <div className="stat-pill banner-dex-tag">
             <Zap size={13} className="text-pulse-cyan" />
-            <span>DexScreener & PulseX Live Feeds</span>
+            <span>DexScreener & PulseX</span>
           </div>
         </div>
       </div>
@@ -123,8 +134,8 @@ export default function Navbar({ activeTab, setActiveTab, onSelectPair, watchlis
             <img src="/PulseDex.png" alt="PulseDex" className="brand-text-img" />
           </div>
 
-          {/* Navigation Tabs */}
-          <nav className="nav-tabs">
+          {/* Desktop Navigation Tabs (Hidden on mobile <768px, shown in bottom nav) */}
+          <nav className="nav-tabs desktop-only-nav">
             <button
               className={`btn-tab ${activeTab === 'screener' ? 'active' : ''}`}
               onClick={() => setActiveTab('screener')}
@@ -165,13 +176,13 @@ export default function Navbar({ activeTab, setActiveTab, onSelectPair, watchlis
           </nav>
         </div>
 
-        {/* Global Search Bar */}
-        <div className="nav-center" ref={searchRef}>
+        {/* Desktop Global Search Bar */}
+        <div className="nav-center desktop-search" ref={searchRef}>
           <div className="search-bar-wrapper">
             <Search size={16} className="search-icon" />
             <input
               type="text"
-              placeholder="Search PulseChain pair, token symbol or 0x address..."
+              placeholder="Search pair, token or 0x address..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onFocus={() => {
@@ -229,8 +240,17 @@ export default function Navbar({ activeTab, setActiveTab, onSelectPair, watchlis
           )}
         </div>
 
-        {/* Right Action / Connect Wallet */}
+        {/* Right Action: Mobile Search Trigger + Connect Wallet */}
         <div className="nav-right">
+          {/* Mobile Search Icon Button */}
+          <button
+            className="mobile-search-trigger-btn btn-icon-round"
+            onClick={openMobileSearch}
+            title="Search PulseChain Pairs"
+          >
+            <Search size={17} />
+          </button>
+
           {isConnected ? (
             <div className="wallet-connected-wrapper">
               <button
@@ -238,10 +258,10 @@ export default function Navbar({ activeTab, setActiveTab, onSelectPair, watchlis
                 onClick={() => setShowWalletMenu(!showWalletMenu)}
               >
                 <div className="connected-dot"></div>
-                <span className="font-mono">
-                  {address?.slice(0, 6)}...{address?.slice(-4)}
+                <span className="font-mono wallet-addr-label">
+                  {address?.slice(0, 5)}...{address?.slice(-4)}
                 </span>
-                <ChevronDown size={14} />
+                <ChevronDown size={13} />
               </button>
 
               {showWalletMenu && (
@@ -286,18 +306,96 @@ export default function Navbar({ activeTab, setActiveTab, onSelectPair, watchlis
             </div>
           ) : (
             <button
-              className="btn-primary"
+              className="btn-primary wallet-connect-btn"
               onClick={() => {
                 const connector = connectors[0]
                 if (connector) connect({ connector })
               }}
             >
-              <Wallet size={16} />
-              <span>Connect Wallet</span>
+              <Wallet size={15} />
+              <span className="wallet-btn-text">Connect</span>
             </button>
           )}
         </div>
       </div>
+
+      {/* Mobile Fullscreen Search Overlay */}
+      {mobileSearchExpanded && (
+        <div className="mobile-search-overlay glass-panel">
+          <div className="mobile-search-bar-row">
+            <div className="search-bar-wrapper flex-1">
+              <Search size={16} className="search-icon" />
+              <input
+                ref={mobileInputRef}
+                type="text"
+                placeholder="Search token, symbol or 0x..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="search-input font-mono"
+              />
+              {isSearching && <div className="search-spinner"></div>}
+            </div>
+            <button
+              className="mobile-search-close-btn"
+              onClick={() => setMobileSearchExpanded(false)}
+            >
+              Cancel
+            </button>
+          </div>
+
+          {/* Results list in mobile overlay */}
+          <div className="mobile-search-results">
+            {searchResults.length === 0 ? (
+              <div className="search-empty">
+                {searchQuery.trim()
+                  ? isSearching
+                    ? 'Searching PulseChain...'
+                    : 'No matching tokens found'
+                  : 'Type a token symbol (e.g. WPLS, PLSX, HEX, INC) or contract address...'}
+              </div>
+            ) : (
+              searchResults.map((pair) => {
+                const priceChange = pair.priceChange?.h24 || 0
+                return (
+                  <div
+                    key={pair.pairAddress}
+                    className="mobile-search-item"
+                    onClick={() => handlePairClick(pair)}
+                  >
+                    <div className="search-item-left">
+                      <TokenLogo
+                        symbol={pair.baseToken?.symbol}
+                        address={pair.baseToken?.address}
+                        customUrl={pair.info?.imageUrl}
+                        size={26}
+                      />
+                      <div className="mobile-search-names">
+                        <span className="search-pair-name font-mono">
+                          {pair.baseToken?.symbol}{' '}
+                          <span className="text-muted">/ {pair.quoteToken?.symbol}</span>
+                        </span>
+                        <span className="search-dex-badge">{pair.dexId}</span>
+                      </div>
+                    </div>
+                    <div className="search-item-right text-right">
+                      <span className="search-price font-mono">${pair.priceUsd}</span>
+                      <span
+                        className={`search-change font-mono ${
+                          priceChange >= 0 ? 'text-pulse-green' : 'text-pulse-red'
+                        }`}
+                      >
+                        {priceChange >= 0 ? '+' : ''}
+                        {priceChange}%
+                      </span>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </div>
+      )}
     </header>
   )
 }
+

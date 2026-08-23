@@ -4,8 +4,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { wagmiConfig } from './config/wagmi'
 import { DEFAULT_PAIR_ADDRESS } from './config/pulsechain'
 import { getPulsePair, getTopPulsePairs } from './services/dexscreener'
+import { TrendingUp, Zap, Layers, Flame } from 'lucide-react'
 
 import Navbar from './components/Navbar'
+import MobileBottomNav from './components/MobileBottomNav'
 import TickerMarquee from './components/TickerMarquee'
 import SidebarPairs from './components/SidebarPairs'
 import PairHeader from './components/PairHeader'
@@ -27,6 +29,7 @@ function MainApp() {
   const [topPairs, setTopPairs] = useState([])
   const [isLoadingTopPairs, setIsLoadingTopPairs] = useState(true)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [mobileScreenerTab, setMobileScreenerTab] = useState('chart') // 'chart' | 'trades' | 'details' | 'pairs'
 
   // Watchlist stored in localStorage (array of lowercase pair addresses)
   const [watchlist, setWatchlist] = useState(() => {
@@ -93,6 +96,7 @@ function MainApp() {
       if (fetched) setCurrentPair(fetched)
     }
     setActiveTab('screener')
+    setMobileScreenerTab('chart')
   }
 
   const isCurrentPairStarred = currentPair
@@ -118,44 +122,84 @@ function MainApp() {
       {/* Main Views */}
       <main className="app-main-content">
         {activeTab === 'screener' && (
-          <div className={`screener-pro-layout ${isSidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
-            {/* Left Pairs Sidebar */}
-            <SidebarPairs
-              pairs={topPairs}
-              currentPair={currentPair}
-              onSelectPair={handleSelectPair}
-              watchlist={watchlist}
-              onToggleWatchlist={handleToggleWatchlist}
-              isCollapsed={isSidebarCollapsed}
-              onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            />
-
-            {/* Middle Main Column: Pair Header + Chart + Trade Feed */}
-            <div className="screener-main-col">
-              <PairHeader
-                pair={currentPair}
-                isStarred={isCurrentPairStarred}
-                onToggleStar={() =>
-                  currentPair && handleToggleWatchlist(currentPair.pairAddress)
-                }
-              />
-              <TradingChart
-                pair={currentPair}
-                pairAddress={currentPair?.pairAddress || DEFAULT_PAIR_ADDRESS}
-              />
-              <TradeHistory pair={currentPair} />
+          <div className="screener-view-wrapper">
+            {/* Mobile Screener Segment Control */}
+            <div className="mobile-screener-switcher font-mono">
+              <button
+                className={`mobile-switcher-btn ${mobileScreenerTab === 'chart' ? 'active' : ''}`}
+                onClick={() => setMobileScreenerTab('chart')}
+              >
+                <TrendingUp size={13} />
+                <span>Chart</span>
+              </button>
+              <button
+                className={`mobile-switcher-btn ${mobileScreenerTab === 'trades' ? 'active' : ''}`}
+                onClick={() => setMobileScreenerTab('trades')}
+              >
+                <Zap size={13} />
+                <span>Swaps</span>
+              </button>
+              <button
+                className={`mobile-switcher-btn ${mobileScreenerTab === 'details' ? 'active' : ''}`}
+                onClick={() => setMobileScreenerTab('details')}
+              >
+                <Layers size={13} />
+                <span>Token Info</span>
+              </button>
+              <button
+                className={`mobile-switcher-btn ${mobileScreenerTab === 'pairs' ? 'active' : ''}`}
+                onClick={() => setMobileScreenerTab('pairs')}
+              >
+                <Flame size={13} />
+                <span>Pairs</span>
+              </button>
             </div>
 
-            {/* Right Side Column: Token Details */}
-            <div className="screener-side-col">
-              <TokenDetails
-                pair={currentPair}
-                isStarred={isCurrentPairStarred}
-                onToggleStar={() =>
-                  currentPair && handleToggleWatchlist(currentPair.pairAddress)
-                }
-                watchlistCount={watchlist.length}
-              />
+            <div className={`screener-pro-layout ${isSidebarCollapsed ? 'sidebar-collapsed' : ''} mobile-tab-${mobileScreenerTab}`}>
+              {/* Left Pairs Sidebar */}
+              <div className={`screener-sidebar-wrapper ${mobileScreenerTab === 'pairs' ? 'mobile-show' : 'mobile-hide'}`}>
+                <SidebarPairs
+                  pairs={topPairs}
+                  currentPair={currentPair}
+                  onSelectPair={handleSelectPair}
+                  watchlist={watchlist}
+                  onToggleWatchlist={handleToggleWatchlist}
+                  isCollapsed={isSidebarCollapsed}
+                  onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                />
+              </div>
+
+              {/* Middle Main Column: Pair Header + Chart + Trade Feed */}
+              <div className={`screener-main-col ${mobileScreenerTab === 'chart' || mobileScreenerTab === 'trades' ? 'mobile-show' : 'mobile-hide'}`}>
+                <PairHeader
+                  pair={currentPair}
+                  isStarred={isCurrentPairStarred}
+                  onToggleStar={() =>
+                    currentPair && handleToggleWatchlist(currentPair.pairAddress)
+                  }
+                />
+                <div className={mobileScreenerTab === 'chart' ? 'mobile-show' : 'mobile-hide-on-mobile'}>
+                  <TradingChart
+                    pair={currentPair}
+                    pairAddress={currentPair?.pairAddress || DEFAULT_PAIR_ADDRESS}
+                  />
+                </div>
+                <div className={mobileScreenerTab === 'trades' ? 'mobile-show' : 'mobile-hide-on-mobile'}>
+                  <TradeHistory pair={currentPair} />
+                </div>
+              </div>
+
+              {/* Right Side Column: Token Details */}
+              <div className={`screener-side-col ${mobileScreenerTab === 'details' ? 'mobile-show' : 'mobile-hide'}`}>
+                <TokenDetails
+                  pair={currentPair}
+                  isStarred={isCurrentPairStarred}
+                  onToggleStar={() =>
+                    currentPair && handleToggleWatchlist(currentPair.pairAddress)
+                  }
+                  watchlistCount={watchlist.length}
+                />
+              </div>
             </div>
           </div>
         )}
@@ -187,6 +231,13 @@ function MainApp() {
           />
         )}
       </main>
+
+      {/* Mobile Native Bottom Navigation */}
+      <MobileBottomNav
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        watchlistCount={watchlist.length}
+      />
     </div>
   )
 }
@@ -200,3 +251,4 @@ export default function App() {
     </WagmiProvider>
   )
 }
+
