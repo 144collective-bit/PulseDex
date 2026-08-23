@@ -30,7 +30,7 @@ function MainApp() {
   const [topPairs, setTopPairs] = useState([])
   const [isLoadingTopPairs, setIsLoadingTopPairs] = useState(true)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
-  const [mobileScreenerTab, setMobileScreenerTab] = useState('chart') // 'chart' | 'trades' | 'details' | 'pairs'
+  const [mobileScreenerTab, setMobileScreenerTab] = useState('pairs') // 'pairs' | 'chart' | 'trades' | 'details'
   const [showWalletModal, setShowWalletModal] = useState(false)
 
   // Watchlist stored in localStorage (array of lowercase pair addresses)
@@ -126,8 +126,15 @@ function MainApp() {
       <main className="app-main-content">
         {activeTab === 'screener' && (
           <div className="screener-view-wrapper">
-            {/* Mobile Screener Segment Control */}
+            {/* Mobile Screener Segment Control (Full-Width Responsive Menu) */}
             <div className="mobile-screener-switcher font-mono">
+              <button
+                className={`mobile-switcher-btn ${mobileScreenerTab === 'pairs' ? 'active' : ''}`}
+                onClick={() => setMobileScreenerTab('pairs')}
+              >
+                <Flame size={13} />
+                <span>Pairs</span>
+              </button>
               <button
                 className={`mobile-switcher-btn ${mobileScreenerTab === 'chart' ? 'active' : ''}`}
                 onClick={() => setMobileScreenerTab('chart')}
@@ -148,13 +155,6 @@ function MainApp() {
               >
                 <Layers size={13} />
                 <span>Token Info</span>
-              </button>
-              <button
-                className={`mobile-switcher-btn ${mobileScreenerTab === 'pairs' ? 'active' : ''}`}
-                onClick={() => setMobileScreenerTab('pairs')}
-              >
-                <Flame size={13} />
-                <span>Pairs</span>
               </button>
             </div>
 
