@@ -15,10 +15,14 @@ import {
 } from 'lucide-react'
 import { searchPulsePairs, getNativePlsPrice, getPulseGasPrice } from '../services/dexscreener'
 import TokenLogo from './TokenLogo'
-
-export default function Navbar({ activeTab, setActiveTab, onSelectPair, watchlistCount = 0 }) {
+export default function Navbar({
+  activeTab,
+  setActiveTab,
+  onSelectPair,
+  watchlistCount = 0,
+  onOpenWalletModal,
+}) {
   const { address, isConnected } = useAccount()
-  const { connectors, connect } = useConnect()
   const { disconnect } = useDisconnect()
 
   const [plsPrice, setPlsPrice] = useState(0.00001455)
@@ -307,10 +311,7 @@ export default function Navbar({ activeTab, setActiveTab, onSelectPair, watchlis
           ) : (
             <button
               className="btn-primary wallet-connect-btn"
-              onClick={() => {
-                const connector = connectors[0]
-                if (connector) connect({ connector })
-              }}
+              onClick={onOpenWalletModal}
             >
               <Wallet size={15} />
               <span className="wallet-btn-text">Connect</span>

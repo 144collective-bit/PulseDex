@@ -18,6 +18,7 @@ import MarketOverview from './components/MarketOverview'
 import PortfolioView from './components/PortfolioView'
 import WatchlistView from './components/WatchlistView'
 import TrenchesView from './components/TrenchesView'
+import WalletConnectModal from './components/WalletConnectModal'
 
 import './App.css'
 
@@ -30,6 +31,7 @@ function MainApp() {
   const [isLoadingTopPairs, setIsLoadingTopPairs] = useState(true)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [mobileScreenerTab, setMobileScreenerTab] = useState('chart') // 'chart' | 'trades' | 'details' | 'pairs'
+  const [showWalletModal, setShowWalletModal] = useState(false)
 
   // Watchlist stored in localStorage (array of lowercase pair addresses)
   const [watchlist, setWatchlist] = useState(() => {
@@ -111,6 +113,7 @@ function MainApp() {
         setActiveTab={setActiveTab}
         onSelectPair={handleSelectPair}
         watchlistCount={watchlist.length}
+        onOpenWalletModal={() => setShowWalletModal(true)}
       />
 
       {/* Top Ticker Marquee */}
@@ -237,6 +240,12 @@ function MainApp() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         watchlistCount={watchlist.length}
+      />
+
+      {/* Global Secure Wallet Connect Modal */}
+      <WalletConnectModal
+        isOpen={showWalletModal}
+        onClose={() => setShowWalletModal(false)}
       />
     </div>
   )

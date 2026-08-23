@@ -24,6 +24,7 @@ import {
 import { fetchWalletPortfolio, fetchTokenMetadata } from '../services/portfolio'
 import TokenLogo from './TokenLogo'
 import PulseTokenExplorer from './PulseTokenExplorer'
+import WalletConnectModal from './WalletConnectModal'
 
 export default function PortfolioView({ onSelectTokenForChart }) {
   const { address: connectedAddress, isConnected } = useAccount()
@@ -53,6 +54,7 @@ export default function PortfolioView({ onSelectTokenForChart }) {
   const [newWalletInput, setNewWalletInput] = useState('')
   const [newWalletLabel, setNewWalletLabel] = useState('')
   const [showAddWalletModal, setShowAddWalletModal] = useState(false)
+  const [showConnectModal, setShowConnectModal] = useState(false)
   
   // Dashboard Filter & Search States
   const [tokenSearch, setTokenSearch] = useState('')
@@ -368,6 +370,15 @@ export default function PortfolioView({ onSelectTokenForChart }) {
               </div>
 
               <div className="wallet-actions">
+                {!isConnected && (
+                  <button
+                    className="btn-primary btn-sm font-mono btn-glow-pulse"
+                    onClick={() => setShowConnectModal(true)}
+                  >
+                    <Wallet size={13} />
+                    <span>Connect Wallet</span>
+                  </button>
+                )}
                 <button
                   className="btn-secondary btn-sm font-mono"
                   onClick={() => setShowAddWalletModal(true)}
@@ -844,6 +855,13 @@ export default function PortfolioView({ onSelectTokenForChart }) {
           </div>
         </>
       )}
+
+      {/* Secure Wallet Connect Modal */}
+      <WalletConnectModal
+        isOpen={showConnectModal}
+        onClose={() => setShowConnectModal(false)}
+      />
     </div>
   )
 }
+
