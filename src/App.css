@@ -8270,6 +8270,63 @@
    TWITTER (X) AUTH & EXTENDED USER PROFILE STYLES
    ========================================================================== */
 
+/* Prominent X (Twitter) Button */
+.btn-x-prominent {
+  width: 100%;
+  padding: 12px 16px;
+  background: #000000;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: var(--radius-md);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 4px;
+}
+
+.btn-x-prominent:hover {
+  background: #0d0d0d;
+  border-color: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
+}
+
+.x-btn-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.x-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.x-btn-text {
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.2px;
+}
+
+.x-btn-arrow {
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
+
+.btn-x-prominent:hover .x-btn-arrow {
+  transform: translateX(3px);
+  color: #ffffff;
+}
+
 /* Social & Web3 Auth Buttons Grid */
 .auth-social-cta-grid {
   display: grid;

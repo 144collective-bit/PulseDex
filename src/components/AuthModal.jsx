@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useAccount } from 'wagmi'
 import {
   X,
@@ -8,18 +8,18 @@ import {
   ShieldCheck,
   Eye,
   EyeOff,
-  Sparkles,
   AlertCircle,
   Lock,
   User,
   Mail,
+  ArrowRight,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { PRESET_AVATARS, playChimeSound } from '../context/UserProfileContext'
+import { playChimeSound } from '../context/UserProfileContext'
 import { fetchTwitterProfile } from '../services/twitterService'
 
-// Twitter (X) SVG Icon Component
-function TwitterXIcon({ size = 16, className = '' }) {
+// Official X (Twitter) Logo
+function TwitterXIcon({ size = 18, className = '' }) {
   return (
     <svg
       width={size}
@@ -46,77 +46,86 @@ export default function AuthModal() {
     signInWithTwitter,
   } = useAuth()
 
-  // Form States
-  const [username, setUsername] = useState('')
-  const [displayName, setDisplayName] = useState('')
+  // Standard Form Fields
   const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [selectedAvatarId, setSelectedAvatarId] = useState('cyber-pulse')
-  const [linkCurrentWallet, setLinkCurrentWallet] = useState(true)
-  const [agreeTerms, setAgreeTerms] = useState(true)
 
   const [showPassword, setShowPassword] = useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Twitter Dialog Modal State
-  const [showTwitterAuthDialog, setShowTwitterAuthDialog] = useState(false)
-  const [twitterInputHandle, setTwitterInputHandle] = useState('')
-  const [twitterDisplayName, setTwitterDisplayName] = useState('')
-  const [isTwitterConnecting, setIsTwitterConnecting] = useState(false)
-  const [twitterLivePreview, setTwitterLivePreview] = useState(null)
-  const [isFetchingXPreview, setIsFetchingXPreview] = useState(false)
+  // 𝕏 (Twitter) Sign-In Dialog State
+  const [showXDialog, setShowXDialog] = useState(false)
+  const [xHandleInput, setXHandleInput] = useState('')
+  const [xLivePreview, setXLivePreview] = useState(null)
+  const [isFetchingX, setIsFetchingX] = useState(false)
+  const [isConnectingX, setIsConnectingX] = useState(false)
 
-  // Password strength calculation
-  const passwordStrength = useMemo(() => {
-    if (!password) return { score: 0, label: '', color: '' }
-    let score = 0
-    if (password.length >= 6) score += 1
-    if (password.length >= 10) score += 1
-    if (/[A-Z]/.test(password) && /[0-9]/.test(password)) score += 1
-    if (/[^A-Za-z0-9]/.test(password)) score += 1
+  // Debounce fetch live 𝕏 profile info
+  useEffect(() => {
+    if (!xHandleInput.trim() || xHandleInput.length < 2) {
+      setXLivePreview(null)
+      setIsFetchingX(false)
+      return
+    }
 
-    if (score === 1) return { score: 25, label: 'Weak', color: '#f43f5e' }
-    if (score === 2) return { score: 50, label: 'Fair', color: '#fbbf24' }
-    if (score === 3) return { score: 75, label: 'Strong', color: '#00e5ff' }
-    return { score: 100, label: 'Pulse-Grade', color: '#00ff9d' }
-  }, [password])
+    const clean = xHandleInput.trim().replace(/^@/, '')
+    const timer = setTimeout(async () => {
+      setIsFetchingX(true)
+      try {
+        const profileData = await fetchTwitterProfile(clean)
+        if (profileData) {
+          setXLivePreview(profileData)
+        }
+      } catch (err) {
+        console.debug('Error resolving 𝕏 preview:', err)
+      } finally {
+        setIsFetchingX(false)
+      }
+    }, 350)
 
+    return () => clearTimeout(timer)
+  }, [xHandleInput])
+
+  // Normal Sign Up Handler
   const handleSignUpSubmit = async (e) => {
     e.preventDefault()
     setErrorMessage('')
 
-    if (!username.trim() || username.length < 3) {
-      setErrorMessage('Username must be at least 3 characters long.')
+    if (!email.trim() && !username.trim()) {
+      setErrorMessage('Please enter an email or username.')
       return
     }
 
     if (!password || password.length < 6) {
-      setErrorMessage('Password must be at least 6 characters long.')
+      setErrorMessage('Password must be at least 6 characters.')
       return
     }
 
     if (password !== confirmPassword) {
-      setErrorMessage('Passwords do not match. Please re-enter.')
+      setErrorMessage('Passwords do not match.')
       return
     }
 
-    if (!agreeTerms) {
-      setErrorMessage('Please accept the Terms of Service.')
-      return
+    // Auto-generate username from email if not explicitly provided
+    let finalUsername = username.trim()
+    if (!finalUsername && email.includes('@')) {
+      finalUsername = email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '')
+    }
+    if (!finalUsername) {
+      finalUsername = `trader_${Math.floor(Math.random() * 90000 + 10000)}`
     }
 
     setIsSubmitting(true)
     try {
       await signUp({
-        username: username.trim(),
-        displayName: displayName.trim() || username.trim(),
+        username: finalUsername,
+        displayName: finalUsername,
         email: email.trim(),
         password,
-        avatarId: selectedAvatarId,
-        linkedWallet: linkCurrentWallet && isConnected ? address : '',
+        linkedWallet: isConnected && address ? address : '',
       })
       playChimeSound('success')
     } catch (err) {
@@ -126,33 +135,65 @@ export default function AuthModal() {
     }
   }
 
+  // Normal Sign In Handler
   const handleSignInSubmit = async (e) => {
     e.preventDefault()
     setErrorMessage('')
 
-    if (!username.trim() || !password) {
-      setErrorMessage('Please enter both your username/email and password.')
+    const identifier = (email || username).trim()
+    if (!identifier || !password) {
+      setErrorMessage('Please enter your email/username and password.')
       return
     }
 
     setIsSubmitting(true)
     try {
       await signIn({
-        identifier: username.trim(),
+        identifier,
         password,
       })
       playChimeSound('success')
     } catch (err) {
-      setErrorMessage(err.message || 'Incorrect credentials. Please verify and try again.')
+      setErrorMessage(err.message || 'Invalid credentials. Please verify and try again.')
     } finally {
       setIsSubmitting(false)
     }
   }
 
+  // 1-Click 𝕏 Sign-In Handler
+  const handleXSignIn = async (e) => {
+    e?.preventDefault()
+    if (!xHandleInput.trim()) return
+
+    setIsConnectingX(true)
+    try {
+      const cleanHandle = xHandleInput.trim().replace(/^@/, '')
+      const finalAvatar = xLivePreview?.avatarUrl || `https://unavatar.io/twitter/${cleanHandle}`
+      const finalName = xLivePreview?.displayName || `@${cleanHandle}`
+      const finalBio = xLivePreview?.bio || `PulseChain Trader | @${cleanHandle} on 𝕏`
+      const finalBanner = xLivePreview?.bannerUrl || ''
+
+      await signInWithTwitter({
+        twitterHandle: cleanHandle,
+        displayName: finalName,
+        avatarUrl: finalAvatar,
+        bio: finalBio,
+        bannerUrl: finalBanner,
+      })
+      playChimeSound('success')
+      setShowXDialog(false)
+    } catch (err) {
+      setErrorMessage(err.message || 'Failed to sign in with 𝕏 account.')
+    } finally {
+      setIsConnectingX(false)
+    }
+  }
+
+  // Web3 Wallet Sign-In
   const handleWalletSignIn = async () => {
     setErrorMessage('')
     if (!isConnected || !address) {
-      setErrorMessage('Please connect your Web3 wallet first using the top Connect button.')
+      setErrorMessage('Please connect your Web3 wallet first.')
       return
     }
 
@@ -166,65 +207,6 @@ export default function AuthModal() {
       setIsSubmitting(false)
     }
   }
-
-  // Debounce and fetch live X profile details when handle changes
-  useEffect(() => {
-    if (!twitterInputHandle.trim() || twitterInputHandle.length < 2) {
-      setTwitterLivePreview(null)
-      setIsFetchingXPreview(false)
-      return
-    }
-
-    const clean = twitterInputHandle.trim().replace(/^@/, '')
-    const timer = setTimeout(async () => {
-      setIsFetchingXPreview(true)
-      try {
-        const profileData = await fetchTwitterProfile(clean)
-        if (profileData) {
-          setTwitterLivePreview(profileData)
-          if (profileData.displayName && profileData.displayName !== `@${clean}` && !twitterDisplayName) {
-            setTwitterDisplayName(profileData.displayName)
-          }
-        }
-      } catch (err) {
-        console.debug('Error fetching live X preview:', err)
-      } finally {
-        setIsFetchingXPreview(false)
-      }
-    }, 400)
-
-    return () => clearTimeout(timer)
-  }, [twitterInputHandle, twitterDisplayName])
-
-  const handleTwitterSubmit = async (e) => {
-    e.preventDefault()
-    if (!twitterInputHandle.trim()) return
-
-    setIsTwitterConnecting(true)
-    try {
-      const cleanHandle = twitterInputHandle.trim().replace(/^@/, '')
-      const finalAvatar = twitterLivePreview?.avatarUrl || `https://unavatar.io/twitter/${cleanHandle}`
-      const finalName = twitterDisplayName.trim() || twitterLivePreview?.displayName || `@${cleanHandle}`
-      const finalBio = twitterLivePreview?.bio || `PulseChain Trader | @${cleanHandle} on 𝕏`
-      const finalBanner = twitterLivePreview?.bannerUrl || ''
-
-      await signInWithTwitter({
-        twitterHandle: cleanHandle,
-        displayName: finalName,
-        avatarUrl: finalAvatar,
-        bio: finalBio,
-        bannerUrl: finalBanner,
-      })
-      playChimeSound('success')
-      setShowTwitterAuthDialog(false)
-    } catch (err) {
-      setErrorMessage(err.message || 'Failed to authenticate with X account.')
-    } finally {
-      setIsTwitterConnecting(false)
-    }
-  }
-
-  const currentAvatar = PRESET_AVATARS.find((a) => a.id === selectedAvatarId) || PRESET_AVATARS[0]
 
   if (!isAuthModalOpen) return null
 
@@ -242,12 +224,12 @@ export default function AuthModal() {
             </div>
             <div>
               <h2 className="auth-modal-title">
-                {authMode === 'signup' ? 'Create PulseDex Account' : 'Welcome Back to PulseDex'}
+                {authMode === 'signup' ? 'Create Account' : 'Welcome Back'}
               </h2>
               <span className="auth-modal-sub">
                 {authMode === 'signup'
-                  ? 'Sign up to persist custom watchlists, notes & DEX preferences'
-                  : 'Sign in to access your synchronized trader profile'}
+                  ? 'Sign up to save watchlists, notes & preferences'
+                  : 'Sign in to access your PulseDex profile'}
               </span>
             </div>
           </div>
@@ -257,13 +239,14 @@ export default function AuthModal() {
           </button>
         </div>
 
-        {/* Tab Selector */}
+        {/* Modal Tab Switcher */}
         <div className="auth-tabs-bar">
           <button
             className={`auth-tab-btn ${authMode === 'signin' ? 'active' : ''}`}
             onClick={() => {
               setAuthMode('signin')
               setErrorMessage('')
+              setShowXDialog(false)
             }}
           >
             <LogIn size={14} />
@@ -275,15 +258,15 @@ export default function AuthModal() {
             onClick={() => {
               setAuthMode('signup')
               setErrorMessage('')
+              setShowXDialog(false)
             }}
           >
             <UserPlus size={14} />
-            <span>Create Account</span>
-            <span className="auth-new-chip">NEW</span>
+            <span>Sign Up</span>
           </button>
         </div>
 
-        {/* Error Alert Banner */}
+        {/* Error Banner */}
         {errorMessage && (
           <div className="auth-error-banner">
             <AlertCircle size={15} />
@@ -293,95 +276,78 @@ export default function AuthModal() {
 
         {/* Modal Body */}
         <div className="auth-modal-body">
-          {/* Twitter Auth Interactive Overlay Dialog */}
-          {showTwitterAuthDialog ? (
+          {/* 𝕏 (Twitter) Instant Sign-In Modal Flow */}
+          {showXDialog ? (
             <div className="auth-twitter-dialog glass-panel">
               <div className="twitter-dialog-header">
                 <div className="twitter-logo-circle">
-                  <TwitterXIcon size={22} />
+                  <TwitterXIcon size={20} />
                 </div>
                 <div>
-                  <h3 className="text-white font-bold text-base">Authorize with X (Twitter)</h3>
-                  <span className="text-xs text-muted">Auto-import your X avatar, display name & bio</span>
+                  <h3 className="text-white font-bold text-sm">Sign in with 𝕏</h3>
+                  <span className="text-xs text-muted">Enter your handle to link your 𝕏 profile</span>
                 </div>
               </div>
 
-              <form onSubmit={handleTwitterSubmit} className="twitter-auth-form">
+              <form onSubmit={handleXSignIn} className="twitter-auth-form">
                 <div className="auth-field">
-                  <label className="auth-label">Your X (Twitter) Handle *</label>
+                  <label className="auth-label">Your 𝕏 (Twitter) Handle</label>
                   <div className="auth-input-wrapper">
                     <span className="auth-prefix font-bold text-pulse-cyan">@</span>
                     <input
                       type="text"
                       placeholder="e.g. RichardHeartWin"
-                      value={twitterInputHandle}
-                      onChange={(e) => setTwitterInputHandle(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+                      value={xHandleInput}
+                      onChange={(e) => setXHandleInput(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
                       className="auth-input font-mono"
                       required
                       autoFocus
                     />
-                    {isFetchingXPreview && <div className="search-spinner mr-2"></div>}
+                    {isFetchingX && <div className="search-spinner mr-2"></div>}
                   </div>
                 </div>
 
-                {/* Live X Profile Preview Card */}
-                {twitterLivePreview && (
+                {/* Live 𝕏 Preview */}
+                {xLivePreview && (
                   <div className="twitter-live-preview-box glass-panel">
-                    <div className="twitter-preview-left">
-                      <img
-                        src={twitterLivePreview.avatarUrl}
-                        alt={twitterLivePreview.handle}
-                        className="twitter-preview-avatar"
-                        onError={(e) => {
-                          e.target.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${twitterLivePreview.handle}`
-                        }}
-                      />
-                    </div>
+                    <img
+                      src={xLivePreview.avatarUrl}
+                      alt={xLivePreview.handle}
+                      className="twitter-preview-avatar"
+                      onError={(e) => {
+                        e.target.src = `https://api.dicebear.com/7.x/identicon/svg?seed=${xLivePreview.handle}`
+                      }}
+                    />
                     <div className="twitter-preview-right">
                       <div className="flex items-center gap-1">
-                        <span className="text-white font-bold text-xs">{twitterLivePreview.displayName}</span>
+                        <span className="text-white font-bold text-xs">{xLivePreview.displayName}</span>
                         <span className="twitter-verified-chip text-xs">✓ 𝕏 Verified</span>
                       </div>
-                      <span className="text-muted text-xs font-mono">@{twitterLivePreview.handle}</span>
-                      <p className="twitter-preview-bio text-xs">{twitterLivePreview.bio}</p>
+                      <span className="text-muted text-xs font-mono">@{xLivePreview.handle}</span>
                     </div>
                   </div>
                 )}
-
-                <div className="auth-field">
-                  <label className="auth-label">Custom Display Name (Optional override)</label>
-                  <div className="auth-input-wrapper">
-                    <User size={15} className="auth-input-icon" />
-                    <input
-                      type="text"
-                      placeholder="e.g. Pulse Whale"
-                      value={twitterDisplayName}
-                      onChange={(e) => setTwitterDisplayName(e.target.value)}
-                      className="auth-input"
-                    />
-                  </div>
-                </div>
 
                 <div className="twitter-actions-row">
                   <button
                     type="button"
                     className="btn-secondary"
-                    onClick={() => setShowTwitterAuthDialog(false)}
+                    onClick={() => setShowXDialog(false)}
                   >
                     Back
                   </button>
                   <button
                     type="submit"
                     className="btn-primary btn-x-signin"
-                    disabled={isTwitterConnecting || !twitterInputHandle.trim()}
+                    disabled={isConnectingX || !xHandleInput.trim()}
                   >
                     <TwitterXIcon size={14} />
                     <span>
-                      {isTwitterConnecting
-                        ? 'Importing from X...'
-                        : twitterLivePreview
-                        ? `Sign In as @${twitterLivePreview.handle}`
-                        : 'Authorize & Sign In'}
+                      {isConnectingX
+                        ? 'Connecting...'
+                        : xLivePreview
+                        ? `Continue as @${xLivePreview.handle}`
+                        : 'Sign In with 𝕏'}
                     </span>
                   </button>
                 </div>
@@ -389,58 +355,73 @@ export default function AuthModal() {
             </div>
           ) : (
             <>
-              {/* Quick Social & Web3 Auth Row (Available on both Sign In & Sign Up) */}
-              <div className="auth-social-cta-grid">
-                <button
-                  type="button"
-                  className="btn-x-oauth"
-                  onClick={() => setShowTwitterAuthDialog(true)}
-                  title="Sign in with your X (Twitter) handle"
-                >
-                  <TwitterXIcon size={16} />
-                  <span>Continue with 𝕏</span>
-                </button>
-
-                <button
-                  type="button"
-                  className="btn-wallet-oauth"
-                  onClick={handleWalletSignIn}
-                  title="Sign in using your connected PulseChain Web3 wallet"
-                >
-                  <Wallet size={16} className="text-pulse-green" />
-                  <span>Sign In with Wallet</span>
-                </button>
-              </div>
+              {/* Prominent 𝕏 (Twitter) Sign-In Button */}
+              <button
+                type="button"
+                className="btn-x-prominent"
+                onClick={() => setShowXDialog(true)}
+              >
+                <div className="x-btn-inner">
+                  <div className="x-btn-icon">
+                    <TwitterXIcon size={18} />
+                  </div>
+                  <span className="x-btn-text">
+                    {authMode === 'signup' ? 'Sign up with 𝕏 (Twitter)' : 'Sign in with 𝕏 (Twitter)'}
+                  </span>
+                </div>
+                <ArrowRight size={15} className="x-btn-arrow" />
+              </button>
 
               <div className="auth-divider">
-                <span>OR USE CREDENTIALS</span>
+                <span>OR WITH EMAIL</span>
               </div>
 
-              {/* SIGN IN FORM */}
-              {authMode === 'signin' && (
-                <form onSubmit={handleSignInSubmit} className="auth-form-container">
+              {/* STANDARD SIGN UP FORM */}
+              {authMode === 'signup' && (
+                <form onSubmit={handleSignUpSubmit} className="auth-form-container">
+                  {/* Email */}
                   <div className="auth-field">
-                    <label className="auth-label">Username or Email</label>
+                    <label className="auth-label">Email Address</label>
                     <div className="auth-input-wrapper">
-                      <User size={15} className="auth-input-icon" />
+                      <Mail size={15} className="auth-input-icon" />
                       <input
-                        type="text"
-                        placeholder="Enter your @username or email"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
+                        type="email"
+                        placeholder="you@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
                         className="auth-input font-mono"
                         required
+                        autoFocus
                       />
                     </div>
                   </div>
 
+                  {/* Username (Optional / Handle) */}
+                  <div className="auth-field">
+                    <label className="auth-label">Username (Optional)</label>
+                    <div className="auth-input-wrapper">
+                      <span className="auth-prefix font-bold text-pulse-cyan">@</span>
+                      <input
+                        type="text"
+                        placeholder="Choose a username handle"
+                        value={username}
+                        onChange={(e) =>
+                          setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))
+                        }
+                        className="auth-input font-mono"
+                        maxLength={24}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Password */}
                   <div className="auth-field">
                     <label className="auth-label">Password</label>
                     <div className="auth-input-wrapper">
                       <Lock size={15} className="auth-input-icon" />
                       <input
                         type={showPassword ? 'text' : 'password'}
-                        placeholder="••••••••••••"
+                        placeholder="Create a password (min. 6 chars)"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="auth-input font-mono"
@@ -456,245 +437,40 @@ export default function AuthModal() {
                     </div>
                   </div>
 
-                  <button
-                    type="submit"
-                    className="btn-primary auth-submit-btn btn-glow-pulse"
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? (
-                      <span>Authenticating...</span>
-                    ) : (
-                      <>
-                        <LogIn size={15} />
-                        <span>Sign In to Account</span>
-                      </>
-                    )}
-                  </button>
-
-                  <div className="auth-footer-prompt">
-                    <span>Don't have an account yet?</span>
-                    <button
-                      type="button"
-                      className="auth-switch-link"
-                      onClick={() => {
-                        setAuthMode('signup')
-                        setErrorMessage('')
-                      }}
-                    >
-                      Create one now
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {/* SIGN UP FORM */}
-              {authMode === 'signup' && (
-                <form onSubmit={handleSignUpSubmit} className="auth-form-container">
-                  {/* Top Avatar Preview & Selector */}
-                  <div className="auth-avatar-header-row">
-                    <div
-                      className="auth-selected-avatar"
-                      style={{
-                        background: currentAvatar.bg,
-                        boxShadow: `0 0 16px ${currentAvatar.glowColor}88`,
-                      }}
-                    >
-                      <span>{currentAvatar.icon}</span>
-                    </div>
-                    <div className="auth-avatar-picker-mini">
-                      <span className="text-xs text-muted mb-1 block">Choose Initial Avatar:</span>
-                      <div className="avatar-mini-chips">
-                        {PRESET_AVATARS.map((av) => (
-                          <button
-                            key={av.id}
-                            type="button"
-                            className={`mini-av-chip ${selectedAvatarId === av.id ? 'active' : ''}`}
-                            onClick={() => setSelectedAvatarId(av.id)}
-                            title={av.name}
-                            style={{
-                              background: av.bg,
-                              borderColor: selectedAvatarId === av.id ? av.glowColor : 'transparent',
-                            }}
-                          >
-                            {av.icon}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="auth-fields-grid">
-                    {/* Username */}
-                    <div className="auth-field">
-                      <label className="auth-label">Username Handle *</label>
-                      <div className="auth-input-wrapper">
-                        <span className="auth-prefix font-bold text-pulse-cyan">@</span>
-                        <input
-                          type="text"
-                          placeholder="e.g. pulse_whale"
-                          value={username}
-                          onChange={(e) =>
-                            setUsername(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))
-                          }
-                          className="auth-input font-mono"
-                          maxLength={24}
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    {/* Display Name */}
-                    <div className="auth-field">
-                      <label className="auth-label">Display Name</label>
-                      <div className="auth-input-wrapper">
-                        <User size={15} className="auth-input-icon" />
-                        <input
-                          type="text"
-                          placeholder="e.g. Diamond Trader"
-                          value={displayName}
-                          onChange={(e) => setDisplayName(e.target.value)}
-                          className="auth-input"
-                          maxLength={32}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Email */}
+                  {/* Confirm Password */}
                   <div className="auth-field">
-                    <label className="auth-label">Email Address (Optional for alerts)</label>
+                    <label className="auth-label">Confirm Password</label>
                     <div className="auth-input-wrapper">
-                      <Mail size={15} className="auth-input-icon" />
+                      <Lock size={15} className="auth-input-icon" />
                       <input
-                        type="email"
-                        placeholder="trader@pulsechain.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="Confirm your password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
                         className="auth-input font-mono"
+                        required
                       />
                     </div>
                   </div>
 
-                  <div className="auth-fields-grid">
-                    {/* Password */}
-                    <div className="auth-field">
-                      <label className="auth-label">Password *</label>
-                      <div className="auth-input-wrapper">
-                        <Lock size={15} className="auth-input-icon" />
-                        <input
-                          type={showPassword ? 'text' : 'password'}
-                          placeholder="Min 6 characters"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          className="auth-input font-mono"
-                          required
-                        />
-                        <button
-                          type="button"
-                          className="auth-show-pwd-btn"
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
-                          {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Confirm Password */}
-                    <div className="auth-field">
-                      <label className="auth-label">Confirm Password *</label>
-                      <div className="auth-input-wrapper">
-                        <Lock size={15} className="auth-input-icon" />
-                        <input
-                          type={showConfirmPassword ? 'text' : 'password'}
-                          placeholder="Re-enter password"
-                          value={confirmPassword}
-                          onChange={(e) => setConfirmPassword(e.target.value)}
-                          className="auth-input font-mono"
-                          required
-                        />
-                        <button
-                          type="button"
-                          className="auth-show-pwd-btn"
-                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        >
-                          {showConfirmPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Password Strength Bar */}
-                  {password && (
-                    <div className="password-strength-container">
-                      <div className="strength-bar-track">
-                        <div
-                          className="strength-bar-fill"
-                          style={{
-                            width: `${passwordStrength.score}%`,
-                            backgroundColor: passwordStrength.color,
-                            boxShadow: `0 0 10px ${passwordStrength.color}88`,
-                          }}
-                        ></div>
-                      </div>
-                      <span
-                        className="strength-label font-mono"
-                        style={{ color: passwordStrength.color }}
-                      >
-                        Strength: {passwordStrength.label}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Link Wallet Option */}
-                  {isConnected && (
-                    <label className="auth-checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={linkCurrentWallet}
-                        onChange={(e) => setLinkCurrentWallet(e.target.checked)}
-                        className="auth-checkbox"
-                      />
-                      <span>
-                        Link connected PulseChain address (
-                        <strong className="text-pulse-green font-mono">
-                          {address?.slice(0, 6)}...{address?.slice(-4)}
-                        </strong>
-                        ) to this account
-                      </span>
-                    </label>
-                  )}
-
-                  {/* Agree Terms */}
-                  <label className="auth-checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={agreeTerms}
-                      onChange={(e) => setAgreeTerms(e.target.checked)}
-                      className="auth-checkbox"
-                      required
-                    />
-                    <span className="text-xs text-muted">
-                      I agree to store my trading profile and preferences locally in PulseDex Vault.
-                    </span>
-                  </label>
-
+                  {/* Submit Button */}
                   <button
                     type="submit"
                     className="btn-primary auth-submit-btn btn-glow-pulse"
                     disabled={isSubmitting}
                   >
                     {isSubmitting ? (
-                      <span>Creating Vault Account...</span>
+                      <span>Creating Account...</span>
                     ) : (
                       <>
-                        <Sparkles size={15} />
-                        <span>Complete Sign Up</span>
+                        <UserPlus size={15} />
+                        <span>Create Account</span>
                       </>
                     )}
                   </button>
 
                   <div className="auth-footer-prompt">
-                    <span>Already registered?</span>
+                    <span>Already have an account?</span>
                     <button
                       type="button"
                       className="auth-switch-link"
@@ -703,7 +479,97 @@ export default function AuthModal() {
                         setErrorMessage('')
                       }}
                     >
-                      Sign in here
+                      Sign In
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* STANDARD SIGN IN FORM */}
+              {authMode === 'signin' && (
+                <form onSubmit={handleSignInSubmit} className="auth-form-container">
+                  {/* Email or Username */}
+                  <div className="auth-field">
+                    <label className="auth-label">Email or Username</label>
+                    <div className="auth-input-wrapper">
+                      <User size={15} className="auth-input-icon" />
+                      <input
+                        type="text"
+                        placeholder="Enter your email or username"
+                        value={email || username}
+                        onChange={(e) => {
+                          setEmail(e.target.value)
+                          setUsername(e.target.value)
+                        }}
+                        className="auth-input font-mono"
+                        required
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+
+                  {/* Password */}
+                  <div className="auth-field">
+                    <label className="auth-label">Password</label>
+                    <div className="auth-input-wrapper">
+                      <Lock size={15} className="auth-input-icon" />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="Enter your password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="auth-input font-mono"
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="auth-show-pwd-btn"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <button
+                    type="submit"
+                    className="btn-primary auth-submit-btn btn-glow-pulse"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? (
+                      <span>Signing In...</span>
+                    ) : (
+                      <>
+                        <LogIn size={15} />
+                        <span>Sign In</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Wallet 1-Click Option */}
+                  {isConnected && (
+                    <button
+                      type="button"
+                      className="btn-secondary btn-sm flex items-center justify-center gap-2 mt-1"
+                      onClick={handleWalletSignIn}
+                    >
+                      <Wallet size={14} className="text-pulse-green" />
+                      <span>Sign In with Connected Wallet ({address?.slice(0, 6)}...)</span>
+                    </button>
+                  )}
+
+                  <div className="auth-footer-prompt">
+                    <span>Don't have an account?</span>
+                    <button
+                      type="button"
+                      className="auth-switch-link"
+                      onClick={() => {
+                        setAuthMode('signup')
+                        setErrorMessage('')
+                      }}
+                    >
+                      Sign Up
                     </button>
                   </div>
                 </form>
