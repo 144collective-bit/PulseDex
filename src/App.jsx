@@ -37,9 +37,9 @@ function MainApp() {
   const [watchlist, setWatchlist] = useState(() => {
     try {
       const saved = localStorage.getItem('pulse_watchlist')
-      return saved ? JSON.parse(saved) : [DEFAULT_PAIR_ADDRESS.toLowerCase()]
+      return saved ? JSON.parse(saved) : []
     } catch {
-      return [DEFAULT_PAIR_ADDRESS.toLowerCase()]
+      return []
     }
   })
 

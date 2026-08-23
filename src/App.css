@@ -6789,6 +6789,56 @@
   color: #ffffff;
 }
 
+/* Portfolio Empty Hero State */
+.portfolio-empty-hero {
+  padding: 48px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  border-radius: var(--radius-xl);
+  background: rgba(14, 18, 26, 0.7);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  margin-top: 8px;
+}
+
+.empty-hero-icon-box {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(0, 255, 157, 0.08);
+  border: 1px solid rgba(0, 255, 157, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  box-shadow: 0 0 30px rgba(0, 255, 157, 0.15);
+}
+
+.empty-hero-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #ffffff;
+  margin-bottom: 8px;
+}
+
+.empty-hero-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 520px;
+  line-height: 1.5;
+  margin-bottom: 24px;
+}
+
+.empty-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+
 
 
 
