@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/brand-logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PULSEDEX | PulseChain DEX Screener & Portfolio Tracker</title>
+    <meta name="description" content="PULSEDEX - Real-time DEX screener, live candlestick charts, trade stream, and multi-wallet portfolio tracker for PulseChain (PLS, PLSX, HEX, INC)." />
+    <meta http-equiv="Permissions-Policy" content="autoplay=(), speaker=(), microphone=()" />
+    <script>
+      // Pre-emptive Audio Silencer Lock
+      try {
+        window.Audio = class { play() { return Promise.resolve(); } pause() {} };
+        window.AudioContext = class { constructor() { this.state = 'suspended'; } resume() { return Promise.resolve(); } };
+        window.webkitAudioContext = window.AudioContext;
+        if (window.HTMLMediaElement) {
+          window.HTMLMediaElement.prototype.play = function() { this.muted = true; return Promise.resolve(); };
+        }
+      } catch (e) {}
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
