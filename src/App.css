@@ -9819,7 +9819,8 @@
 }
 
 .switch-swap-compact .switch-iframe {
-  height: 580px;
+  height: 760px;
+  min-height: 760px;
 }
 
 /* Companion Utility Cards */

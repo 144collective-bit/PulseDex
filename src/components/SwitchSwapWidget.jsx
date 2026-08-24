@@ -87,7 +87,7 @@ export default function SwitchSwapWidget({
     setRefreshKey((prev) => prev + 1)
   }
 
-  const widgetHeight = customHeight || (compact ? '640px' : '740px')
+  const widgetHeight = customHeight || '760px'
 
   return (
     <div className={`switch-swap-container ${compact ? 'switch-swap-compact' : ''}`}>

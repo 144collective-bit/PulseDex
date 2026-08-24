@@ -525,7 +525,7 @@ export default function TokenDetails({
           initialTo={swapTo}
           targetToken={base}
           compact={true}
-          customHeight="580px"
+          customHeight="760px"
         />
       </div>
 
