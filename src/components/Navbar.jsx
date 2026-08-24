@@ -16,6 +16,7 @@ import {
   EyeOff,
   UserPlus,
   LogIn,
+  Sparkles,
 } from 'lucide-react'
 import { searchPulsePairs, getNativePlsPrice, getPulseGasPrice } from '../services/dexscreener'
 import TokenLogo from './TokenLogo'
@@ -285,6 +286,18 @@ export default function Navbar({
           </button>
 
           {/* User Profile / Auth Button */}
+          {/* 🚀 Bold Glowing "Buy $DEX" Platform Token Button */}
+          <button
+            type="button"
+            className="btn-buy-dex-glow font-mono"
+            onClick={() => setActiveTab('dex')}
+            title="Buy PulseDex Platform Token ($DEX)"
+          >
+            <Sparkles size={13} className="buy-dex-sparkle" />
+            <span className="buy-dex-text">BUY $DEX</span>
+            <span className="buy-dex-badge">HOT</span>
+          </button>
+
           {isAuthenticated ? (
             <div className="user-profile-menu-wrapper" ref={userMenuRef}>
               <button
