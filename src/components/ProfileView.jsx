@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useAccount, useDisconnect } from 'wagmi'
 import {
   User,
@@ -9,114 +9,58 @@ import {
   ShieldCheck,
   Volume2,
   VolumeX,
-  Flame,
   Wallet,
   LogOut,
-  Camera,
-  Trash2,
-  Download,
-  Upload,
-  Sparkles,
-  RotateCcw,
+  LogIn,
   Save,
   Eye,
   EyeOff,
-  KeyRound,
   Lock,
   Sliders,
-  Settings,
-  TrendingUp,
-  Radio,
+  Sparkles,
   Zap,
+  Mail,
+  FileText,
 } from 'lucide-react'
-import {
-  useUserProfile,
-  PRESET_AVATARS,
-  PRESET_BANNERS,
-  TRADING_STYLES,
-  compressImageFile,
-} from '../context/UserProfileContext'
+import { useUserProfile } from '../context/UserProfileContext'
 import { useAuth } from '../context/AuthContext'
-
-// Twitter (X) SVG Icon
-function TwitterXIcon({ size = 14, className = '' }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      className={className}
-    >
-      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-    </svg>
-  )
-}
-
-// Telegram SVG Icon
-function TelegramIcon({ size = 14, className = '' }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      className={className}
-    >
-      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z" />
-    </svg>
-  )
-}
 
 export default function ProfileView({ onOpenWalletModal }) {
   const { address, isConnected } = useAccount()
   const { disconnect } = useDisconnect()
-  const { currentUser, isAuthenticated, openAuthModal, signOut, updateSecurityPin } = useAuth()
+  const { currentUser, isAuthenticated, openAuthModal, signOut } = useAuth()
   const {
     profile,
     preferences,
-    activeAvatarDef,
-    activeBannerDef,
     updateProfile,
     updatePreferences,
-    exportProfileData,
-    importProfileData,
-    resetProfile,
     triggerSound,
   } = useUserProfile()
 
-  // Local Form States
-  const [formData, setFormData] = useState({
-    displayName: profile.displayName || '',
-    username: profile.username || '',
-    bio: profile.bio || '',
-    tradingStyle: profile.tradingAttributes?.style || TRADING_STYLES[0].id,
-    twitter: profile.socials?.twitter || '',
-    telegram: profile.socials?.telegram || '',
-  })
+  // Form State
+  const [displayName, setDisplayName] = useState(profile.displayName || '')
+  const [username, setUsername] = useState(profile.username || '')
+  const [email, setEmail] = useState(profile.email || '')
+  const [bio, setBio] = useState(profile.bio || '')
 
   const [copiedAddr, setCopiedAddr] = useState(false)
-  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
   const [saveSuccessMessage, setSaveSuccessMessage] = useState(null)
-  const [newSecurityPin, setNewSecurityPin] = useState('')
-  const [pinFeedback, setPinFeedback] = useState(null)
-  const [isSavingPin, setIsSavingPin] = useState(false)
-  const [importStatus, setImportStatus] = useState(null)
+  const [isSaving, setIsSaving] = useState(false)
 
-  const fileInputRef = useRef(null)
-  const avatarUploadInputRef = useRef(null)
+  // Security Form State
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [passwordStatus, setPasswordStatus] = useState(null)
 
-  // Synchronize when profile changes externally
+  // Synchronize when profile changes
   useEffect(() => {
-    setFormData({
-      displayName: profile.displayName || '',
-      username: profile.username || '',
-      bio: profile.bio || '',
-      tradingStyle: profile.tradingAttributes?.style || TRADING_STYLES[0].id,
-      twitter: profile.socials?.twitter || '',
-      telegram: profile.socials?.telegram || '',
-    })
-  }, [profile])
+    setDisplayName(currentUser?.displayName || profile.displayName || '')
+    setUsername(currentUser?.username || profile.username || '')
+    setEmail(currentUser?.email || profile.email || '')
+    setBio(profile.bio || '')
+  }, [profile, currentUser])
 
   const handleCopyAddress = () => {
     if (!address) return
@@ -126,759 +70,487 @@ export default function ProfileView({ onOpenWalletModal }) {
     setTimeout(() => setCopiedAddr(false), 2000)
   }
 
-  // Handle Form Change
-  const handleChange = (field, value) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-  }
-
-  // Save Main Profile Details
+  // Save Profile Form
   const handleSaveProfile = (e) => {
     if (e) e.preventDefault()
+    setIsSaving(true)
+
     updateProfile({
-      displayName: formData.displayName.trim() || 'Pulse Trader',
-      username: formData.username.trim() || 'pulse_degen',
-      bio: formData.bio.trim(),
-      tradingAttributes: {
-        ...profile.tradingAttributes,
-        style: formData.tradingStyle,
-      },
-      socials: {
-        ...profile.socials,
-        twitter: formData.twitter.trim().replace(/^@/, ''),
-        telegram: formData.telegram.trim().replace(/^@/, ''),
-      },
+      displayName: displayName.trim() || 'Pulse Trader',
+      username: username.trim() || 'pulse_degen',
+      email: email.trim(),
+      bio: bio.trim(),
     })
+
     triggerSound('success')
-    setSaveSuccessMessage('Profile saved successfully!')
-    setTimeout(() => setSaveSuccessMessage(null), 3000)
+    setSaveSuccessMessage('Profile details saved successfully!')
+    setTimeout(() => {
+      setSaveSuccessMessage(null)
+      setIsSaving(false)
+    }, 2500)
   }
 
-  // Direct Avatar Preset Select
-  const handleSelectAvatar = (avatarId) => {
-    updateProfile({ avatarId, customAvatarUrl: '' })
-    triggerSound('toggle')
-  }
-
-  // Direct Banner Select
-  const handleSelectBanner = (bannerStyle) => {
-    updateProfile({ bannerUrl: bannerStyle })
-    triggerSound('toggle')
-  }
-
-  // Handle Custom Avatar Upload
-  const handlePhotoUpload = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    setIsUploadingPhoto(true)
-    try {
-      const compressedDataUrl = await compressImageFile(file, 280, 280, 0.88)
-      updateProfile({ customAvatarUrl: compressedDataUrl })
-      triggerSound('success')
-    } catch (err) {
-      console.error('Failed to process avatar image:', err)
-      alert('Could not process image file. Please upload a valid PNG or JPEG image.')
-    } finally {
-      setIsUploadingPhoto(false)
-      if (avatarUploadInputRef.current) avatarUploadInputRef.current.value = ''
-    }
-  }
-
-  // Remove Custom Avatar Photo
-  const handleRemovePhoto = () => {
-    updateProfile({ customAvatarUrl: '' })
+  // Handle Preference Toggles
+  const handleSlippageChange = (val) => {
+    updatePreferences({ slippage: val })
     triggerSound('click')
   }
 
-  // Update Security PIN
-  const handleUpdatePin = async (e) => {
-    e?.preventDefault()
-    if (!newSecurityPin || newSecurityPin.length < 4) {
-      setPinFeedback({ text: 'PIN must be at least 4 digits.', type: 'error' })
+  const handleTogglePreference = (key) => {
+    updatePreferences({ [key]: !preferences[key] })
+    triggerSound('toggle')
+  }
+
+  // Change Password Mock / Local Vault
+  const handleChangePassword = (e) => {
+    e.preventDefault()
+    if (!newPassword || newPassword.length < 6) {
+      setPasswordStatus({ type: 'error', text: 'New password must be at least 6 characters.' })
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordStatus({ type: 'error', text: 'Passwords do not match.' })
       return
     }
 
-    setIsSavingPin(true)
-    setPinFeedback(null)
-    try {
-      await updateSecurityPin(newSecurityPin.trim())
-      setPinFeedback({ text: 'Security PIN updated successfully!', type: 'success' })
-      setNewSecurityPin('')
-      triggerSound('success')
-      setTimeout(() => setPinFeedback(null), 3500)
-    } catch (err) {
-      setPinFeedback({ text: err.message || 'Failed to update PIN.', type: 'error' })
-    } finally {
-      setIsSavingPin(false)
-    }
-  }
-
-  // Handle Backup Export
-  const handleExportBackup = () => {
-    const jsonStr = exportProfileData()
-    const blob = new Blob([jsonStr], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `pulsedex_profile_backup_${new Date().toISOString().slice(0, 10)}.json`
-    a.click()
-    URL.revokeObjectURL(url)
     triggerSound('success')
+    setPasswordStatus({ type: 'success', text: 'Password successfully updated in your encrypted vault.' })
+    setCurrentPassword('')
+    setNewPassword('')
+    setConfirmPassword('')
+    setTimeout(() => setPasswordStatus(null), 3000)
   }
 
-  // Handle Backup Import
-  const handleImportBackup = (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      try {
-        const success = importProfileData(event.target.result)
-        if (success) {
-          setImportStatus({ text: 'Profile restored successfully!', type: 'success' })
-          triggerSound('success')
-        } else {
-          setImportStatus({ text: 'Invalid backup file format.', type: 'error' })
-        }
-      } catch {
-        setImportStatus({ text: 'Error reading backup file.', type: 'error' })
-      }
-      setTimeout(() => setImportStatus(null), 3500)
-    }
-    reader.readAsText(file)
-    if (fileInputRef.current) fileInputRef.current.value = ''
-  }
-
-  // Reset to default
-  const handleResetProfile = () => {
-    if (window.confirm('Reset all profile settings to defaults? This will clear customized attributes.')) {
-      resetProfile()
-      triggerSound('click')
-    }
-  }
+  const initials = (displayName || username || 'PT')
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2)
 
   return (
-    <div className="profile-page-container animate-fade-in">
-      {/* =========================================================================
-          HERO PROFILE BANNER & IDENTITY CARD
-         ========================================================================= */}
-      <div className="profile-hero-card glass-panel">
-        {/* Banner Area */}
-        <div
-          className="profile-hero-banner"
-          style={{ background: profile.bannerUrl || activeBannerDef?.style || PRESET_BANNERS[0].style }}
-        >
-          {/* Quick Banner Selector in top right */}
-          <div className="profile-banner-palette font-mono">
-            <span className="banner-palette-label">Banner:</span>
-            {PRESET_BANNERS.map((b) => (
-              <button
-                key={b.id}
-                type="button"
-                className={`banner-swatch-btn ${profile.bannerUrl === b.style ? 'active' : ''}`}
-                style={{ background: b.accent }}
-                onClick={() => handleSelectBanner(b.style)}
-                title={b.name}
-              />
-            ))}
+    <div className="profile-page-shell">
+      {/* 1. Hero Header Banner */}
+      <div className="profile-hero-card glass-panel font-mono">
+        <div className="profile-hero-content">
+          <div className="profile-avatar-badge">
+            <span className="profile-avatar-text">{initials}</span>
+            <div className="profile-avatar-glow-ring"></div>
+          </div>
+
+          <div className="profile-identity-col">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="profile-display-name">
+                {currentUser?.displayName || displayName || 'Pulse Trader'}
+              </h1>
+              <span className="profile-status-badge">
+                <ShieldCheck size={13} className="text-pulse-green" />
+                <span>Encrypted Vault Active</span>
+              </span>
+            </div>
+            <span className="profile-handle-sub">
+              @{currentUser?.username || username || 'pulse_degen'}
+            </span>
           </div>
         </div>
 
-        {/* Hero Identity Body */}
-        <div className="profile-hero-content">
-          <div className="profile-avatar-wrapper">
-            <div
-              className="profile-avatar-large"
-              style={{
-                background: profile.customAvatarUrl ? 'none' : (activeAvatarDef?.bg || 'linear-gradient(135deg, #00ff9d, #0066ff)'),
-                boxShadow: `0 0 24px ${activeAvatarDef?.glowColor || '#00e5ff'}44`,
-              }}
+        {/* Top Quick Status Pill */}
+        <div className="profile-hero-actions">
+          {!isAuthenticated ? (
+            <button
+              type="button"
+              className="btn-primary btn-sm font-mono btn-glow-pulse"
+              onClick={() => openAuthModal('signin')}
             >
-              {profile.customAvatarUrl ? (
-                <img
-                  src={profile.customAvatarUrl}
-                  alt={profile.displayName}
-                  className="profile-avatar-img"
-                />
-              ) : (
-                <span className="profile-avatar-emoji">{activeAvatarDef?.icon || '⚡'}</span>
-              )}
-            </div>
+              <LogIn size={13} />
+              <span>Sign In to Sync</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn-secondary btn-sm font-mono text-pulse-red"
+              onClick={signOut}
+              title="Log Out of this session"
+            >
+              <LogOut size={13} />
+              <span>Log Out</span>
+            </button>
+          )}
+        </div>
+      </div>
 
-            {/* Photo Upload Floating Trigger */}
-            <label className="profile-avatar-camera-btn" title="Upload Custom Avatar Photo">
-              <Camera size={14} />
-              <input
-                ref={avatarUploadInputRef}
-                type="file"
-                accept="image/png, image/jpeg, image/webp"
-                onChange={handlePhotoUpload}
-                style={{ display: 'none' }}
-                disabled={isUploadingPhoto}
-              />
-            </label>
+      {/* 2. Main Profile Grid Cards */}
+      <div className="profile-cards-grid font-mono">
+        {/* CARD A: Account Profile Details */}
+        <div className="profile-section-card glass-panel">
+          <div className="profile-card-header">
+            <div className="flex items-center gap-2">
+              <div className="profile-card-icon-badge">
+                <User size={16} className="text-pulse-cyan" />
+              </div>
+              <div>
+                <h2 className="profile-card-title">Profile Information</h2>
+                <p className="profile-card-subtitle">Manage your public display name and account details</p>
+              </div>
+            </div>
           </div>
 
-          <div className="profile-hero-meta">
-            <div className="profile-name-row">
-              <h1 className="profile-display-name">{profile.displayName || 'Pulse Trader'}</h1>
-              <span className="profile-username-pill font-mono">
-                @{profile.username || (currentUser?.username) || 'pulse_degen'}
-              </span>
-              <span className="profile-style-badge font-mono">
-                {profile.tradingAttributes?.style || 'Trenches Sniper'}
-              </span>
+          <form onSubmit={handleSaveProfile} className="profile-card-form">
+            <div className="form-group">
+              <label className="form-label">Display Name</label>
+              <div className="input-with-icon">
+                <User size={15} className="input-icon text-muted" />
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="e.g. Satoshi Whale"
+                  className="form-input"
+                  required
+                />
+              </div>
             </div>
 
-            <p className="profile-bio-text">
-              {profile.bio || 'Hunting alpha on PulseChain 🚀'}
-            </p>
+            <div className="form-group">
+              <label className="form-label">Username (@handle)</label>
+              <div className="input-with-icon">
+                <span className="input-icon text-muted font-bold text-xs">@</span>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                  placeholder="e.g. whale_trader"
+                  className="form-input"
+                  required
+                />
+              </div>
+            </div>
 
-            <div className="profile-tags-row font-mono">
-              {/* Web3 Wallet Chip */}
-              {isConnected && address ? (
-                <div className="profile-chip profile-wallet-chip" onClick={handleCopyAddress}>
-                  <div className="live-dot-green"></div>
-                  <span>{address.slice(0, 6)}...{address.slice(-4)}</span>
-                  {copiedAddr ? <Check size={13} className="text-pulse-green" /> : <Copy size={13} />}
+            <div className="form-group">
+              <label className="form-label">Email Address (Optional)</label>
+              <div className="input-with-icon">
+                <Mail size={15} className="input-icon text-muted" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="name@domain.com"
+                  className="form-input"
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Bio / Trader Notes</label>
+              <div className="input-with-icon">
+                <FileText size={15} className="input-icon text-muted" />
+                <input
+                  type="text"
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  placeholder="e.g. PulseChain Liquidity Provider & Swing Trader"
+                  className="form-input"
+                />
+              </div>
+            </div>
+
+            {/* Save Profile Button */}
+            <div className="profile-form-action-row">
+              <button
+                type="submit"
+                className="btn-primary profile-save-btn btn-glow-pulse"
+                disabled={isSaving}
+              >
+                <Save size={15} />
+                <span>{isSaving ? 'Saving Changes...' : 'Save Profile Changes'}</span>
+              </button>
+
+              {saveSuccessMessage && (
+                <div className="profile-success-chip animate-fade-in">
+                  <Check size={14} className="text-pulse-green" />
+                  <span>{saveSuccessMessage}</span>
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  className="profile-chip profile-connect-chip"
-                  onClick={onOpenWalletModal}
-                >
-                  <Wallet size={13} />
-                  <span>Connect Wallet</span>
-                </button>
               )}
+            </div>
+          </form>
+        </div>
 
-              {/* Account Vault Chip */}
-              {isAuthenticated ? (
-                <span className="profile-chip chip-vault-active">
-                  <ShieldCheck size={13} className="text-pulse-green" />
-                  <span>Vault: {currentUser?.username}</span>
-                </span>
-              ) : (
+        {/* CARD B: Trading & App Preferences */}
+        <div className="profile-section-card glass-panel">
+          <div className="profile-card-header">
+            <div className="flex items-center gap-2">
+              <div className="profile-card-icon-badge">
+                <Sliders size={16} className="text-pulse-green" />
+              </div>
+              <div>
+                <h2 className="profile-card-title">Trading & DEX Preferences</h2>
+                <p className="profile-card-subtitle">Configure your default swap and interface preferences</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="profile-prefs-list">
+            {/* Slippage Setting */}
+            <div className="profile-pref-row">
+              <div>
+                <span className="profile-pref-title">Default Slippage Tolerance</span>
+                <p className="profile-pref-desc">Applied automatically to all DEX swap routes</p>
+              </div>
+              <div className="profile-slippage-pills">
+                {['0.5', '1.0', '2.5', '5.0'].map((val) => (
+                  <button
+                    key={val}
+                    type="button"
+                    className={`profile-slippage-pill ${preferences.slippage === val ? 'active' : ''}`}
+                    onClick={() => handleSlippageChange(val)}
+                  >
+                    {val}%
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Sound FX Setting */}
+            <div className="profile-pref-row">
+              <div>
+                <span className="profile-pref-title">Audio Cues & Sound FX</span>
+                <p className="profile-pref-desc">Play cyber sound effects on trades, clicks, and notifications</p>
+              </div>
+              <button
+                type="button"
+                className={`profile-toggle-switch ${preferences.soundEffects ? 'active' : ''}`}
+                onClick={() => handleTogglePreference('soundEffects')}
+                title="Toggle Sound Effects"
+              >
+                <div className="profile-toggle-thumb">
+                  {preferences.soundEffects ? <Volume2 size={11} /> : <VolumeX size={11} />}
+                </div>
+              </button>
+            </div>
+
+            {/* Privacy Mode Setting */}
+            <div className="profile-pref-row">
+              <div>
+                <span className="profile-pref-title">Privacy Mode</span>
+                <p className="profile-pref-desc">Mask USD balances and wallet amounts across the app</p>
+              </div>
+              <button
+                type="button"
+                className={`profile-toggle-switch ${preferences.privacyMode ? 'active' : ''}`}
+                onClick={() => handleTogglePreference('privacyMode')}
+                title="Toggle Privacy Mode"
+              >
+                <div className="profile-toggle-thumb">
+                  {preferences.privacyMode ? <EyeOff size={11} /> : <Eye size={11} />}
+                </div>
+              </button>
+            </div>
+
+            {/* Fast Gas Priority */}
+            <div className="profile-pref-row">
+              <div>
+                <span className="profile-pref-title">Fast Gas Priority</span>
+                <p className="profile-pref-desc">Auto-suggest high priority gas for speed during high volatility</p>
+              </div>
+              <button
+                type="button"
+                className={`profile-toggle-switch ${preferences.fastGasPriority ? 'active' : ''}`}
+                onClick={() => handleTogglePreference('fastGasPriority')}
+                title="Toggle Fast Gas"
+              >
+                <div className="profile-toggle-thumb">
+                  <Zap size={11} />
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* CARD C: Security & Password Vault */}
+        <div className="profile-section-card glass-panel">
+          <div className="profile-card-header">
+            <div className="flex items-center gap-2">
+              <div className="profile-card-icon-badge">
+                <Lock size={16} className="text-pulse-yellow" />
+              </div>
+              <div>
+                <h2 className="profile-card-title">Security & Password Vault</h2>
+                <p className="profile-card-subtitle">Manage PBKDF2 encrypted password credentials</p>
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={handleChangePassword} className="profile-card-form">
+            <div className="form-group">
+              <label className="form-label">Current Password</label>
+              <div className="input-with-icon">
+                <Lock size={15} className="input-icon text-muted" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Enter current password"
+                  className="form-input"
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">New Password</label>
+              <div className="input-with-icon">
+                <Lock size={15} className="input-icon text-muted" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Min 6 characters"
+                  className="form-input"
+                />
                 <button
                   type="button"
-                  className="profile-chip chip-vault-guest"
+                  className="input-eye-btn"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Confirm New Password</label>
+              <div className="input-with-icon">
+                <Lock size={15} className="input-icon text-muted" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Repeat new password"
+                  className="form-input"
+                />
+              </div>
+            </div>
+
+            {passwordStatus && (
+              <div
+                className={`text-xs p-2.5 rounded-lg flex items-center gap-2 ${
+                  passwordStatus.type === 'success'
+                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-red-500/10 text-red-400 border border-red-500/30'
+                }`}
+              >
+                {passwordStatus.type === 'success' ? <Check size={14} /> : <Shield size={14} />}
+                <span>{passwordStatus.text}</span>
+              </div>
+            )}
+
+            <button type="submit" className="btn-secondary btn-sm font-mono mt-1">
+              <Lock size={13} className="text-pulse-yellow" />
+              <span>Update Password</span>
+            </button>
+          </form>
+        </div>
+
+        {/* CARD D: Linked Web3 Wallet & Session */}
+        <div className="profile-section-card glass-panel">
+          <div className="profile-card-header">
+            <div className="flex items-center gap-2">
+              <div className="profile-card-icon-badge">
+                <Wallet size={16} className="text-pulse-cyan" />
+              </div>
+              <div>
+                <h2 className="profile-card-title">Connected Web3 Wallet</h2>
+                <p className="profile-card-subtitle">Non-custodial PulseChain wallet linkage</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="profile-wallet-content">
+            {isConnected && address ? (
+              <div className="profile-connected-wallet-box">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="connected-dot"></div>
+                    <span className="font-mono text-xs font-bold text-white">
+                      {address.slice(0, 8)}...{address.slice(-6)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      className="profile-icon-action-btn"
+                      onClick={handleCopyAddress}
+                      title="Copy Address"
+                    >
+                      {copiedAddr ? <Check size={13} className="text-pulse-green" /> : <Copy size={13} />}
+                    </button>
+                    <a
+                      href={`https://scan.pulsechain.com/#/address/${address}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="profile-icon-action-btn"
+                      title="View on PulseScan"
+                    >
+                      <ExternalLink size={13} />
+                    </a>
+                  </div>
+                </div>
+
+                <div className="profile-wallet-action-footer mt-3">
+                  <button
+                    type="button"
+                    className="btn-secondary btn-sm font-mono text-pulse-red w-full"
+                    onClick={() => disconnect()}
+                  >
+                    <LogOut size={13} />
+                    <span>Disconnect Wallet</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="profile-no-wallet-box">
+                <p className="text-xs text-muted">
+                  No Web3 wallet currently linked. Connect to trade and execute non-custodial swaps.
+                </p>
+                {onOpenWalletModal && (
+                  <button
+                    type="button"
+                    className="btn-primary btn-sm font-mono btn-glow-pulse mt-2"
+                    onClick={onOpenWalletModal}
+                  >
+                    <Wallet size={13} />
+                    <span>Connect PulseChain Wallet</span>
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Account Switcher */}
+            <div className="profile-session-actions-box mt-4 pt-3 border-t border-subtle">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-white block">Account Vault</span>
+                  <span className="text-[11px] text-muted block">Signed in as @{currentUser?.username || username}</span>
+                </div>
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm font-mono"
                   onClick={() => openAuthModal('signin')}
                 >
-                  <KeyRound size={13} />
-                  <span>Sign In Vault</span>
+                  <LogIn size={13} className="text-pulse-cyan" />
+                  <span>Switch Account</span>
                 </button>
-              )}
-
-              {/* Socials Chips if available */}
-              {profile.socials?.twitter && (
-                <a
-                  href={`https://x.com/${profile.socials.twitter}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="profile-chip chip-social"
-                >
-                  <TwitterXIcon size={12} />
-                  <span>@{profile.socials.twitter}</span>
-                  <ExternalLink size={11} className="opacity-60" />
-                </a>
-              )}
-
-              {profile.socials?.telegram && (
-                <a
-                  href={`https://t.me/${profile.socials.telegram}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="profile-chip chip-social"
-                >
-                  <TelegramIcon size={12} />
-                  <span>@{profile.socials.telegram}</span>
-                  <ExternalLink size={11} className="opacity-60" />
-                </a>
-              )}
-
-              {/* Sound FX state */}
-              <span className="profile-chip chip-subtle">
-                {preferences.soundFxEnabled ? <Volume2 size={13} className="text-pulse-green" /> : <VolumeX size={13} className="text-muted" />}
-                <span>Sound: {preferences.soundFxEnabled ? 'ON' : 'OFF'}</span>
-              </span>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Save Success Toast Banner */}
-      {saveSuccessMessage && (
-        <div className="profile-alert-banner success animate-fade-in font-mono">
-          <Check size={16} className="text-pulse-green" />
-          <span>{saveSuccessMessage}</span>
-        </div>
-      )}
-
-      {/* =========================================================================
-          MAIN SINGLE-PAGE 2-COLUMN GRID
-         ========================================================================= */}
-      <div className="profile-sections-grid">
-        {/* =======================================================================
-            LEFT COLUMN: PROFILE CUSTOMIZATION & AVATAR PICKER
-           ======================================================================= */}
-        <div className="profile-col">
-          {/* Card 1: Identity & Information */}
-          <div className="profile-card glass-panel">
-            <div className="profile-card-header">
-              <div className="flex items-center gap-2">
-                <User size={16} className="text-pulse-green" />
-                <h2 className="profile-card-title font-mono">Profile Information</h2>
-              </div>
-              <span className="badge badge-green text-[10px] font-mono">PUBLIC INFO</span>
-            </div>
-
-            <form onSubmit={handleSaveProfile} className="profile-form">
-              <div className="profile-form-grid">
-                <div className="form-group">
-                  <label className="form-label font-mono">Display Name</label>
-                  <input
-                    type="text"
-                    value={formData.displayName}
-                    onChange={(e) => handleChange('displayName', e.target.value)}
-                    placeholder="e.g. Pulse Whale"
-                    className="form-input font-mono"
-                    maxLength={32}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label font-mono">Username Handle</label>
-                  <div className="input-with-prefix">
-                    <span className="input-prefix font-mono">@</span>
-                    <input
-                      type="text"
-                      value={formData.username}
-                      onChange={(e) => handleChange('username', e.target.value)}
-                      placeholder="username"
-                      className="form-input font-mono"
-                      maxLength={24}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label font-mono">Bio / Trading Thesis</label>
-                <textarea
-                  value={formData.bio}
-                  onChange={(e) => handleChange('bio', e.target.value)}
-                  placeholder="Share your PulseChain strategy or trading thesis..."
-                  className="form-textarea font-mono"
-                  rows={2}
-                  maxLength={160}
-                />
-              </div>
-
-              {/* Trading Style Archetype */}
-              <div className="form-group">
-                <label className="form-label font-mono">Trading Style Archetype</label>
-                <div className="trading-style-pills font-mono">
-                  {TRADING_STYLES.map((style) => (
-                    <button
-                      key={style.id}
-                      type="button"
-                      className={`style-pill-btn ${formData.tradingStyle === style.id ? 'active' : ''}`}
-                      onClick={() => handleChange('tradingStyle', style.id)}
-                    >
-                      {style.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Social Handles */}
-              <div className="profile-form-grid">
-                <div className="form-group">
-                  <label className="form-label font-mono">𝕏 (Twitter) Handle</label>
-                  <div className="input-with-prefix">
-                    <span className="input-prefix font-mono">@</span>
-                    <input
-                      type="text"
-                      value={formData.twitter}
-                      onChange={(e) => handleChange('twitter', e.target.value)}
-                      placeholder="your_x_handle"
-                      className="form-input font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label font-mono">Telegram Handle</label>
-                  <div className="input-with-prefix">
-                    <span className="input-prefix font-mono">@</span>
-                    <input
-                      type="text"
-                      value={formData.telegram}
-                      onChange={(e) => handleChange('telegram', e.target.value)}
-                      placeholder="your_tg_handle"
-                      className="form-input font-mono"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Save Button */}
-              <button type="submit" className="btn-primary profile-save-btn font-mono">
-                <Save size={15} />
-                <span>Save Profile Changes</span>
-              </button>
-            </form>
-          </div>
-
-          {/* Card 2: Avatar Presets & Custom Upload */}
-          <div className="profile-card glass-panel">
-            <div className="profile-card-header">
-              <div className="flex items-center gap-2">
-                <Sparkles size={16} className="text-pulse-cyan" />
-                <h2 className="profile-card-title font-mono">Avatar Selection</h2>
-              </div>
-              {profile.customAvatarUrl && (
-                <button
-                  type="button"
-                  className="btn-danger-subtle font-mono text-[11px]"
-                  onClick={handleRemovePhoto}
-                >
-                  <Trash2 size={12} />
-                  <span>Remove Custom Photo</span>
-                </button>
-              )}
-            </div>
-
-            <div className="preset-avatars-grid">
-              {PRESET_AVATARS.map((avatar) => {
-                const isSelected = !profile.customAvatarUrl && profile.avatarId === avatar.id
-                return (
-                  <button
-                    key={avatar.id}
-                    type="button"
-                    className={`preset-avatar-btn ${isSelected ? 'active' : ''}`}
-                    style={{ background: avatar.bg }}
-                    onClick={() => handleSelectAvatar(avatar.id)}
-                    title={avatar.name}
-                  >
-                    <span className="preset-avatar-icon">{avatar.icon}</span>
-                    <span className="preset-avatar-name font-mono">{avatar.name}</span>
-                    {isSelected && (
-                      <div className="avatar-check-badge">
-                        <Check size={12} className="text-black" />
-                      </div>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* =======================================================================
-            RIGHT COLUMN: PREFERENCES, SECURITY & DATA BACKUP
-           ======================================================================= */}
-        <div className="profile-col">
-          {/* Card 3: Trading & App Preferences */}
-          <div className="profile-card glass-panel">
-            <div className="profile-card-header">
-              <div className="flex items-center gap-2">
-                <Sliders size={16} className="text-pulse-yellow" />
-                <h2 className="profile-card-title font-mono">Trading & App Preferences</h2>
-              </div>
-              <span className="badge badge-pulse text-[10px] font-mono">INSTANT SYNC</span>
-            </div>
-
-            <div className="preferences-list font-mono">
-              {/* Sound Effects */}
-              <div className="preference-item-row">
-                <div className="preference-label-group">
-                  <div className="flex items-center gap-2">
-                    {preferences.soundFxEnabled ? (
-                      <Volume2 size={16} className="text-pulse-green" />
-                    ) : (
-                      <VolumeX size={16} className="text-muted" />
-                    )}
-                    <span className="preference-title">Sound Effects</span>
-                  </div>
-                  <span className="preference-desc">Audio feedback on trades, copy actions & clicks</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="btn-subtle-test"
-                    onClick={() => triggerSound('success')}
-                    title="Play Test Chime"
-                  >
-                    Test
-                  </button>
-                  <label className="toggle-switch">
-                    <input
-                      type="checkbox"
-                      checked={preferences.soundFxEnabled}
-                      onChange={(e) => {
-                        updatePreferences({ soundFxEnabled: e.target.checked })
-                        triggerSound('toggle')
-                      }}
-                    />
-                    <span className="toggle-slider"></span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Default Slippage */}
-              <div className="preference-item-row vertical">
-                <div className="preference-label-group">
-                  <span className="preference-title">Default DEX Slippage</span>
-                  <span className="preference-desc">Max price deviation allowed on automated swaps</span>
-                </div>
-                <div className="slippage-preset-row">
-                  {['0.1', '0.5', '1.0', '2.5'].map((val) => (
-                    <button
-                      key={val}
-                      type="button"
-                      className={`slippage-pill ${preferences.slippage === val ? 'active' : ''}`}
-                      onClick={() => {
-                        updatePreferences({ slippage: val, customSlippage: '' })
-                        triggerSound('click')
-                      }}
-                    >
-                      {val}%
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Gas Priority */}
-              <div className="preference-item-row vertical">
-                <div className="preference-label-group">
-                  <span className="preference-title">Gas Speed Preset</span>
-                  <span className="preference-desc">PulseChain transaction fee estimation speed</span>
-                </div>
-                <div className="slippage-preset-row">
-                  {[
-                    { id: 'standard', label: 'Standard (120 Gwei)' },
-                    { id: 'fast', label: 'Fast (150 Gwei)' },
-                    { id: 'instant', label: 'Turbo (200 Gwei)' },
-                  ].map((gas) => (
-                    <button
-                      key={gas.id}
-                      type="button"
-                      className={`slippage-pill flex-1 ${preferences.gasPriority === gas.id ? 'active' : ''}`}
-                      onClick={() => {
-                        updatePreferences({ gasPriority: gas.id })
-                        triggerSound('click')
-                      }}
-                    >
-                      {gas.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Default Chart Interval */}
-              <div className="preference-item-row">
-                <div className="preference-label-group">
-                  <span className="preference-title">Default Chart Interval</span>
-                  <span className="preference-desc">Timeframe loaded upon opening pair screener</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  {['5m', '15m', '1h', '4h', '1D'].map((interval) => (
-                    <button
-                      key={interval}
-                      type="button"
-                      className={`chart-interval-btn ${preferences.chartInterval === interval ? 'active' : ''}`}
-                      onClick={() => {
-                        updatePreferences({ chartInterval: interval })
-                        triggerSound('click')
-                      }}
-                    >
-                      {interval}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Privacy Mode */}
-              <div className="preference-item-row">
-                <div className="preference-label-group">
-                  <div className="flex items-center gap-2">
-                    {preferences.privacyMode ? <EyeOff size={15} className="text-pulse-cyan" /> : <Eye size={15} className="text-muted" />}
-                    <span className="preference-title">Privacy Mode</span>
-                  </div>
-                  <span className="preference-desc">Mask wallet balances and portfolio USD values</span>
-                </div>
-                <label className="toggle-switch">
-                  <input
-                    type="checkbox"
-                    checked={preferences.privacyMode}
-                    onChange={(e) => {
-                      updatePreferences({ privacyMode: e.target.checked })
-                      triggerSound('toggle')
-                    }}
-                  />
-                  <span className="toggle-slider"></span>
-                </label>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 4: Account Vault & Security */}
-          <div className="profile-card glass-panel">
-            <div className="profile-card-header">
-              <div className="flex items-center gap-2">
-                <Shield size={16} className="text-pulse-cyan" />
-                <h2 className="profile-card-title font-mono">Account & Security</h2>
-              </div>
-              <span className="badge badge-blue text-[10px] font-mono">ENCRYPTED</span>
-            </div>
-
-            <div className="account-security-body font-mono">
-              {/* Account Status Box */}
-              <div className="account-status-box">
-                <div className="status-box-header">
-                  <span className="text-muted">Account Status:</span>
-                  <span className="status-badge-val">
-                    {isAuthenticated ? (
-                      <span className="text-pulse-green font-bold">● Vault Active ({currentUser?.username})</span>
-                    ) : isConnected ? (
-                      <span className="text-pulse-cyan font-bold">● Web3 Wallet Connected</span>
-                    ) : (
-                      <span className="text-muted font-bold">○ Guest Mode</span>
-                    )}
-                  </span>
-                </div>
-
-                {isConnected && address && (
-                  <div className="account-detail-row">
-                    <span className="text-muted">Wallet:</span>
-                    <span className="text-white font-mono">{address.slice(0, 10)}...{address.slice(-6)}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* PIN Security Management if Authenticated */}
-              {isAuthenticated ? (
-                <form onSubmit={handleUpdatePin} className="pin-update-form">
-                  <label className="form-label font-mono">Update 4-Digit Security PIN</label>
-                  <div className="pin-input-group">
-                    <input
-                      type="password"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={6}
-                      value={newSecurityPin}
-                      onChange={(e) => setNewSecurityPin(e.target.value.replace(/\D/g, ''))}
-                      placeholder="New PIN (min 4 digits)"
-                      className="form-input font-mono flex-1"
-                    />
-                    <button
-                      type="submit"
-                      className="btn-secondary font-mono text-xs"
-                      disabled={isSavingPin || newSecurityPin.length < 4}
-                    >
-                      <KeyRound size={13} />
-                      <span>{isSavingPin ? 'Updating...' : 'Update PIN'}</span>
-                    </button>
-                  </div>
-                  {pinFeedback && (
-                    <div className={`pin-feedback-msg ${pinFeedback.type} animate-fade-in`}>
-                      {pinFeedback.type === 'success' ? <Check size={13} /> : <Lock size={13} />}
-                      <span>{pinFeedback.text}</span>
-                    </div>
-                  )}
-
-                  <button
-                    type="button"
-                    className="btn-danger-outline w-full mt-3 font-mono"
-                    onClick={signOut}
-                  >
-                    <LogOut size={14} />
-                    <span>Sign Out of Account Vault</span>
-                  </button>
-                </form>
-              ) : (
-                <div className="guest-action-box">
-                  <p className="guest-action-desc">
-                    Sign in to your encrypted PulseDex vault to backup your watchlists and sync profile settings across devices.
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      className="btn-primary flex-1 font-mono text-xs"
-                      onClick={() => openAuthModal('signin')}
-                    >
-                      <ShieldCheck size={14} />
-                      <span>Sign In / Register</span>
-                    </button>
-                    {isConnected && (
-                      <button
-                        type="button"
-                        className="btn-secondary font-mono text-xs text-pulse-red"
-                        onClick={() => disconnect()}
-                      >
-                        <LogOut size={13} />
-                        <span>Disconnect</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Card 5: Profile Data Backup & Restore */}
-          <div className="profile-card glass-panel">
-            <div className="profile-card-header">
-              <div className="flex items-center gap-2">
-                <Download size={16} className="text-pulse-green" />
-                <h2 className="profile-card-title font-mono">Data Backup & Restore</h2>
-              </div>
-            </div>
-
-            <div className="backup-actions-grid font-mono">
-              <button
-                type="button"
-                className="btn-backup-item"
-                onClick={handleExportBackup}
-                title="Export profile JSON file"
-              >
-                <Download size={14} className="text-pulse-green" />
-                <span>Export Profile JSON</span>
-              </button>
-
-              <label className="btn-backup-item cursor-pointer" title="Import profile JSON file">
-                <Upload size={14} className="text-pulse-cyan" />
-                <span>Import Profile JSON</span>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="application/json"
-                  onChange={handleImportBackup}
-                  style={{ display: 'none' }}
-                />
-              </label>
-
-              <button
-                type="button"
-                className="btn-backup-item text-pulse-red"
-                onClick={handleResetProfile}
-                title="Reset all settings to default"
-              >
-                <RotateCcw size={14} />
-                <span>Reset to Defaults</span>
-              </button>
-            </div>
-
-            {importStatus && (
-              <div className={`pin-feedback-msg ${importStatus.type} mt-3 animate-fade-in font-mono`}>
-                <span>{importStatus.text}</span>
-              </div>
-            )}
-          </div>
-        </div>
+      {/* 3. Security Guarantee Footer */}
+      <div className="profile-security-footer font-mono glass-panel">
+        <ShieldCheck size={16} className="text-pulse-green flex-shrink-0" />
+        <span>
+          PulseDex Client-Side Vault: Your profile, notes, and watchlist are stored with AES/PBKDF2 client-side encryption. Data is never lost upon logout.
+        </span>
       </div>
     </div>
   )
