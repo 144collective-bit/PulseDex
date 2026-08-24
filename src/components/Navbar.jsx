@@ -208,6 +208,13 @@ export default function Navbar({
               <span>Watchlist</span>
               {watchlistCount > 0 && <span className="tab-count-badge">{watchlistCount}</span>}
             </button>
+            <button
+              className={`btn-tab ${activeTab === 'profile' ? 'active' : ''}`}
+              onClick={() => setActiveTab('profile')}
+            >
+              <User size={16} className="text-pulse-cyan" />
+              <span>Profile</span>
+            </button>
           </nav>
         </div>
 

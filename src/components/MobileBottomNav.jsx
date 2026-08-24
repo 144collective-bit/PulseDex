@@ -94,8 +94,10 @@ export default function MobileBottomNav({
       </button>
 
       <button
-        className="mobile-nav-item mobile-profile-nav-item"
-        onClick={openProfileModal}
+        className={`mobile-nav-item mobile-profile-nav-item ${activeTab === 'profile' ? 'active' : ''}`}
+        onClick={() => {
+          setActiveTab('profile')
+        }}
       >
         <div className="mobile-nav-icon-wrapper">
           <div

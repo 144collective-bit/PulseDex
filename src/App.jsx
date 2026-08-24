@@ -22,6 +22,7 @@ import DexView from './components/DexView'
 import CrossChainSwap from './components/CrossChainSwap'
 import WalletConnectModal from './components/WalletConnectModal'
 import UserProfileModal from './components/UserProfileModal'
+import ProfileView from './components/ProfileView'
 import AuthModal from './components/AuthModal'
 import { AuthProvider } from './context/AuthContext'
 import { UserProfileProvider } from './context/UserProfileContext'
@@ -251,6 +252,10 @@ function MainApp() {
             onSelectPair={handleSelectPair}
             onToggleWatchlist={handleToggleWatchlist}
           />
+        )}
+
+        {activeTab === 'profile' && (
+          <ProfileView onOpenWalletModal={() => setShowWalletModal(true)} />
         )}
       </main>
 

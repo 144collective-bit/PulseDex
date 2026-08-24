@@ -11334,6 +11334,20 @@
   border-color: rgba(0, 229, 255, 0.25);
 }
 
+/* Dedicated Profile Page View */
+.profile-view-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 16px 60px 16px;
+}
+
+.profile-view-container .user-profile-hero {
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 20px;
+}
+
+
 
 
 
