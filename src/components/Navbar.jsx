@@ -149,9 +149,7 @@ export default function Navbar({
         <div className="nav-left">
           {/* Logo */}
           <div className="logo-box" onClick={() => setActiveTab('screener')}>
-            <div className="logo-image-container">
-              <img src="/brand-logo.png" alt="PulseDex" className="brand-logo-img" />
-            </div>
+            <img src="/brand-logo.png" alt="PulseDex" className="brand-logo-img" />
             <img src="/PulseDex.png" alt="PulseDex" className="brand-text-img" />
           </div>
 
@@ -171,6 +169,13 @@ export default function Navbar({
               <Flame size={16} className="text-pulse-amber" />
               <span>Trenches</span>
               <span className="tab-hot-badge font-mono">HOT</span>
+            </button>
+            <button
+              className={`btn-tab ${activeTab === 'dex' ? 'active' : ''}`}
+              onClick={() => setActiveTab('dex')}
+            >
+              <Zap size={16} className="text-pulse-green" />
+              <span>DEX</span>
             </button>
             <button
               className={`btn-tab ${activeTab === 'markets' ? 'active' : ''}`}

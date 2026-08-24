@@ -18,6 +18,7 @@ import MarketOverview from './components/MarketOverview'
 import PortfolioView from './components/PortfolioView'
 import WatchlistView from './components/WatchlistView'
 import TrenchesView from './components/TrenchesView'
+import DexView from './components/DexView'
 import WalletConnectModal from './components/WalletConnectModal'
 import UserProfileModal from './components/UserProfileModal'
 import AuthModal from './components/AuthModal'
@@ -200,6 +201,8 @@ function MainApp() {
               <div className={`screener-side-col ${mobileScreenerTab === 'details' ? 'mobile-show' : 'mobile-hide'}`}>
                 <TokenDetails
                   pair={currentPair}
+                  allPairs={topPairs}
+                  onSelectPair={handleSelectPair}
                   isStarred={isCurrentPairStarred}
                   onToggleStar={() =>
                     currentPair && handleToggleWatchlist(currentPair.pairAddress)
@@ -213,6 +216,10 @@ function MainApp() {
 
         {activeTab === 'trenches' && (
           <TrenchesView onSelectPairForChart={handleSelectPair} />
+        )}
+
+        {activeTab === 'dex' && (
+          <DexView onSelectPairForChart={handleSelectPair} />
         )}
 
         {activeTab === 'markets' && (

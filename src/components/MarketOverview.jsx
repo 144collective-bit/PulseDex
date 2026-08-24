@@ -15,6 +15,9 @@ import {
   Copy,
   Check,
   Layers,
+  ExternalLink,
+  X,
+  ArrowRight,
 } from 'lucide-react'
 import TokenLogo from './TokenLogo'
 
@@ -33,6 +36,7 @@ export default function MarketOverview({
   const [sortField, setSortField] = useState('volume') // 'volume' | 'liquidity' | 'price' | 'change24' | 'change1' | 'change5m' | 'txns'
   const [sortDirection, setSortDirection] = useState('desc') // 'asc' | 'desc'
   const [copiedAddr, setCopiedAddr] = useState('')
+  const [activePoolsModalToken, setActivePoolsModalToken] = useState(null)
 
   const handleCopy = (e, text) => {
     e.stopPropagation()
@@ -52,14 +56,50 @@ export default function MarketOverview({
     }
   }
 
-  // Global Market Stats computed from all live pairs
+  // Deduplicate pairs so that each token only appears ONCE in the markets list
+  // Group all liquidity pools for any token with multiple pools
+  const uniqueTokenMarkets = useMemo(() => {
+    const tokenMap = new Map()
+
+    pairs.forEach((p) => {
+      const baseAddr = p.baseToken?.address?.toLowerCase()
+      const baseSym = (p.baseToken?.symbol || '').toUpperCase()
+      const key = baseAddr || baseSym
+
+      if (!key) return
+
+      if (!tokenMap.has(key)) {
+        tokenMap.set(key, {
+          primaryPair: p,
+          allPools: [p],
+        })
+      } else {
+        const item = tokenMap.get(key)
+        item.allPools.push(p)
+        // Set the pool with the largest liquidity as the primary display representative
+        const currentLiq = parseFloat(p.liquidity?.usd || 0)
+        const maxLiq = parseFloat(item.primaryPair.liquidity?.usd || 0)
+        if (currentLiq > maxLiq) {
+          item.primaryPair = p
+        }
+      }
+    })
+
+    return Array.from(tokenMap.values()).map(({ primaryPair, allPools }) => ({
+      ...primaryPair,
+      allPools,
+      poolCount: allPools.length,
+    }))
+  }, [pairs])
+
+  // Global Market Stats computed from unique tokens
   const marketStats = useMemo(() => {
     let totalVolume = 0
     let totalLiquidity = 0
     let topGainer = null
     let topVolumePair = null
 
-    pairs.forEach((p) => {
+    uniqueTokenMarkets.forEach((p) => {
       const vol = parseFloat(p.volume?.h24 || 0)
       const liq = parseFloat(p.liquidity?.usd || 0)
       const chg = parseFloat(p.priceChange?.h24 || 0)
@@ -81,15 +121,16 @@ export default function MarketOverview({
     return {
       totalVolume,
       totalLiquidity,
-      topGainer: topGainer || pairs[0],
-      topVolumePair: topVolumePair || pairs[0],
-      pairCount: pairs.length,
+      topGainer: topGainer || uniqueTokenMarkets[0],
+      topVolumePair: topVolumePair || uniqueTokenMarkets[0],
+      uniqueTokenCount: uniqueTokenMarkets.length,
+      totalPoolCount: pairs.length,
     }
-  }, [pairs])
+  }, [uniqueTokenMarkets, pairs])
 
-  // Filter and sort pairs
-  const processedPairs = useMemo(() => {
-    let list = [...pairs]
+  // Filter and sort deduplicated tokens
+  const processedTokens = useMemo(() => {
+    let list = [...uniqueTokenMarkets]
 
     // 1. Text filter
     if (searchFilter.trim()) {
@@ -182,21 +223,21 @@ export default function MarketOverview({
     })
 
     return list
-  }, [pairs, activeCategory, searchFilter, dexFilter, quoteFilter, minLiquidity, sortField, sortDirection, watchlist])
+  }, [uniqueTokenMarkets, activeCategory, searchFilter, dexFilter, quoteFilter, minLiquidity, sortField, sortDirection, watchlist])
 
   const exportCSV = () => {
-    const headers = 'Rank,Pair,BaseSymbol,QuoteSymbol,BaseContract,PairContract,DEX,PriceUSD,5mChangePct,1hChangePct,6hChangePct,24hChangePct,24hVolumeUSD,LiquidityUSD,24hBuys,24hSells,TotalSwaps\n'
-    const rows = processedPairs
+    const headers = 'Rank,TokenSymbol,TokenName,BaseContract,PrimaryPair,PrimaryDEX,PriceUSD,5mChangePct,1hChangePct,24hChangePct,24hVolumeUSD,LiquidityUSD,TotalPools\n'
+    const rows = processedTokens
       .map(
         (p, idx) =>
-          `"${idx + 1}","${p.baseToken?.symbol}/${p.quoteToken?.symbol}","${p.baseToken?.symbol}","${p.quoteToken?.symbol}","${p.baseToken?.address}","${p.pairAddress}","${p.dexId}","${p.priceUsd}","${p.priceChange?.m5 || 0}","${p.priceChange?.h1 || 0}","${p.priceChange?.h6 || 0}","${p.priceChange?.h24 || 0}","${p.volume?.h24 || 0}","${p.liquidity?.usd || 0}","${p.txns?.h24?.buys || 0}","${p.txns?.h24?.sells || 0}","${(p.txns?.h24?.buys || 0) + (p.txns?.h24?.sells || 0)}"`
+          `"${idx + 1}","${p.baseToken?.symbol}","${p.baseToken?.name}","${p.baseToken?.address}","${p.baseToken?.symbol}/${p.quoteToken?.symbol}","${p.dexId}","${p.priceUsd}","${p.priceChange?.m5 || 0}","${p.priceChange?.h1 || 0}","${p.priceChange?.h24 || 0}","${p.volume?.h24 || 0}","${p.liquidity?.usd || 0}","${p.poolCount || 1}"`
       )
       .join('\n')
     const blob = new Blob([headers + rows], { type: 'text/csv' })
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `pulsechain_markets_overview_${Date.now()}.csv`
+    a.download = `pulsechain_unique_tokens_${Date.now()}.csv`
     a.click()
   }
 
@@ -243,7 +284,7 @@ export default function MarketOverview({
             {formatUsd(marketStats.totalVolume)}
           </div>
           <div className="hero-card-sub font-mono">
-            <span className="text-muted">Total tracked volume across all pairs</span>
+            <span className="text-muted">Aggregated across all verified tokens</span>
           </div>
         </div>
 
@@ -303,7 +344,7 @@ export default function MarketOverview({
                 customUrl={marketStats.topVolumePair.info?.imageUrl}
                 size={24}
               />
-              <span className="hero-token-sym">{marketStats.topVolumePair.baseToken?.symbol}/{marketStats.topVolumePair.quoteToken?.symbol}</span>
+              <span className="hero-token-sym">{marketStats.topVolumePair.baseToken?.symbol}</span>
               <span className="hero-token-price font-bold text-white">
                 {formatUsd(marketStats.topVolumePair.volume?.h24)}
               </span>
@@ -321,14 +362,14 @@ export default function MarketOverview({
             <div className="hero-card-icon bg-purple">
               <Droplets size={16} className="text-pulse-purple" />
             </div>
-            <span className="hero-card-title">Tracked Liquidity</span>
-            <span className="badge badge-purple">{marketStats.pairCount} Pairs</span>
+            <span className="hero-card-title">Tracked Tokens</span>
+            <span className="badge badge-purple">{marketStats.uniqueTokenCount} Tokens ({marketStats.totalPoolCount} Pools)</span>
           </div>
           <div className="hero-card-val font-mono">
             {formatUsd(marketStats.totalLiquidity)}
           </div>
           <div className="hero-card-sub font-mono">
-            <span className="text-pulse-green">Active on-chain AMMs</span>
+            <span className="text-pulse-green">Deduplicated Token Feed</span>
           </div>
         </div>
       </div>
@@ -504,7 +545,7 @@ export default function MarketOverview({
           <button
             className="btn-icon"
             onClick={exportCSV}
-            title="Download Markets Table CSV"
+            title="Download Unique Tokens CSV"
           >
             <Download size={14} />
           </button>
@@ -515,11 +556,11 @@ export default function MarketOverview({
       <div className="markets-table-wrapper glass-panel">
         <div className="markets-table-top-bar font-mono">
           <span className="markets-results-count">
-            Showing <strong>{processedPairs.length}</strong> active pairs on PulseChain
+            Showing <strong>{processedTokens.length}</strong> unique tokens on PulseChain (no repeated assets)
           </span>
           <span className="markets-live-indicator">
             <span className="live-indicator-dot"></span>
-            Live Real-Time Screener Feed
+            1-Token-1-Row Verified Feed
           </span>
         </div>
 
@@ -535,7 +576,7 @@ export default function MarketOverview({
                 <tr>
                   <th style={{ width: '42px' }}>#</th>
                   <th onClick={() => handleSort('name')} className="sortable-th">
-                    <span className="th-content">Pair {renderSortIcon('name')}</span>
+                    <span className="th-content">Token Asset {renderSortIcon('name')}</span>
                   </th>
                   <th onClick={() => handleSort('price')} className="sortable-th text-right">
                     <span className="th-content justify-end">Price (USD) {renderSortIcon('price')}</span>
@@ -562,17 +603,17 @@ export default function MarketOverview({
                 </tr>
               </thead>
               <tbody>
-                {processedPairs.length === 0 ? (
+                {processedTokens.length === 0 ? (
                   <tr>
                     <td colSpan="10" className="text-center py-12 text-muted">
                       <div className="empty-state-box">
                         <Layers size={32} className="text-muted opacity-40 mb-2" />
-                        <p>No pairs found matching your active filter criteria.</p>
+                        <p>No tokens found matching your active filter criteria.</p>
                       </div>
                     </td>
                   </tr>
                 ) : (
-                  processedPairs.map((pair, index) => {
+                  processedTokens.map((pair, index) => {
                     const isStarred = watchlist.includes(pair.pairAddress?.toLowerCase())
                     const base = pair.baseToken || {}
                     const quote = pair.quoteToken || {}
@@ -582,11 +623,12 @@ export default function MarketOverview({
                     const buys = pair.txns?.h24?.buys || 0
                     const sells = pair.txns?.h24?.sells || 0
                     const totalTxns = buys + sells
-                    const isCopied = copiedAddr === pair.pairAddress
+                    const isCopied = copiedAddr === (base.address || pair.pairAddress)
+                    const hasMultiplePools = pair.poolCount > 1
 
                     return (
                       <tr
-                        key={pair.pairAddress || index}
+                        key={base.address || pair.pairAddress || index}
                         className="market-row"
                         onClick={() => onSelectPair(pair)}
                       >
@@ -606,7 +648,7 @@ export default function MarketOverview({
                           <span className="rank-num">{index + 1}</span>
                         </td>
 
-                        {/* Pair Symbol, Name, and DEX Pill */}
+                        {/* Token Symbol, Name, Primary DEX & Multi-Pool Badge */}
                         <td>
                           <div className="table-pair-cell">
                             <TokenLogo
@@ -617,14 +659,30 @@ export default function MarketOverview({
                             />
                             <div className="table-pair-symbols">
                               <div className="pair-line">
-                                <span className="base-sym">{base.symbol}</span>
-                                <span className="quote-sym">/{quote.symbol}</span>
+                                <span className="base-sym font-bold text-white">{base.symbol}</span>
+                                <span className="quote-sym text-muted">/{quote.symbol}</span>
                               </div>
                               <span className="pair-fullname text-muted">{base.name}</span>
                             </div>
+
                             <span className={`table-dex-pill dex-${(pair.dexId || 'pulsex').toLowerCase()}`}>
                               {pair.dexId || 'PulseX'}
                             </span>
+
+                            {hasMultiplePools && (
+                              <button
+                                type="button"
+                                className="badge badge-purple font-mono cursor-pointer hover:opacity-80 transition-opacity"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setActivePoolsModalToken(pair)
+                                }}
+                                title={`View all ${pair.poolCount} liquidity pools for ${base.symbol}`}
+                              >
+                                <Layers size={10} className="mr-0.5" />
+                                <span>{pair.poolCount} Pools</span>
+                              </button>
+                            )}
                           </div>
                         </td>
 
@@ -685,8 +743,8 @@ export default function MarketOverview({
                           <div className="table-actions-group">
                             <button
                               className="mini-copy-btn"
-                              onClick={(e) => handleCopy(e, pair.pairAddress)}
-                              title="Copy Pair Address"
+                              onClick={(e) => handleCopy(e, base.address || pair.pairAddress)}
+                              title="Copy Token Contract Address"
                             >
                               {isCopied ? <Check size={12} className="text-pulse-green" /> : <Copy size={12} />}
                             </button>
@@ -707,6 +765,79 @@ export default function MarketOverview({
           </div>
         )}
       </div>
+
+      {/* Other Pools Modal for Multi-Pool Tokens in Markets */}
+      {activePoolsModalToken && (
+        <div className="modal-backdrop" onClick={() => setActivePoolsModalToken(null)}>
+          <div className="modal-card glass-panel max-w-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between pb-3 border-b border-subtle">
+              <div className="flex items-center gap-2.5">
+                <TokenLogo
+                  symbol={activePoolsModalToken.baseToken?.symbol}
+                  address={activePoolsModalToken.baseToken?.address}
+                  size={28}
+                />
+                <div>
+                  <h3 className="text-white font-bold text-base flex items-center gap-2">
+                    <span>{activePoolsModalToken.baseToken?.symbol} Liquidity Pools</span>
+                    <span className="badge badge-purple text-xs">{activePoolsModalToken.allPools?.length} Pools</span>
+                  </h3>
+                  <span className="text-xs text-muted font-mono">{activePoolsModalToken.baseToken?.name} ({activePoolsModalToken.baseToken?.address?.slice(0, 8)}...{activePoolsModalToken.baseToken?.address?.slice(-6)})</span>
+                </div>
+              </div>
+              <button
+                className="wallet-modal-close-btn"
+                onClick={() => setActivePoolsModalToken(null)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="my-4 flex flex-col gap-2.5 max-h-[380px] overflow-y-auto pr-1 font-mono">
+              {activePoolsModalToken.allPools?.map((pool, idx) => (
+                <div
+                  key={pool.pairAddress || idx}
+                  className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-subtle hover:border-pulse-cyan/40 hover:bg-pulse-cyan/5 transition-all cursor-pointer"
+                  onClick={() => {
+                    onSelectPair(pool)
+                    setActivePoolsModalToken(null)
+                  }}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <TokenLogo symbol={pool.quoteToken?.symbol} address={pool.quoteToken?.address} size={22} />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white text-xs">{pool.baseToken?.symbol} / {pool.quoteToken?.symbol}</span>
+                        <span className="badge badge-pulse text-[10px]">{pool.dexId || 'PulseX'}</span>
+                      </div>
+                      <span className="text-[11px] text-muted">{pool.pairAddress?.slice(0, 6)}...{pool.pairAddress?.slice(-4)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4 text-right">
+                    <div>
+                      <div className="font-bold text-white text-xs">{formatPrice(pool.priceUsd)}</div>
+                      <div className="text-[11px] text-pulse-cyan">Liq: {formatUsd(pool.liquidity?.usd)}</div>
+                    </div>
+
+                    <span className={`badge ${parseFloat(pool.priceChange?.h24 || 0) >= 0 ? 'badge-green' : 'badge-red'} text-[10.5px]`}>
+                      {parseFloat(pool.priceChange?.h24 || 0) >= 0 ? '+' : ''}{(pool.priceChange?.h24 || 0).toFixed(1)}%
+                    </span>
+
+                    <button
+                      type="button"
+                      className="btn-secondary btn-xs flex items-center gap-1 font-sans"
+                    >
+                      <span>Chart</span>
+                      <ArrowRight size={10} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

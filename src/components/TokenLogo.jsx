@@ -101,6 +101,7 @@ export default function TokenLogo({
 
   return (
     <div
+      aria-hidden="true"
       className={`token-logo-fallback ${className}`}
       style={{
         width: `${size}px`,

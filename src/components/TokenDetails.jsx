@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
   Copy,
   Check,
@@ -13,19 +13,42 @@ import {
   ArrowLeftRight,
   ChevronDown,
   ChevronUp,
+  Layers,
+  ArrowRight,
 } from 'lucide-react'
 import TokenLogo from './TokenLogo'
+import { useUserProfile } from '../context/UserProfileContext'
 
 export default function TokenDetails({
   pair,
+  allPairs = [],
+  onSelectPair,
   isStarred = false,
   onToggleStar,
   watchlistCount = 0,
 }) {
+  const { triggerSound } = useUserProfile()
   const [copiedToken, setCopiedToken] = useState(false)
   const [timeframe, setTimeframe] = useState('24H') // '5M', '1H', '6H', '24H'
   const [showMoreSocials, setShowMoreSocials] = useState(false)
   const [alertActive, setAlertActive] = useState(false)
+  const [showOtherPoolsModal, setShowOtherPoolsModal] = useState(false)
+
+  // Find all other liquidity pools matching the current base token
+  const otherPools = useMemo(() => {
+    if (!pair || !allPairs || !allPairs.length) return []
+    const baseAddr = pair.baseToken?.address?.toLowerCase()
+    const baseSym = (pair.baseToken?.symbol || '').toUpperCase()
+    const currentPairAddr = pair.pairAddress?.toLowerCase()
+
+    return allPairs.filter((p) => {
+      if (p.pairAddress?.toLowerCase() === currentPairAddr) return false
+      const matchBaseAddr = baseAddr && p.baseToken?.address?.toLowerCase() === baseAddr
+      const matchQuoteAddr = baseAddr && p.quoteToken?.address?.toLowerCase() === baseAddr
+      const matchSym = baseSym && (p.baseToken?.symbol?.toUpperCase() === baseSym || p.quoteToken?.symbol?.toUpperCase() === baseSym)
+      return matchBaseAddr || matchQuoteAddr || matchSym
+    })
+  }, [pair, allPairs])
 
   if (!pair) {
     return (
@@ -44,6 +67,7 @@ export default function TokenDetails({
     if (!text) return
     navigator.clipboard.writeText(text)
     setCopiedToken(true)
+    triggerSound('click')
     setTimeout(() => setCopiedToken(false), 2000)
   }
 
@@ -174,7 +198,7 @@ export default function TokenDetails({
           </span>
         </div>
 
-        {/* Chain & DEX Breadcrumbs */}
+        {/* Chain & DEX Breadcrumbs + Other Pools Button */}
         <div className="dex-breadcrumbs-row">
           <div className="dex-chain-pill">
             <span className="dex-pulse-gradient-dot"></span>
@@ -187,6 +211,28 @@ export default function TokenDetails({
             <span className="dex-version-chip">{pair.labels?.[0] || 'V1'}</span>
           </div>
         </div>
+
+        {/* Other Pools Selector Button */}
+        {otherPools.length > 0 && (
+          <div className="dex-other-pools-trigger-wrap mt-2">
+            <button
+              type="button"
+              className="dex-other-pools-btn"
+              onClick={() => setShowOtherPoolsModal(true)}
+              title={`View ${otherPools.length} other liquidity pools for ${base.symbol}`}
+            >
+              <div className="flex items-center gap-1.5">
+                <Layers size={13} className="text-pulse-purple" />
+                <span className="font-bold text-white text-xs">Other Pools</span>
+                <span className="badge badge-purple text-[10px] font-mono">+{otherPools.length}</span>
+              </div>
+              <div className="flex items-center gap-1 text-[11px] text-pulse-cyan font-medium">
+                <span>Switch Pool</span>
+                <ChevronDown size={13} />
+              </div>
+            </button>
+          </div>
+        )}
 
         {/* Social / Info Buttons */}
         <div className="dex-social-links-row">
@@ -462,6 +508,96 @@ export default function TokenDetails({
         </div>
         <ExternalLink size={14} className="dex-trade-cta-ext" />
       </a>
+
+      {/* Other Pools Modal for the Right-Side Token Info Panel */}
+      {showOtherPoolsModal && (
+        <div className="modal-backdrop" onClick={() => setShowOtherPoolsModal(false)}>
+          <div className="modal-card glass-panel max-w-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between pb-3 border-b border-subtle">
+              <div className="flex items-center gap-2.5">
+                <TokenLogo
+                  symbol={base.symbol}
+                  address={base.address}
+                  customUrl={pair.info?.imageUrl}
+                  size={28}
+                />
+                <div>
+                  <h3 className="text-white font-bold text-base flex items-center gap-2">
+                    <span>{base.symbol} Liquidity Pools</span>
+                    <span className="badge badge-purple text-xs">{otherPools.length + 1} Total</span>
+                  </h3>
+                  <span className="text-xs text-muted font-mono">Select any pool to switch charts & order data</span>
+                </div>
+              </div>
+              <button
+                className="wallet-modal-close-btn"
+                onClick={() => setShowOtherPoolsModal(false)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="my-4 flex flex-col gap-2.5 max-h-[380px] overflow-y-auto pr-1 font-mono">
+              {/* Current Active Pool */}
+              <div className="flex items-center justify-between p-3 rounded-xl bg-pulse-green/10 border border-pulse-green/30">
+                <div className="flex items-center gap-2.5">
+                  <TokenLogo symbol={quote.symbol} address={quote.address} size={22} />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-white text-xs">{base.symbol} / {quote.symbol}</span>
+                      <span className="badge badge-green text-[10px]">CURRENT POOL</span>
+                    </div>
+                    <span className="text-[11px] text-muted">{pair.dexId || 'PulseX'} • {pair.pairAddress?.slice(0, 6)}...{pair.pairAddress?.slice(-4)}</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="font-bold text-white text-xs">{formatUsdPrice(pair.priceUsd)}</div>
+                  <div className="text-[11px] text-pulse-green">Liq: {formatCompact(pair.liquidity?.usd)}</div>
+                </div>
+              </div>
+
+              {/* Other Available Pools */}
+              {otherPools.map((p, idx) => (
+                <div
+                  key={p.pairAddress || idx}
+                  className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-subtle hover:border-pulse-cyan/40 hover:bg-pulse-cyan/5 transition-all cursor-pointer"
+                  onClick={() => {
+                    if (onSelectPair) onSelectPair(p)
+                    setShowOtherPoolsModal(false)
+                    triggerSound('click')
+                  }}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <TokenLogo symbol={p.quoteToken?.symbol} address={p.quoteToken?.address} size={22} />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white text-xs">{p.baseToken?.symbol} / {p.quoteToken?.symbol}</span>
+                        <span className="badge badge-pulse text-[10px]">{p.dexId || 'PulseX'}</span>
+                      </div>
+                      <span className="text-[11px] text-muted">{p.pairAddress?.slice(0, 6)}...{p.pairAddress?.slice(-4)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 text-right">
+                    <div>
+                      <div className="font-bold text-white text-xs">{formatUsdPrice(p.priceUsd)}</div>
+                      <div className="text-[11px] text-pulse-cyan">Liq: {formatCompact(p.liquidity?.usd)}</div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="btn-secondary btn-xs flex items-center gap-1 font-sans"
+                    >
+                      <span>Switch</span>
+                      <ArrowRight size={10} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

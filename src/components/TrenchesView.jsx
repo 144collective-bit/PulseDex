@@ -6,7 +6,17 @@ import {
   Trash2,
   Compass,
   ArrowUpRight,
+  ExternalLink,
+  Zap,
+  Shield,
+  Droplets,
+  Layers,
+  Sparkles,
+  Bookmark,
+  Activity,
+  Globe,
 } from 'lucide-react'
+import { useUserProfile } from '../context/UserProfileContext'
 
 // Default Curated Ecosystem Links with Verified Logos
 const DEFAULT_ECOSYSTEM_APPS = [
@@ -19,7 +29,7 @@ const DEFAULT_ECOSYSTEM_APPS = [
     badgeColor: 'amber',
     logo: '/apps/plsx-fun.png',
     icon: '🔥',
-    desc: 'PulseChain fair-launch bonding curve terminal. Trade early meme tokens before they hit PulseX.',
+    desc: 'PulseChain fair-launch bonding curve terminal. Trade early meme tokens before they migrate to PulseX.',
     tags: ['Bonding Curve', 'Fair Launch', 'Meme Coins'],
     featured: true,
   },
@@ -28,7 +38,7 @@ const DEFAULT_ECOSYSTEM_APPS = [
     name: 'pump.tires',
     url: 'https://pump.tires',
     category: 'launchpads',
-    badge: 'Meme Terminal',
+    badge: 'Meme Arena',
     badgeColor: 'cyan',
     logo: '/apps/pump-tires.png',
     icon: '🛞',
@@ -45,7 +55,7 @@ const DEFAULT_ECOSYSTEM_APPS = [
     badgeColor: 'green',
     logo: '/apps/pulsex.png',
     icon: '⚡',
-    desc: "PulseChain's flagship decentralized exchange. Deepest on-chain liquidity, AMM swap & yield farms.",
+    desc: "PulseChain's flagship decentralized exchange. Deepest on-chain liquidity, AMM swaps, and yield farms.",
     tags: ['DEX', 'Liquidity Pools', 'Yield Farms'],
     featured: true,
   },
@@ -93,11 +103,11 @@ const DEFAULT_ECOSYSTEM_APPS = [
     name: 'PulseScan Explorer',
     url: 'https://scan.pulsechain.com',
     category: 'security',
-    badge: 'Explorer',
+    badge: 'Block Explorer',
     badgeColor: 'cyan',
     logo: '/apps/pulsescan.png',
     icon: '🔍',
-    desc: 'Official block explorer for PulseChain. Inspect PRC-20 contracts, wallet balances, whale transactions.',
+    desc: 'Official block explorer for PulseChain. Inspect PRC-20 contracts, wallet balances, and whale transactions.',
     tags: ['Explorer', 'Contracts', 'Holders'],
     featured: false,
   },
@@ -195,6 +205,7 @@ const DEFAULT_ECOSYSTEM_APPS = [
 ]
 
 export default function TrenchesView() {
+  const { triggerSound } = useUserProfile()
   const [activeCategory, setActiveCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [customLinks, setCustomLinks] = useState([])
@@ -203,7 +214,7 @@ export default function TrenchesView() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [newAppName, setNewAppName] = useState('')
   const [newAppUrl, setNewAppUrl] = useState('')
-  const [newAppCategory, setNewAppCategory] = useState('tools')
+  const [newAppCategory, setNewAppCategory] = useState('launchpads')
   const [newAppDesc, setNewAppDesc] = useState('')
 
   // Load custom links from localStorage
@@ -236,12 +247,13 @@ export default function TrenchesView() {
       name: newAppName.trim(),
       url: formattedUrl,
       category: newAppCategory,
-      badge: 'Custom',
+      badge: 'Custom Bookmark',
       badgeColor: 'cyan',
       icon: '🔗',
-      desc: newAppDesc.trim() || 'User bookmark tool for trading.',
+      desc: newAppDesc.trim() || 'User bookmarked portal for quick trading access.',
       tags: ['Custom', 'Bookmark'],
       isCustom: true,
+      featured: false,
     }
 
     const updated = [newItem, ...customLinks]
@@ -250,12 +262,14 @@ export default function TrenchesView() {
     setNewAppUrl('')
     setNewAppDesc('')
     setShowAddModal(false)
+    triggerSound('click')
   }
 
   const handleRemoveCustomApp = (id, e) => {
     e.stopPropagation()
     const updated = customLinks.filter((item) => item.id !== id)
     saveCustomLinks(updated)
+    triggerSound('click')
   }
 
   // Combine default apps with custom user links
@@ -281,52 +295,125 @@ export default function TrenchesView() {
 
   return (
     <div className="trenches-page-container">
-      {/* ⚔️ HERO BANNER */}
+      {/* ⚔️ HERO BANNER WITH PLSX.FUN SHOWCASE */}
       <section className="trenches-hero glass-panel">
-        <div className="trenches-hero-content">
-          <div className="trenches-badge font-mono">
-            <Flame size={14} className="text-pulse-amber animate-pulse" />
-            <span>PULSECHAIN DEGEN TERMINAL</span>
-            <span className="trenches-live-tag">LIVE</span>
+        <div className="trenches-hero-grid-layout">
+          {/* Left Column: Title, Subtitle & Quick Stats */}
+          <div className="trenches-hero-content">
+            <div className="trenches-badge">
+              <Flame size={14} className="text-pulse-amber animate-pulse" />
+              <span>PULSECHAIN DEGEN TERMINAL</span>
+              <span className="trenches-live-tag">LIVE</span>
+            </div>
+
+            <h1 className="trenches-title">
+              THE <span className="text-gradient-amber">TRENCHES</span>
+            </h1>
+
+            <p className="trenches-subtitle">
+              Instant gateway to PulseChain bonding-curve launchpads, early meme arenas, and verified DeFi terminals.
+            </p>
+
+            {/* Quick Ecosystem Metrics Strip */}
+            <div className="trenches-stats-strip">
+              <a
+                href="https://plsx.fun/trenches"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="t-stat-pill hover:border-pulse-amber/50 transition-all"
+              >
+                <span className="t-stat-label">PRIMARY LAUNCHPAD</span>
+                <div className="t-stat-val text-pulse-amber flex items-center gap-1.5">
+                  <img src="/apps/plsx-fun.png" alt="plsx.fun" className="t-stat-mini-logo" />
+                  <span className="font-bold font-mono">plsx.fun</span>
+                  <ArrowUpRight size={12} />
+                </div>
+              </a>
+
+              <a
+                href="https://pump.tires"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="t-stat-pill hover:border-pulse-cyan/50 transition-all"
+              >
+                <span className="t-stat-label">MEME ARENA</span>
+                <div className="t-stat-val text-pulse-cyan flex items-center gap-1.5">
+                  <img src="/apps/pump-tires.png" alt="pump.tires" className="t-stat-mini-logo" />
+                  <span className="font-bold font-mono">pump.tires</span>
+                  <ArrowUpRight size={12} />
+                </div>
+              </a>
+
+              <a
+                href="https://app.pulsex.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="t-stat-pill hover:border-pulse-green/50 transition-all"
+              >
+                <span className="t-stat-label">FLAGSHIP AMM</span>
+                <div className="t-stat-val text-pulse-green flex items-center gap-1.5">
+                  <img src="/apps/pulsex.png" alt="PulseX" className="t-stat-mini-logo" />
+                  <span className="font-bold font-mono">PulseX v2</span>
+                  <ArrowUpRight size={12} />
+                </div>
+              </a>
+
+              <div className="t-stat-pill">
+                <span className="t-stat-label">NETWORK GAS</span>
+                <div className="t-stat-val text-pulse-yellow font-bold font-mono">
+                  ~150 Gwei (&lt;$0.0001)
+                </div>
+              </div>
+            </div>
           </div>
 
-          <h1 className="trenches-title">
-            THE <span className="text-gradient-amber">TRENCHES</span>
-          </h1>
+          {/* Right Column: Large plsx.fun Featured Showcase Card */}
+          <div className="trenches-hero-feature-showcase">
+            <div className="trenches-featured-hero-card glass-panel glow-amber">
+              <div className="featured-hero-top">
+                <div className="featured-hero-logo-wrap">
+                  <img src="/apps/plsx-fun.png" alt="plsx.fun Logo" className="featured-hero-logo" />
+                  <div className="featured-hero-pulse-glow"></div>
+                </div>
+                <div className="featured-hero-badge-col">
+                  <span className="badge badge-amber font-mono text-[10.5px] font-bold">
+                    🔥 MAIN TRENCHES FEATURE
+                  </span>
+                  <h2 className="featured-hero-brand-name font-mono font-bold text-white text-xl flex items-center gap-1.5 mt-0.5">
+                    <span>plsx.fun</span>
+                    <span className="text-pulse-amber text-xs font-normal">/trenches</span>
+                  </h2>
+                </div>
+              </div>
 
-          <p className="trenches-subtitle">
-            Direct gateway to PulseChain bonding-curve launchpads, meme arenas, and essential DeFi portals.
-          </p>
+              <p className="featured-hero-desc text-xs text-slate-300">
+                PulseChain's premier fair-launch bonding curve launchpad. Deploy or snipe new tokens with 100% fair launch and automated liquidity migration straight into PulseX.
+              </p>
 
-          {/* Quick Ecosystem Metrics Strip */}
-          <div className="trenches-stats-strip font-mono">
-            <div className="t-stat">
-              <span className="t-stat-label">PRIMARY LAUNCHPAD</span>
-              <div className="t-stat-val-with-logo text-pulse-amber">
-                <img src="/apps/plsx-fun.png" alt="plsx.fun" className="t-stat-mini-logo" />
-                <span>plsx.fun</span>
+              <div className="featured-hero-perks font-mono text-[11px]">
+                <div className="perk-chip">
+                  <Sparkles size={12} className="text-pulse-amber" />
+                  <span>Fair Launch</span>
+                </div>
+                <div className="perk-chip">
+                  <Shield size={12} className="text-pulse-green" />
+                  <span>Anti-Rug Curve</span>
+                </div>
+                <div className="perk-chip">
+                  <Zap size={12} className="text-pulse-cyan" />
+                  <span>Auto PulseX Migration</span>
+                </div>
               </div>
-            </div>
-            <div className="t-stat-divider"></div>
-            <div className="t-stat">
-              <span className="t-stat-label">MEME ARENA</span>
-              <div className="t-stat-val-with-logo text-pulse-cyan">
-                <img src="/apps/pump-tires.png" alt="pump.tires" className="t-stat-mini-logo" />
-                <span>pump.tires</span>
-              </div>
-            </div>
-            <div className="t-stat-divider"></div>
-            <div className="t-stat">
-              <span className="t-stat-label">FLAGSHIP AMM</span>
-              <div className="t-stat-val-with-logo text-pulse-green">
-                <img src="/apps/pulsex.png" alt="PulseX" className="t-stat-mini-logo" />
-                <span>PulseX V2</span>
-              </div>
-            </div>
-            <div className="t-stat-divider"></div>
-            <div className="t-stat">
-              <span className="t-stat-label">NETWORK GAS</span>
-              <span className="t-stat-val text-white">~150 Gwei</span>
+
+              <a
+                href="https://plsx.fun/trenches"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-launch-hero-feature btn-primary w-full justify-center py-2.5 text-xs font-bold font-mono flex items-center gap-2"
+              >
+                <span>Enter plsx.fun Trenches</span>
+                <ArrowUpRight size={15} />
+              </a>
             </div>
           </div>
         </div>
@@ -334,31 +421,40 @@ export default function TrenchesView() {
 
       {/* 🌐 ECOSYSTEM & LAUNCHPAD DIRECTORY */}
       <section className="trenches-directory-section">
-        <div className="directory-header">
+        <div className="directory-header glass-panel">
           <div className="directory-title-block">
-            <h2 className="directory-heading font-mono">
-              <Compass size={20} className="text-pulse-cyan" />
-              <span>TERMINAL APPS & GATEWAYS</span>
-            </h2>
-            <p className="directory-sub">Curated directory of launchpads, meme arenas, and DEX tools.</p>
+            <div className="flex items-center gap-2">
+              <Compass size={18} className="text-pulse-cyan" />
+              <h2 className="directory-heading font-bold text-white text-sm tracking-tight">TERMINAL APPS & GATEWAYS</h2>
+            </div>
+            <p className="directory-sub text-xs text-muted mt-0.5">Curated directory of launchpads, meme arenas, and DEX tools on PulseChain.</p>
           </div>
 
           <div className="directory-actions">
             {/* Search filter */}
             <div className="dir-search-wrap">
-              <Search size={14} className="search-icon" />
+              <Search size={13} className="search-icon text-muted" />
               <input
                 type="text"
-                placeholder="Search tools or launchpads..."
+                placeholder="Search portals or launchpads..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="dir-search-input font-mono"
               />
+              {searchQuery && (
+                <button className="market-clear-search" onClick={() => setSearchQuery('')}>✕</button>
+              )}
             </div>
 
             {/* Add Custom Tool button */}
-            <button className="btn-add-custom-tool" onClick={() => setShowAddModal(true)}>
-              <Plus size={15} />
+            <button
+              className="btn-add-custom-tool btn-primary btn-sm font-semibold flex items-center gap-1.5"
+              onClick={() => {
+                setShowAddModal(true)
+                triggerSound('click')
+              }}
+            >
+              <Plus size={14} />
               <span>Add Custom Link</span>
             </button>
           </div>
@@ -368,43 +464,64 @@ export default function TrenchesView() {
         <div className="directory-categories-bar font-mono">
           <button
             className={`cat-tab ${activeCategory === 'all' ? 'active' : ''}`}
-            onClick={() => setActiveCategory('all')}
+            onClick={() => {
+              setActiveCategory('all')
+              triggerSound('click')
+            }}
           >
             All Portals ({allApps.length})
           </button>
           <button
             className={`cat-tab ${activeCategory === 'featured' ? 'active' : ''}`}
-            onClick={() => setActiveCategory('featured')}
+            onClick={() => {
+              setActiveCategory('featured')
+              triggerSound('click')
+            }}
           >
-            🔥 Featured Launchpads
+            🔥 Featured
           </button>
           <button
             className={`cat-tab ${activeCategory === 'launchpads' ? 'active' : ''}`}
-            onClick={() => setActiveCategory('launchpads')}
+            onClick={() => {
+              setActiveCategory('launchpads')
+              triggerSound('click')
+            }}
           >
-            🚀 Meme & Fair Launch
+            🚀 Meme & Launchpads
           </button>
           <button
             className={`cat-tab ${activeCategory === 'dex' ? 'active' : ''}`}
-            onClick={() => setActiveCategory('dex')}
+            onClick={() => {
+              setActiveCategory('dex')
+              triggerSound('click')
+            }}
           >
             ⚡ DEXs & Swaps
           </button>
           <button
             className={`cat-tab ${activeCategory === 'security' ? 'active' : ''}`}
-            onClick={() => setActiveCategory('security')}
+            onClick={() => {
+              setActiveCategory('security')
+              triggerSound('click')
+            }}
           >
             🛡️ Security & Wallets
           </button>
           <button
             className={`cat-tab ${activeCategory === 'bridges' ? 'active' : ''}`}
-            onClick={() => setActiveCategory('bridges')}
+            onClick={() => {
+              setActiveCategory('bridges')
+              triggerSound('click')
+            }}
           >
             🌉 Bridges & On-Ramps
           </button>
           <button
             className={`cat-tab ${activeCategory === 'analytics' ? 'active' : ''}`}
-            onClick={() => setActiveCategory('analytics')}
+            onClick={() => {
+              setActiveCategory('analytics')
+              triggerSound('click')
+            }}
           >
             📊 Analytics
           </button>
@@ -447,12 +564,12 @@ export default function TrenchesView() {
                 </div>
 
                 <div className="trench-badge-wrap">
-                  <span className={`badge badge-${app.badgeColor || 'cyan'} font-mono`}>
+                  <span className={`badge badge-${app.badgeColor || 'cyan'} font-mono text-[10.5px]`}>
                     {app.badge}
                   </span>
                   {app.isCustom && (
                     <button
-                      className="btn-del-custom"
+                      className="btn-del-custom text-pulse-red hover:opacity-80 p-1"
                       onClick={(e) => handleRemoveCustomApp(app.id, e)}
                       title="Remove Bookmark"
                     >
@@ -463,14 +580,15 @@ export default function TrenchesView() {
               </div>
 
               <div className="trench-card-title-row">
-                <h3 className="trench-app-name font-mono">{app.name}</h3>
-                <span className="trench-app-url font-mono">{new URL(app.url).hostname}</span>
+                <h3 className="trench-app-name font-bold text-white text-sm">{app.name}</h3>
+                <span className="trench-app-url font-mono text-[11px] text-muted">{new URL(app.url).hostname}</span>
               </div>
-              <p className="trench-app-desc">{app.desc}</p>
+
+              <p className="trench-app-desc text-xs text-slate-300">{app.desc}</p>
 
               <div className="trench-tags-row font-mono">
                 {app.tags?.map((t) => (
-                  <span key={t} className="trench-tag">
+                  <span key={t} className="trench-tag text-[10.5px]">
                     #{t}
                   </span>
                 ))}
@@ -480,11 +598,11 @@ export default function TrenchesView() {
                 <a
                   href={app.url}
                   target="_blank"
-                  rel="noreferrer"
-                  className="btn-launch-app font-mono"
+                  rel="noopener noreferrer"
+                  className="btn-launch-app btn-primary w-full justify-center py-2.5 text-xs font-bold"
                 >
-                  <span>Launch Application</span>
-                  <ArrowUpRight size={15} />
+                  <span>Launch Terminal</span>
+                  <ArrowUpRight size={14} />
                 </a>
               </div>
             </div>
@@ -496,44 +614,44 @@ export default function TrenchesView() {
       {showAddModal && (
         <div className="modal-backdrop" onClick={() => setShowAddModal(false)}>
           <div className="modal-card glass-panel" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3 className="font-mono">Add Custom Portal / Bookmark</h3>
-              <button className="modal-close-btn" onClick={() => setShowAddModal(false)}>
+            <div className="modal-header pb-3 border-b border-subtle flex items-center justify-between">
+              <h3 className="font-bold text-white text-base">Add Custom PulseChain Bookmark</h3>
+              <button className="wallet-modal-close-btn" onClick={() => setShowAddModal(false)}>
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleAddCustomApp} className="modal-form font-mono">
-              <div className="form-group">
-                <label>Portal / Tool Name</label>
+            <form onSubmit={handleAddCustomApp} className="modal-form font-mono my-4 flex flex-col gap-3">
+              <div className="form-group flex flex-col gap-1">
+                <label className="text-xs text-muted font-sans font-medium">Portal / Tool Name</label>
                 <input
                   type="text"
-                  placeholder="e.g. My Sniper Bot / Telegram Gateway"
+                  placeholder="e.g. My Sniper Bot / Telegram Hub"
                   value={newAppName}
                   onChange={(e) => setNewAppName(e.target.value)}
-                  className="modal-input"
+                  className="modal-input text-xs"
                   required
                 />
               </div>
 
-              <div className="form-group">
-                <label>Website / dApp URL</label>
+              <div className="form-group flex flex-col gap-1">
+                <label className="text-xs text-muted font-sans font-medium">Website / dApp URL</label>
                 <input
                   type="text"
                   placeholder="https://..."
                   value={newAppUrl}
                   onChange={(e) => setNewAppUrl(e.target.value)}
-                  className="modal-input"
+                  className="modal-input text-xs"
                   required
                 />
               </div>
 
-              <div className="form-group">
-                <label>Category</label>
+              <div className="form-group flex flex-col gap-1">
+                <label className="text-xs text-muted font-sans font-medium">Category</label>
                 <select
                   value={newAppCategory}
                   onChange={(e) => setNewAppCategory(e.target.value)}
-                  className="modal-select"
+                  className="modal-select text-xs"
                 >
                   <option value="launchpads">Meme & Launchpads</option>
                   <option value="dex">DEXs & Trading</option>
@@ -544,27 +662,27 @@ export default function TrenchesView() {
                 </select>
               </div>
 
-              <div className="form-group">
-                <label>Short Description (Optional)</label>
+              <div className="form-group flex flex-col gap-1">
+                <label className="text-xs text-muted font-sans font-medium">Short Description (Optional)</label>
                 <input
                   type="text"
                   placeholder="e.g. Fast sniper bot for meme launches"
                   value={newAppDesc}
                   onChange={(e) => setNewAppDesc(e.target.value)}
-                  className="modal-input"
+                  className="modal-input text-xs"
                 />
               </div>
 
-              <div className="modal-actions">
+              <div className="modal-actions flex items-center justify-end gap-2.5 mt-2">
                 <button
                   type="button"
-                  className="btn-modal-cancel"
+                  className="btn-secondary btn-sm"
                   onClick={() => setShowAddModal(false)}
                 >
                   Cancel
                 </button>
-                <button type="submit" className="btn-modal-submit">
-                  Save Portal
+                <button type="submit" className="btn-primary btn-sm font-bold">
+                  Save Portal Bookmark
                 </button>
               </div>
             </form>

@@ -1,6 +1,7 @@
 import {
   TrendingUp,
   Flame,
+  Zap,
   Radio,
   PieChart,
   Star,
@@ -25,6 +26,16 @@ export default function MobileBottomNav({
           <TrendingUp size={18} />
         </div>
         <span className="mobile-nav-label">Screener</span>
+      </button>
+
+      <button
+        className={`mobile-nav-item ${activeTab === 'dex' ? 'active' : ''}`}
+        onClick={() => setActiveTab('dex')}
+      >
+        <div className="mobile-nav-icon-wrapper">
+          <Zap size={18} className="text-pulse-green" />
+        </div>
+        <span className="mobile-nav-label">DEX</span>
       </button>
 
       <button
