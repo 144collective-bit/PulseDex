@@ -17,8 +17,11 @@ import {
   ArrowRight,
 } from 'lucide-react'
 import TokenLogo from './TokenLogo'
+import SwitchSwapWidget from './SwitchSwapWidget'
 import { useUserProfile } from '../context/UserProfileContext'
 import { formatCryptoPrice, formatUsd } from '../utils/formatters'
+
+const NATIVE_PLS_ADDRESS = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
 
 export default function TokenDetails({
   pair,
@@ -63,6 +66,21 @@ export default function TokenDetails({
 
   const base = pair.baseToken || {}
   const quote = pair.quoteToken || {}
+
+  // Determine swap tokens for the selected pair
+  const isBaseNative =
+    !base.address ||
+    base.address.toLowerCase() === NATIVE_PLS_ADDRESS.toLowerCase() ||
+    base.symbol?.toUpperCase() === 'PLS' ||
+    base.symbol?.toUpperCase() === 'WPLS'
+
+  const swapFrom = isBaseNative
+    ? (quote.address || NATIVE_PLS_ADDRESS)
+    : NATIVE_PLS_ADDRESS
+
+  const swapTo = isBaseNative
+    ? (quote.address || '0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39')
+    : (base.address || '0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39')
 
   const copyToClipboard = (text) => {
     if (!text) return
@@ -487,6 +505,30 @@ export default function TokenDetails({
         </button>
       </div>
 
+      {/* ⚡ Instant DEX Aggregator Widget for Selected Token */}
+      <div className="dex-token-swap-widget-card">
+        <div className="dex-token-swap-header">
+          <div className="flex items-center gap-1.5">
+            <span className="dex-token-swap-badge">⚡ INSTANT SWAP</span>
+            <span className="dex-token-swap-title font-mono text-xs font-bold text-white">
+              Trade {base.symbol} on PulseChain
+            </span>
+          </div>
+          <span className="dex-token-swap-sub font-mono text-[10px] text-muted">
+            Auto-Aggregated
+          </span>
+        </div>
+
+        <SwitchSwapWidget
+          key={`token-swap-${base.address || quote.address}`}
+          initialFrom={swapFrom}
+          initialTo={swapTo}
+          targetToken={base}
+          compact={true}
+          customHeight="580px"
+        />
+      </div>
+
       {/* Big Trade Button */}
       <a
         href={swapUrl}
@@ -497,7 +539,7 @@ export default function TokenDetails({
         <div className="dex-trade-cta-inner">
           <ArrowLeftRight size={15} className="dex-trade-cta-icon" />
           <span className="dex-trade-cta-text">
-            Trade {base.symbol}/{quote.symbol}
+            Trade {base.symbol}/{quote.symbol} on {pair.dexId || 'PulseX'}
           </span>
         </div>
         <ExternalLink size={14} className="dex-trade-cta-ext" />

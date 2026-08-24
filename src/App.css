@@ -9774,6 +9774,54 @@
   color: var(--pulse-green);
 }
 
+/* Embedded DEX Swap Widget under Token Details */
+.dex-token-swap-widget-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.dex-token-swap-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 2px;
+}
+
+.dex-token-swap-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  color: #000000;
+  background: var(--pulse-cyan);
+  padding: 2px 6px;
+  border-radius: 4px;
+  box-shadow: 0 0 8px rgba(0, 229, 255, 0.6);
+}
+
+.switch-target-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  background: rgba(0, 229, 255, 0.1);
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.switch-swap-compact .switch-widget-wrapper {
+  border-radius: 12px;
+}
+
+.switch-swap-compact .switch-iframe {
+  height: 580px;
+}
+
 /* Companion Utility Cards */
 .dex-utility-card {
   padding: 16px 18px;

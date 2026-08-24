@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Zap,
   ExternalLink,
   ShieldCheck,
   RefreshCw,
   Sparkles,
+  ArrowDownUp,
 } from 'lucide-react'
 
 const PARTNER_ADDRESS = '0x9EbD2d52bE577940F900BA9A6aaD0F700615e2D1'
@@ -42,11 +43,24 @@ const QUICK_PAIRS = [
 export default function SwitchSwapWidget({
   initialFrom = NATIVE_PLS_ADDRESS,
   initialTo = '0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39',
+  targetToken = null,
+  compact = false,
+  customHeight = null,
 }) {
   const [fromToken, setFromToken] = useState(initialFrom)
   const [toToken, setToToken] = useState(initialTo)
   const [refreshKey, setRefreshKey] = useState(0)
   const [borderColorTheme, setBorderColorTheme] = useState('00e5ff') // 00e5ff (cyan), 00ff9d (green), d946ef (purple)
+
+  // Dynamically update tokens whenever parent passes a new selected token
+  useEffect(() => {
+    if (initialTo) {
+      setToToken(initialTo)
+    }
+    if (initialFrom) {
+      setFromToken(initialFrom)
+    }
+  }, [initialFrom, initialTo])
 
   // Custom theme variables harmonized with PulseDex palette
   const bgColor = '080b11' // --bg-main obsidian dark
@@ -62,40 +76,70 @@ export default function SwitchSwapWidget({
     setRefreshKey((prev) => prev + 1)
   }
 
+  const handleSwapDirection = () => {
+    const temp = fromToken
+    setFromToken(toToken)
+    setToToken(temp)
+    setRefreshKey((prev) => prev + 1)
+  }
+
   const handleRefreshWidget = () => {
     setRefreshKey((prev) => prev + 1)
   }
 
+  const widgetHeight = customHeight || (compact ? '640px' : '740px')
+
   return (
-    <div className="switch-swap-container">
+    <div className={`switch-swap-container ${compact ? 'switch-swap-compact' : ''}`}>
       {/* Sleek Top Quick-Action Bar */}
       <div className="switch-top-toolbar glass-panel">
         <div className="switch-toolbar-left">
           <div className="switch-brand-pill">
             <Zap size={13} className="text-pulse-green" />
-            <span className="switch-brand-title">Aggregator Terminal</span>
+            <span className="switch-brand-title">
+              {targetToken?.symbol ? `Swap ${targetToken.symbol}` : 'DEX Aggregator'}
+            </span>
           </div>
 
-          <div className="switch-quick-pills">
-            {QUICK_PAIRS.map((qp) => {
-              const isSelected =
-                toToken.toLowerCase() === qp.to.toLowerCase() &&
-                fromToken.toLowerCase() === qp.from.toLowerCase()
-              return (
-                <button
-                  key={qp.name}
-                  type="button"
-                  onClick={() => handleSelectQuickPair(qp)}
-                  className={`switch-toolbar-chip ${isSelected ? 'active' : ''}`}
-                >
-                  <span>{qp.name}</span>
-                </button>
-              )
-            })}
-          </div>
+          {!compact && (
+            <div className="switch-quick-pills">
+              {QUICK_PAIRS.map((qp) => {
+                const isSelected =
+                  toToken.toLowerCase() === qp.to.toLowerCase() &&
+                  fromToken.toLowerCase() === qp.from.toLowerCase()
+                return (
+                  <button
+                    key={qp.name}
+                    type="button"
+                    onClick={() => handleSelectQuickPair(qp)}
+                    className={`switch-toolbar-chip ${isSelected ? 'active' : ''}`}
+                  >
+                    <span>{qp.name}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {compact && targetToken && (
+            <div className="switch-target-badge font-mono">
+              <span className="text-muted">Target:</span>
+              <span className="text-pulse-cyan font-bold">{targetToken.symbol}</span>
+            </div>
+          )}
         </div>
 
         <div className="switch-toolbar-right">
+          {/* Swap direction toggle */}
+          <button
+            type="button"
+            className="btn-icon-subtle"
+            onClick={handleSwapDirection}
+            title="Switch Buy/Sell Direction"
+          >
+            <ArrowDownUp size={13} />
+          </button>
+
           {/* Accent Color Dots */}
           <div className="switch-accent-dots" title="Swap Terminal Color Accent">
             <button
@@ -139,14 +183,14 @@ export default function SwitchSwapWidget({
         </div>
       </div>
 
-      {/* Embedded Switch.win Iframe Widget Frame immediately at the top */}
+      {/* Embedded Switch.win Iframe Widget Frame */}
       <div className="switch-widget-wrapper">
         <iframe
           key={`${refreshKey}-${borderColorTheme}-${fromToken}-${toToken}`}
           src={iframeSrc}
           allow="clipboard-read; clipboard-write"
           width="100%"
-          height="740px"
+          height={widgetHeight}
           className="switch-iframe"
           style={{ backgroundColor: '#080b11', colorScheme: 'dark' }}
           title="Switch.win PulseChain DEX Aggregator Widget"
@@ -156,12 +200,14 @@ export default function SwitchSwapWidget({
       {/* Bottom Footer Info */}
       <div className="switch-footer-meta glass-panel">
         <div className="switch-footer-left">
-          <span className="switch-footer-label">Referral Partner:</span>
-          <code className="switch-footer-partner-code font-mono">{PARTNER_ADDRESS.slice(0, 6)}...{PARTNER_ADDRESS.slice(-4)}</code>
+          <span className="switch-footer-label">Partner Routing:</span>
+          <code className="switch-footer-partner-code font-mono">
+            {PARTNER_ADDRESS.slice(0, 6)}...{PARTNER_ADDRESS.slice(-4)}
+          </code>
         </div>
         <div className="switch-footer-right">
-          <ShieldCheck size={14} className="text-pulse-green" />
-          <span className="switch-footer-security-text">Non-Custodial Multi-AMM Execution</span>
+          <ShieldCheck size={13} className="text-pulse-green" />
+          <span className="switch-footer-security-text">Multi-AMM PulseChain Router</span>
         </div>
       </div>
     </div>
