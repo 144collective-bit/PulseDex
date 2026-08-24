@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import TokenLogo from './TokenLogo'
 import { useUserProfile } from '../context/UserProfileContext'
+import { formatCryptoPrice, formatUsd } from '../utils/formatters'
 
 export default function TokenDetails({
   pair,
@@ -73,14 +74,7 @@ export default function TokenDetails({
 
   // Format currency / numbers cleanly like DexScreener
   const formatUsdPrice = (price) => {
-    const num = Number(price || 0)
-    if (num === 0) return '$0.00'
-    if (num < 0.000001) return `$${num.toFixed(8)}`
-    if (num < 0.0001) return `$${num.toFixed(7)}`
-    if (num < 0.01) return `$${num.toFixed(6)}`
-    if (num < 1) return `$${num.toFixed(4)}`
-    if (num < 1000) return `$${num.toFixed(2)}`
-    return `$${num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    return formatCryptoPrice(price)
   }
 
   const formatNativePrice = (price, quoteSym) => {

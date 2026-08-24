@@ -18,8 +18,12 @@ import {
   ExternalLink,
   X,
   ArrowRight,
+  ShieldCheck,
+  TrendingDown as TrendDown,
 } from 'lucide-react'
 import TokenLogo from './TokenLogo'
+import { formatCryptoPrice, formatUsd, formatCompactCount, calculateTokenMarketScore } from '../utils/formatters'
+import { getCorePulseRank } from '../services/dexscreener'
 
 export default function MarketOverview({
   pairs = [],
@@ -28,12 +32,12 @@ export default function MarketOverview({
   watchlist = [],
   onToggleWatchlist,
 }) {
-  const [activeCategory, setActiveCategory] = useState('trending') // 'trending' | 'gainers' | 'losers' | 'volume' | 'liquidity' | 'bluechips' | 'watchlist'
+  const [activeCategory, setActiveCategory] = useState('trending') // 'trending' | 'gainers' | 'losers' | 'volume' | 'liquidity' | 'mcap' | 'bluechips' | 'watchlist'
   const [searchFilter, setSearchFilter] = useState('')
   const [dexFilter, setDexFilter] = useState('all') // 'all' | 'pulsex' | '9mm' | '9inch' | 'phux'
   const [quoteFilter, setQuoteFilter] = useState('all') // 'all' | 'wpls' | 'dai' | 'usdc' | 'hex' | 'inc'
   const [minLiquidity, setMinLiquidity] = useState(0)
-  const [sortField, setSortField] = useState('volume') // 'volume' | 'liquidity' | 'price' | 'change24' | 'change1' | 'change5m' | 'txns'
+  const [sortField, setSortField] = useState('score') // 'score' | 'volume' | 'liquidity' | 'mcap' | 'price' | 'change24' | 'change1' | 'change5m' | 'txns'
   const [sortDirection, setSortDirection] = useState('desc') // 'asc' | 'desc'
   const [copiedAddr, setCopiedAddr] = useState('')
   const [activePoolsModalToken, setActivePoolsModalToken] = useState(null)
@@ -58,15 +62,24 @@ export default function MarketOverview({
 
   // Deduplicate pairs so that each token only appears ONCE in the markets list
   // Group all liquidity pools for any token with multiple pools
+  // Filter out defunct/dead pairs that have zero price and zero liquidity
   const uniqueTokenMarkets = useMemo(() => {
     const tokenMap = new Map()
 
     pairs.forEach((p) => {
-      const baseAddr = p.baseToken?.address?.toLowerCase()
-      const baseSym = (p.baseToken?.symbol || '').toUpperCase()
-      const key = baseAddr || baseSym
+      const baseAddr = p.baseToken?.address?.toLowerCase() || ''
+      const baseSym = (p.baseToken?.symbol || '').toUpperCase().trim()
+      if (!baseAddr && !baseSym) return
 
-      if (!key) return
+      const isCanonicalToken = ['WPLS', 'PLS', 'PLSX', 'HEX', 'INC', 'DAI', 'USDC', 'USDT', 'WETH', 'WBTC', 'HDRN'].includes(baseSym)
+      const key = isCanonicalToken ? baseSym : (baseAddr || baseSym)
+
+      const price = parseFloat(p.priceUsd || 0)
+      const liq = parseFloat(p.liquidity?.usd || 0)
+      const vol = parseFloat(p.volume?.h24 || 0)
+
+      // Exclude dead junk pools with 0 price AND 0 liquidity
+      if (price === 0 && liq < 50 && vol < 50) return
 
       if (!tokenMap.has(key)) {
         tokenMap.set(key, {
@@ -76,10 +89,14 @@ export default function MarketOverview({
       } else {
         const item = tokenMap.get(key)
         item.allPools.push(p)
-        // Set the pool with the largest liquidity as the primary display representative
-        const currentLiq = parseFloat(p.liquidity?.usd || 0)
-        const maxLiq = parseFloat(item.primaryPair.liquidity?.usd || 0)
-        if (currentLiq > maxLiq) {
+
+        // Select the primary representative pair based on combined liquidity & volume
+        const currentScore = (liq * 1.0) + (vol * 0.5)
+        const existingLiq = parseFloat(item.primaryPair.liquidity?.usd || 0)
+        const existingVol = parseFloat(item.primaryPair.volume?.h24 || 0)
+        const existingScore = (existingLiq * 1.0) + (existingVol * 0.5)
+
+        if (currentScore > existingScore) {
           item.primaryPair = p
         }
       }
@@ -89,6 +106,8 @@ export default function MarketOverview({
       ...primaryPair,
       allPools,
       poolCount: allPools.length,
+      marketScore: calculateTokenMarketScore(primaryPair),
+      mcap: parseFloat(primaryPair.marketCap || primaryPair.fdv || 0),
     }))
   }, [pairs])
 
@@ -167,6 +186,8 @@ export default function MarketOverview({
       list = list.filter((p) => (p.priceChange?.h24 || 0) < 0)
     } else if (activeCategory === 'liquidity') {
       list = list.filter((p) => parseFloat(p.liquidity?.usd || 0) >= 50000)
+    } else if (activeCategory === 'mcap') {
+      list = list.filter((p) => (p.mcap || 0) >= 100000)
     } else if (activeCategory === 'bluechips') {
       const bluechips = ['wpls', 'pls', 'hex', 'plsx', 'inc', 'dai', 'usdc', 'usdt', 'hdrn']
       list = list.filter((p) =>
@@ -178,6 +199,14 @@ export default function MarketOverview({
 
     // 6. Custom Column Sorting
     list.sort((a, b) => {
+      // For Trending / Default: Core tokens strictly at top, then by multi-factor score
+      if (sortField === 'score' || (!sortField && activeCategory === 'trending')) {
+        const rankA = getCorePulseRank(a)
+        const rankB = getCorePulseRank(b)
+        if (rankA !== rankB) return rankA - rankB
+        return sortDirection === 'desc' ? (b.marketScore || 0) - (a.marketScore || 0) : (a.marketScore || 0) - (b.marketScore || 0)
+      }
+
       let valA = 0
       let valB = 0
 
@@ -189,6 +218,10 @@ export default function MarketOverview({
         case 'liquidity':
           valA = parseFloat(a.liquidity?.usd || 0)
           valB = parseFloat(b.liquidity?.usd || 0)
+          break
+        case 'mcap':
+          valA = parseFloat(a.mcap || 0)
+          valB = parseFloat(b.mcap || 0)
           break
         case 'price':
           valA = parseFloat(a.priceUsd || 0)
@@ -215,8 +248,8 @@ export default function MarketOverview({
             ? (b.baseToken?.symbol || '').localeCompare(a.baseToken?.symbol || '')
             : (a.baseToken?.symbol || '').localeCompare(b.baseToken?.symbol || '')
         default:
-          valA = parseFloat(a.volume?.h24 || 0)
-          valB = parseFloat(b.volume?.h24 || 0)
+          valA = a.marketScore || 0
+          valB = b.marketScore || 0
       }
 
       return sortDirection === 'desc' ? valB - valA : valA - valB
@@ -226,36 +259,19 @@ export default function MarketOverview({
   }, [uniqueTokenMarkets, activeCategory, searchFilter, dexFilter, quoteFilter, minLiquidity, sortField, sortDirection, watchlist])
 
   const exportCSV = () => {
-    const headers = 'Rank,TokenSymbol,TokenName,BaseContract,PrimaryPair,PrimaryDEX,PriceUSD,5mChangePct,1hChangePct,24hChangePct,24hVolumeUSD,LiquidityUSD,TotalPools\n'
+    const headers = 'Rank,TokenSymbol,TokenName,BaseContract,PrimaryPair,PrimaryDEX,PriceUSD,5mChangePct,1hChangePct,24hChangePct,24hVolumeUSD,LiquidityUSD,MarketCapUSD,TotalPools\n'
     const rows = processedTokens
       .map(
         (p, idx) =>
-          `"${idx + 1}","${p.baseToken?.symbol}","${p.baseToken?.name}","${p.baseToken?.address}","${p.baseToken?.symbol}/${p.quoteToken?.symbol}","${p.dexId}","${p.priceUsd}","${p.priceChange?.m5 || 0}","${p.priceChange?.h1 || 0}","${p.priceChange?.h24 || 0}","${p.volume?.h24 || 0}","${p.liquidity?.usd || 0}","${p.poolCount || 1}"`
+          `"${idx + 1}","${p.baseToken?.symbol}","${p.baseToken?.name}","${p.baseToken?.address}","${p.baseToken?.symbol}/${p.quoteToken?.symbol}","${p.dexId}","${p.priceUsd}","${p.priceChange?.m5 || 0}","${p.priceChange?.h1 || 0}","${p.priceChange?.h24 || 0}","${p.volume?.h24 || 0}","${p.liquidity?.usd || 0}","${p.mcap || 0}","${p.poolCount || 1}"`
       )
       .join('\n')
     const blob = new Blob([headers + rows], { type: 'text/csv' })
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `pulsechain_unique_tokens_${Date.now()}.csv`
+    a.download = `pulsechain_markets_ranked_${Date.now()}.csv`
     a.click()
-  }
-
-  const formatUsd = (num) => {
-    const val = parseFloat(num || '0')
-    if (val >= 1e9) return `$${(val / 1e9).toFixed(2)}B`
-    if (val >= 1e6) return `$${(val / 1e6).toFixed(2)}M`
-    if (val >= 1e3) return `$${(val / 1e3).toFixed(1)}K`
-    return `$${val.toFixed(2)}`
-  }
-
-  const formatPrice = (val) => {
-    const p = parseFloat(val || '0')
-    if (p === 0) return '$0.00'
-    if (p < 0.000001) return `$${p.toFixed(8)}`
-    if (p < 0.01) return `$${p.toFixed(6)}`
-    if (p < 1) return `$${p.toFixed(4)}`
-    return `$${p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   }
 
   const renderSortIcon = (field) => {
@@ -313,7 +329,7 @@ export default function MarketOverview({
               />
               <span className="hero-token-sym">{marketStats.topGainer.baseToken?.symbol}</span>
               <span className="hero-token-price font-bold text-pulse-green">
-                {formatPrice(marketStats.topGainer.priceUsd)}
+                {formatCryptoPrice(marketStats.topGainer.priceUsd)}
               </span>
             </div>
             <div className="hero-card-sub font-mono">
@@ -350,7 +366,7 @@ export default function MarketOverview({
               </span>
             </div>
             <div className="hero-card-sub font-mono">
-              <span className="text-muted">Price: {formatPrice(marketStats.topVolumePair.priceUsd)}</span>
+              <span className="text-muted">Price: {formatCryptoPrice(marketStats.topVolumePair.priceUsd)}</span>
               <span className="text-pulse-cyan text-xs">View Chart →</span>
             </div>
           </div>
@@ -362,14 +378,17 @@ export default function MarketOverview({
             <div className="hero-card-icon bg-purple">
               <Droplets size={16} className="text-pulse-purple" />
             </div>
-            <span className="hero-card-title">Tracked Tokens</span>
+            <span className="hero-card-title">Verified Markets</span>
             <span className="badge badge-purple">{marketStats.uniqueTokenCount} Tokens ({marketStats.totalPoolCount} Pools)</span>
           </div>
           <div className="hero-card-val font-mono">
             {formatUsd(marketStats.totalLiquidity)}
           </div>
           <div className="hero-card-sub font-mono">
-            <span className="text-pulse-green">Deduplicated Token Feed</span>
+            <span className="text-pulse-green flex items-center gap-1">
+              <ShieldCheck size={13} />
+              <span>Multi-Factor Ranked Feed</span>
+            </span>
           </div>
         </div>
       </div>
@@ -382,7 +401,7 @@ export default function MarketOverview({
             className={`market-cat-btn ${activeCategory === 'trending' ? 'active' : ''}`}
             onClick={() => {
               setActiveCategory('trending')
-              setSortField('volume')
+              setSortField('score')
               setSortDirection('desc')
             }}
           >
@@ -424,6 +443,18 @@ export default function MarketOverview({
           >
             <Zap size={14} className="text-pulse-cyan" />
             <span>⚡ Volume</span>
+          </button>
+
+          <button
+            className={`market-cat-btn ${activeCategory === 'mcap' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveCategory('mcap')
+              setSortField('mcap')
+              setSortDirection('desc')
+            }}
+          >
+            <Coins size={14} className="text-pulse-amber" />
+            <span>🏦 Market Cap</span>
           </button>
 
           <button
@@ -531,7 +562,7 @@ export default function MarketOverview({
             <Search size={13} className="text-muted" />
             <input
               type="text"
-              placeholder="Search token, symbol, address..."
+              placeholder="Search token, symbol, contract..."
               value={searchFilter}
               onChange={(e) => setSearchFilter(e.target.value)}
               className="market-filter-input font-mono"
@@ -545,7 +576,7 @@ export default function MarketOverview({
           <button
             className="btn-icon"
             onClick={exportCSV}
-            title="Download Unique Tokens CSV"
+            title="Download Markets Table CSV"
           >
             <Download size={14} />
           </button>
@@ -556,11 +587,11 @@ export default function MarketOverview({
       <div className="markets-table-wrapper glass-panel">
         <div className="markets-table-top-bar font-mono">
           <span className="markets-results-count">
-            Showing <strong>{processedTokens.length}</strong> unique tokens on PulseChain (no repeated assets)
+            Showing <strong>{processedTokens.length}</strong> top verified tokens on PulseChain (Volume &amp; Liquidity Ranked)
           </span>
           <span className="markets-live-indicator">
             <span className="live-indicator-dot"></span>
-            1-Token-1-Row Verified Feed
+            Real-Time Screener Feed
           </span>
         </div>
 
@@ -596,6 +627,9 @@ export default function MarketOverview({
                   <th onClick={() => handleSort('liquidity')} className="sortable-th text-right">
                     <span className="th-content justify-end">Liquidity {renderSortIcon('liquidity')}</span>
                   </th>
+                  <th onClick={() => handleSort('mcap')} className="sortable-th text-right">
+                    <span className="th-content justify-end">FDV / MCap {renderSortIcon('mcap')}</span>
+                  </th>
                   <th onClick={() => handleSort('txns')} className="sortable-th text-right">
                     <span className="th-content justify-end">24h Swaps {renderSortIcon('txns')}</span>
                   </th>
@@ -605,7 +639,7 @@ export default function MarketOverview({
               <tbody>
                 {processedTokens.length === 0 ? (
                   <tr>
-                    <td colSpan="10" className="text-center py-12 text-muted">
+                    <td colSpan="11" className="text-center py-12 text-muted">
                       <div className="empty-state-box">
                         <Layers size={32} className="text-muted opacity-40 mb-2" />
                         <p>No tokens found matching your active filter criteria.</p>
@@ -625,11 +659,12 @@ export default function MarketOverview({
                     const totalTxns = buys + sells
                     const isCopied = copiedAddr === (base.address || pair.pairAddress)
                     const hasMultiplePools = pair.poolCount > 1
+                    const isTopCore = getCorePulseRank(pair) <= 4
 
                     return (
                       <tr
                         key={base.address || pair.pairAddress || index}
-                        className="market-row"
+                        className={`market-row ${isTopCore ? 'core-asset-row' : ''}`}
                         onClick={() => onSelectPair(pair)}
                       >
                         {/* Star Button & Rank */}
@@ -645,7 +680,7 @@ export default function MarketOverview({
                               color={isStarred ? '#fbbf24' : '#64748b'}
                             />
                           </button>
-                          <span className="rank-num">{index + 1}</span>
+                          <span className="rank-num font-mono">{index + 1}</span>
                         </td>
 
                         {/* Token Symbol, Name, Primary DEX & Multi-Pool Badge */}
@@ -687,8 +722,8 @@ export default function MarketOverview({
                         </td>
 
                         {/* Price */}
-                        <td className="text-right font-bold text-white">
-                          {formatPrice(pair.priceUsd)}
+                        <td className="text-right font-bold text-white font-mono">
+                          {formatCryptoPrice(pair.priceUsd)}
                         </td>
 
                         {/* 5M */}
@@ -717,18 +752,23 @@ export default function MarketOverview({
                         </td>
 
                         {/* 24h Volume */}
-                        <td className="text-right font-bold text-secondary">
+                        <td className="text-right font-bold text-secondary font-mono">
                           {formatUsd(pair.volume?.h24)}
                         </td>
 
                         {/* Liquidity */}
-                        <td className="text-right text-secondary">
+                        <td className="text-right text-secondary font-mono">
                           {formatUsd(pair.liquidity?.usd)}
+                        </td>
+
+                        {/* FDV / Market Cap */}
+                        <td className="text-right text-muted font-mono">
+                          {formatUsd(pair.mcap || pair.fdv)}
                         </td>
 
                         {/* Swaps Buys/Sells Breakdown */}
                         <td className="text-right">
-                          <div className="swaps-breakdown-box">
+                          <div className="swaps-breakdown-box font-mono">
                             <span className="swaps-total">{totalTxns.toLocaleString()}</span>
                             <div className="swaps-sub-ratio">
                               <span className="text-pulse-green">{buys}B</span>
@@ -816,7 +856,7 @@ export default function MarketOverview({
 
                   <div className="flex items-center gap-4 text-right">
                     <div>
-                      <div className="font-bold text-white text-xs">{formatPrice(pool.priceUsd)}</div>
+                      <div className="font-bold text-white text-xs">{formatCryptoPrice(pool.priceUsd)}</div>
                       <div className="text-[11px] text-pulse-cyan">Liq: {formatUsd(pool.liquidity?.usd)}</div>
                     </div>
 

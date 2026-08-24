@@ -8,6 +8,7 @@ import {
   TrendingDown,
 } from 'lucide-react'
 import TokenLogo from './TokenLogo'
+import { formatCryptoPrice, formatUsd } from '../utils/formatters'
 
 export default function PairHeader({ pair, isStarred, onToggleStar }) {
   const [copiedToken, setCopiedToken] = useState(false)
@@ -40,19 +41,8 @@ export default function PairHeader({ pair, isStarred, onToggleStar }) {
     }
   }
 
-  const formatUsd = (val) => {
-    const num = parseFloat(val || '0')
-    if (num >= 1e9) return `$${(num / 1e9).toFixed(2)}B`
-    if (num >= 1e6) return `$${(num / 1e6).toFixed(2)}M`
-    if (num >= 1e3) return `$${(num / 1e3).toFixed(2)}K`
-    return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-  }
-
   const formatPrice = (val) => {
-    const p = parseFloat(val || '0')
-    if (p < 0.0001) return `$${p.toFixed(8)}`
-    if (p < 1) return `$${p.toFixed(5)}`
-    return `$${p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    return formatCryptoPrice(val)
   }
 
   return (

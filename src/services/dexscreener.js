@@ -1,12 +1,13 @@
 import { KNOWN_PULSE_TOKENS, DEFAULT_PAIR_ADDRESS } from '../config/pulsechain'
+import { calculateTokenMarketScore } from '../utils/formatters'
 
 const DEXSCREENER_BASE = 'https://api.dexscreener.com/latest/dex'
 
 // Known stablecoins to exclude from being displayed as the primary / base coin
 export const STABLECOIN_SYMBOLS = new Set([
-  'DAI',
-  'USDC',
-  'USDT',
+  'DAI.E',
+  'USDC.E',
+  'USDT.E',
   'USDL',
   'CST',
   'BUSD',
@@ -20,11 +21,6 @@ export const STABLECOIN_SYMBOLS = new Set([
   'USD',
   'EUR',
   'EURC',
-  'USDC.E',
-  'DAI.E',
-  'USDT.E',
-  'WPLS/DAI',
-  'DAI/USDC',
 ])
 
 export function isStablecoin(symbol) {
@@ -32,17 +28,18 @@ export function isStablecoin(symbol) {
   const clean = symbol.toUpperCase().trim()
   return (
     STABLECOIN_SYMBOLS.has(clean) ||
-    clean.startsWith('USD') ||
-    clean.endsWith('USD') ||
-    clean === 'USDC' ||
-    clean === 'USDT' ||
-    clean === 'DAI'
+    clean === 'USDL' ||
+    clean === 'CST' ||
+    clean === 'BUSD' ||
+    clean === 'TUSD' ||
+    clean === 'FRAX' ||
+    clean === 'LUSD'
   )
 }
 
 // Cache to prevent hitting rate limits aggressively
 const cache = new Map()
-const CACHE_TTL = 10000 // 10 seconds
+const CACHE_TTL = 8000 // 8 seconds
 
 async function fetchWithCache(url) {
   const now = Date.now()
@@ -69,14 +66,12 @@ async function fetchWithCache(url) {
 }
 
 /**
- * Search pairs on PulseChain (filtering out stablecoins as main base token)
- * Also parses full URLs (plsx.fun, pulsechain.com, dexscreener) to extract 0x addresses
+ * Search pairs on PulseChain (filtering out dead test pools)
  */
 export async function searchPulsePairs(query) {
   if (!query || query.trim() === '') return []
   try {
     let cleanQuery = query.trim()
-    // Extract 0x address if user pasted a full URL (e.g. https://plsx.fun/token/0x...)
     const addressMatch = cleanQuery.match(/0x[a-fA-F0-9]{40}/)
     if (addressMatch) {
       cleanQuery = addressMatch[0]
@@ -85,12 +80,11 @@ export async function searchPulsePairs(query) {
     const url = `${DEXSCREENER_BASE}/search?q=${encodeURIComponent(cleanQuery)}`
     const data = await fetchWithCache(url)
     if (!data || !data.pairs) return []
-    
-    // Filter specifically for PulseChain and exclude stable-to-stable pairs
+
     return data.pairs.filter(
       (p) =>
         p.chainId?.toLowerCase() === 'pulsechain' &&
-        !(isStablecoin(p.baseToken?.symbol) && isStablecoin(p.quoteToken?.symbol))
+        (parseFloat(p.liquidity?.usd || 0) > 20 || parseFloat(p.volume?.h24 || 0) > 20)
     )
   } catch (err) {
     console.error('searchPulsePairs error:', err)
@@ -173,6 +167,11 @@ export const CORE_PULSE_CONTRACTS = {
   HEX_ETH: '0x57fde0a71132198bbec939bb98976993d8d89d225',
   INC_1: '0x2fa878ab3f87cc1c9737fc071108f904c0b0c95d',
   INC_2: '0x2fa807748803010e623e789542345de171cac391',
+  DAI: '0xefd766ccb38eaf1dfd701853bfce31359239f305',
+  WETH: '0x02dcdd04e3f455d838cd1249292c58f3b79e3c3c',
+  USDC: '0x15d38573d2feeb82e7ad5187ab8c1d52810b1f07',
+  USDT: '0x0cb6f5a34ad42ec934882a05265a7d5f59b51a2f',
+  HDRN: '0x3819f64f282bf135d62168c1e513280daf905e06',
 }
 
 // Blocked fake or spam tokens masquerading as core assets
@@ -182,18 +181,23 @@ export const BLOCKED_FAKE_ADDRESSES = new Set([
 
 /**
  * Determine ranking priority strictly by verified official contract address:
- * 1: WPLS (Wrapped Pulse - 0xa1077a294dde1b09bb078844df40758a5d0f9a27)
- * 2: PLSX (PulseX - 0x95b303987a60c71504d99aa1b13b4da07b0790ab / 0x8a810ea8b121d08342e9e7696f4a9915cbe494b7)
- * 3: HEX (HEX on PulseChain - 0x2b591e99afe9f32eaa6214f7b7629768c40eeb39 / eHEX)
- * 4: INC (Incentive Token - 0x2fa878ab3f87cc1c9737fc071108f904c0b0c95d / 0x2fa807748803010e623e789542345de171cac391)
+ * 1: WPLS (Wrapped Pulse)
+ * 2: PLSX (PulseX)
+ * 3: HEX (PulseChain HEX / eHEX)
+ * 4: INC (Incentive Token)
+ * 5: DAI
+ * 6: WETH
+ * 7: USDC / USDT
+ * 8: HDRN
  */
 export function getCorePulseRank(pair) {
   if (!pair) return 999
   const baseAddr = pair.baseToken?.address?.toLowerCase() || ''
+  const quoteAddr = pair.quoteToken?.address?.toLowerCase() || ''
 
-  if (BLOCKED_FAKE_ADDRESSES.has(baseAddr)) return 999
+  if (BLOCKED_FAKE_ADDRESSES.has(baseAddr) || BLOCKED_FAKE_ADDRESSES.has(quoteAddr)) return 999
 
-  // 1. WPLS strictly by contract address (prevents fake tokens)
+  // 1. WPLS strictly by contract address
   if (baseAddr === CORE_PULSE_CONTRACTS.WPLS) return 1
   // 2. PLSX strictly by contract address
   if (baseAddr === CORE_PULSE_CONTRACTS.PLSX_1 || baseAddr === CORE_PULSE_CONTRACTS.PLSX_2) return 2
@@ -201,21 +205,29 @@ export function getCorePulseRank(pair) {
   if (baseAddr === CORE_PULSE_CONTRACTS.HEX_PLS || baseAddr === CORE_PULSE_CONTRACTS.HEX_ETH) return 3
   // 4. INC strictly by contract address
   if (baseAddr === CORE_PULSE_CONTRACTS.INC_1 || baseAddr === CORE_PULSE_CONTRACTS.INC_2) return 4
+  // 5. DAI
+  if (baseAddr === CORE_PULSE_CONTRACTS.DAI) return 5
+  // 6. WETH
+  if (baseAddr === CORE_PULSE_CONTRACTS.WETH) return 6
+  // 7. USDC / USDT
+  if (baseAddr === CORE_PULSE_CONTRACTS.USDC || baseAddr === CORE_PULSE_CONTRACTS.USDT) return 7
+  // 8. HDRN
+  if (baseAddr === CORE_PULSE_CONTRACTS.HDRN) return 8
 
   return 999
 }
 
 /**
  * Fetch top pulsechain pairs across known ecosystem tokens & active volume leaders
- * Filters out stablecoins and ensures main PulseX liquidity pools are selected!
+ * Filters out dead tokens with $0 prices or 0 liquidity
+ * Ranks by composite score (Volume, Liquidity, Market Cap, Trades)
  */
 export async function getTopPulsePairs() {
   try {
     const pairMap = new Map()
 
-    // 1. Fetch by known non-stable token contract addresses
-    const nonStableTokens = KNOWN_PULSE_TOKENS.filter((t) => !isStablecoin(t.symbol))
-    const tokenAddrs = nonStableTokens.map((t) => t.address)
+    // 1. Fetch by known token contract addresses
+    const tokenAddrs = KNOWN_PULSE_TOKENS.map((t) => t.address)
     const tokenPairs = await getPairsByTokens(tokenAddrs)
     tokenPairs.forEach((p) => {
       if (p.pairAddress) {
@@ -224,10 +236,10 @@ export async function getTopPulsePairs() {
     })
 
     // 2. Fetch by ecosystem search keywords for high volume tradeable pairs
-    // Expanding queries to cast a wide net across all pulsechain DEXes and catch top meme/alt coins
     const searchQueries = [
       'pulsechain', 'pulsex', 'v1', 'v2',
-      'WPLS', 'PLSX', 'HEX', 'INC', 'HDRN', 'TEXAN', 'DAI', 'USDC', 'WETH', 'USDT'
+      'WPLS', 'PLSX', 'HEX', 'INC', 'HDRN', 'TEXAN', 'DAI', 'USDC', 'WETH', 'USDT',
+      'TONI', 'LOAN', '9MM', 'ATROPA', 'PRVX', 'PTIRE'
     ]
     const searchResults = await Promise.all(
       searchQueries.map((q) => searchPulsePairs(q))
@@ -239,34 +251,37 @@ export async function getTopPulsePairs() {
       }
     })
 
-    // 3. Filter out pairs where baseToken is a stablecoin OR stable-to-stable pairs, or fake/spam tokens
+    // 3. Filter out spam, dead test pools with $0 price & $0 liquidity
     const filtered = Array.from(pairMap.values()).filter((p) => {
       if (p.chainId && p.chainId !== 'pulsechain') return false
       const baseAddr = p.baseToken?.address?.toLowerCase() || ''
       const quoteAddr = p.quoteToken?.address?.toLowerCase() || ''
       if (BLOCKED_FAKE_ADDRESSES.has(baseAddr) || BLOCKED_FAKE_ADDRESSES.has(quoteAddr)) return false
 
-      const baseSym = p.baseToken?.symbol
-      const quoteSym = p.quoteToken?.symbol
-      // Disallow stablecoin as baseToken (e.g. USDC/WPLS, DAI/WPLS, DAI/USDC)
-      if (isStablecoin(baseSym)) return false
-      // Disallow stable-to-stable
-      if (isStablecoin(baseSym) && isStablecoin(quoteSym)) return false
-
-      // Filter out spam/dummy pools with artificial metrics
+      const baseSym = p.baseToken?.symbol || ''
+      const quoteSym = p.quoteToken?.symbol || ''
       if (quoteSym === 'MULE' || baseSym === 'MULE') return false
+
+      const price = parseFloat(p.priceUsd || 0)
+      const liq = parseFloat(p.liquidity?.usd || 0)
+      const vol = parseFloat(p.volume?.h24 || 0)
+
+      // Hide dead pairs that have zero price AND zero liquidity
+      if (price === 0 && liq < 50 && vol < 50) return false
 
       return true
     })
 
-    // 4. Sort: 4 Core PulseChain Tokens strictly at top (WPLS, PLSX, HEX, INC), then by 24h volume descending
+    // 4. Sort: Core PulseChain Tokens strictly at top (WPLS, PLSX, HEX, INC, DAI, WETH, etc.),
+    // then rank remaining tokens by algorithmic multi-factor market score
     filtered.sort((a, b) => {
       const rankA = getCorePulseRank(a)
       const rankB = getCorePulseRank(b)
       if (rankA !== rankB) return rankA - rankB
-      const volA = Number(a.volume?.h24 || 0)
-      const volB = Number(b.volume?.h24 || 0)
-      return volB - volA
+
+      const scoreA = calculateTokenMarketScore(a)
+      const scoreB = calculateTokenMarketScore(b)
+      return scoreB - scoreA
     })
 
     return filtered
@@ -277,23 +292,26 @@ export async function getTopPulsePairs() {
 }
 
 /**
- * Deduplicate pairs by base token address, keeping the pool with the highest score
- * (Prioritizes PulseX and liquidity/volume)
+ * Deduplicate pairs by canonical token symbol and address, keeping the pool with the highest market score
+ * (Prioritizes PulseX and deepest liquidity & volume)
  */
 export function deduplicatePairs(pairs) {
   const uniqueTokens = new Map()
-  
+
   pairs.forEach((p) => {
     const baseAddr = p.baseToken?.address?.toLowerCase() || ''
-    if (!baseAddr) return
-    
-    const tokenKey = baseAddr
+    const baseSym = (p.baseToken?.symbol || '').toUpperCase().trim()
+    if (!baseAddr && !baseSym) return
+
+    const isCanonicalToken = ['WPLS', 'PLS', 'PLSX', 'HEX', 'INC', 'DAI', 'USDC', 'USDT', 'WETH', 'WBTC', 'HDRN'].includes(baseSym)
+    const tokenKey = isCanonicalToken ? baseSym : baseAddr
+
     const isPulseX = (p.dexId || '').toLowerCase().includes('pulsex')
     const currentLiq = Number(p.liquidity?.usd || 0)
     const currentVol = Number(p.volume?.h24 || 0)
-    
-    // Calculate pool score (favor PulseX official AMM)
-    const score = (isPulseX ? 100000000 : 0) + currentLiq + (currentVol * 0.2)
+
+    // Calculate pool score (favor PulseX official AMM and deep liquidity)
+    const score = (isPulseX ? 100000000 : 0) + currentLiq + (currentVol * 0.5)
 
     if (!uniqueTokens.has(tokenKey)) {
       uniqueTokens.set(tokenKey, { pair: p, score })
@@ -313,12 +331,11 @@ export function deduplicatePairs(pairs) {
  */
 export async function getNativePlsPrice() {
   try {
-    // Primary WPLS/DAI pair for exact PLS price
     const pair = await getPulsePair('0xE56043671df55dE5CDf8459710433C10324DE0aE')
     if (pair && pair.priceUsd) {
       return parseFloat(pair.priceUsd)
     }
-    return 0.00001455 // live estimate
+    return 0.00001455
   } catch (err) {
     return 0.00001455
   }

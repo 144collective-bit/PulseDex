@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import TokenLogo from './TokenLogo'
 import { getCorePulseRank, deduplicatePairs, CORE_PULSE_CONTRACTS } from '../services/dexscreener'
+import { formatCryptoPrice, formatUsd } from '../utils/formatters'
 
 export default function SidebarPairs({
   pairs = [],
@@ -87,12 +88,7 @@ export default function SidebarPairs({
   }
 
   const formatPrice = (val) => {
-    const num = parseFloat(val || '0')
-    if (num === 0) return '$0.00'
-    if (num < 0.000001) return `$${num.toFixed(8)}`
-    if (num < 0.01) return `$${num.toFixed(6)}`
-    if (num < 1) return `$${num.toFixed(5)}`
-    return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    return formatCryptoPrice(val)
   }
 
   const formatVol = (val) => {
