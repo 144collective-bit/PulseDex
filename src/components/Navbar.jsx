@@ -389,24 +389,15 @@ export default function Navbar({
               )}
             </div>
           ) : (
-            <div className="guest-auth-btn-group">
-              <button
-                className="btn-guest-signin font-mono"
-                onClick={() => openAuthModal('signin')}
-                title="Sign In with Username or Web3 Wallet"
-              >
-                <LogIn size={13} className="text-pulse-cyan" />
-                <span className="desktop-only">Sign In</span>
-              </button>
-              <button
-                className="btn-guest-signup font-mono"
-                onClick={() => openAuthModal('signup')}
-                title="Create a PulseDex Account"
-              >
-                <UserPlus size={13} />
-                <span>Sign Up</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              className="btn-guest-signin font-mono"
+              onClick={() => openAuthModal('signin')}
+              title="Sign In to PulseDex (or Create Account)"
+            >
+              <LogIn size={13} className="text-pulse-cyan" />
+              <span>Sign In</span>
+            </button>
           )}
 
           {/* Connect Web3 Wallet - Temporarily hidden from UI; underlying functionality preserved */}

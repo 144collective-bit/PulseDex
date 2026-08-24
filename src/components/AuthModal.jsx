@@ -350,21 +350,50 @@ export default function AuthModal() {
               <span>Processing...</span>
             ) : authMode === 'signup' ? (
               <>
-                <span>Create Account</span>
+                <span>Create Account & Vault</span>
                 <ArrowRight size={15} />
               </>
             ) : (
               <>
-                <span>Sign In</span>
+                <span>Sign In to PulseDex</span>
                 <ArrowRight size={15} />
               </>
             )}
           </button>
         </form>
 
+        {/* Toggle Switch Callout (Sign In <-> Sign Up) */}
+        <div className="auth-mode-toggle-callout font-mono">
+          {authMode === 'signin' ? (
+            <div className="flex items-center justify-between w-full">
+              <span className="text-muted text-xs">Don't have an account yet?</span>
+              <button
+                type="button"
+                className="auth-toggle-action-btn"
+                onClick={() => handleModeSwitch('signup')}
+              >
+                <UserPlus size={13} className="text-pulse-green" />
+                <span>Sign Up Free</span>
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between w-full">
+              <span className="text-muted text-xs">Already have an account?</span>
+              <button
+                type="button"
+                className="auth-toggle-action-btn"
+                onClick={() => handleModeSwitch('signin')}
+              >
+                <LogIn size={13} className="text-pulse-cyan" />
+                <span>Sign In to Vault</span>
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Divider */}
         <div className="auth-divider">
-          <span>OR CONTINUE WITH</span>
+          <span>OR QUICK ACCESS</span>
         </div>
 
         {/* Web3 Wallet Quick Sign In */}
