@@ -39,6 +39,7 @@ export default function SidebarPairs({
       list = list.filter((p) => {
         const dexId = (p.dexId || '').toLowerCase()
         if (dexFilter === 'pulsex') return dexId.includes('pulsex')
+        if (dexFilter === 'libertyswap') return dexId.includes('liberty')
         if (dexFilter === '9mm') return dexId.includes('9mm')
         if (dexFilter === '9inch') return dexId.includes('9inch')
         return true
@@ -253,13 +254,19 @@ export default function SidebarPairs({
             className={`sidebar-dex-pill ${dexFilter === 'all' ? 'active' : ''}`}
             onClick={() => setDexFilter('all')}
           >
-            All DEXs
+            All
           </button>
           <button
             className={`sidebar-dex-pill ${dexFilter === 'pulsex' ? 'active' : ''}`}
             onClick={() => setDexFilter('pulsex')}
           >
             PulseX
+          </button>
+          <button
+            className={`sidebar-dex-pill ${dexFilter === 'libertyswap' ? 'active' : ''}`}
+            onClick={() => setDexFilter('libertyswap')}
+          >
+            Liberty
           </button>
           <button
             className={`sidebar-dex-pill ${dexFilter === '9mm' ? 'active' : ''}`}

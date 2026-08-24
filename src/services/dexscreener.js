@@ -237,9 +237,9 @@ export async function getTopPulsePairs() {
 
     // 2. Fetch by ecosystem search keywords for high volume tradeable pairs
     const searchQueries = [
-      'pulsechain', 'pulsex', 'v1', 'v2',
+      'pulsechain', 'pulsex', 'v1', 'v2', 'libertyswap', 'liberty',
       'WPLS', 'PLSX', 'HEX', 'INC', 'HDRN', 'TEXAN', 'DAI', 'USDC', 'WETH', 'USDT',
-      'TONI', 'LOAN', '9MM', 'ATROPA', 'PRVX', 'PTIRE'
+      'TONI', 'LOAN', '9MM', 'ATROPA', 'PRVX', 'PTIRE', '9inch'
     ]
     const searchResults = await Promise.all(
       searchQueries.map((q) => searchPulsePairs(q))

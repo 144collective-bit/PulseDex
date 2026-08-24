@@ -166,7 +166,34 @@ export default function MarketOverview({
 
     // 2. DEX filter
     if (dexFilter !== 'all') {
-      list = list.filter((p) => (p.dexId || '').toLowerCase().includes(dexFilter.toLowerCase()))
+      const matchDex = (dexId = '') => {
+        const d = dexId.toLowerCase()
+        if (dexFilter === 'libertyswap') return d.includes('liberty')
+        if (dexFilter === 'pulsex') return d.includes('pulsex')
+        if (dexFilter === '9mm') return d.includes('9mm')
+        if (dexFilter === '9inch') return d.includes('9inch')
+        return d.includes(dexFilter.toLowerCase())
+      }
+
+      list = list
+        .map((token) => {
+          // If the primary pair matches, keep it
+          if (matchDex(token.dexId)) return token
+
+          // Otherwise check if any secondary pool in allPools matches this DEX
+          const matchedPool = token.allPools?.find((pool) => matchDex(pool.dexId))
+          if (matchedPool) {
+            return {
+              ...matchedPool,
+              allPools: token.allPools,
+              poolCount: token.poolCount,
+              marketScore: token.marketScore,
+              mcap: token.mcap,
+            }
+          }
+          return null
+        })
+        .filter(Boolean)
     }
 
     // 3. Quote Token filter
@@ -511,6 +538,12 @@ export default function MarketOverview({
               PulseX
             </button>
             <button
+              className={`dex-tab-btn ${dexFilter === 'libertyswap' ? 'active' : ''}`}
+              onClick={() => setDexFilter('libertyswap')}
+            >
+              Liberty Swap
+            </button>
+            <button
               className={`dex-tab-btn ${dexFilter === '9mm' ? 'active' : ''}`}
               onClick={() => setDexFilter('9mm')}
             >
@@ -521,12 +554,6 @@ export default function MarketOverview({
               onClick={() => setDexFilter('9inch')}
             >
               9inch
-            </button>
-            <button
-              className={`dex-tab-btn ${dexFilter === 'phux' ? 'active' : ''}`}
-              onClick={() => setDexFilter('phux')}
-            >
-              Phux
             </button>
           </div>
 
