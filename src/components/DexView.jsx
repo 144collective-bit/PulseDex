@@ -10,11 +10,9 @@ import {
   ArrowRight,
   ShieldCheck,
   ExternalLink,
-  ArrowLeftRight,
 } from 'lucide-react'
 import TokenLogo from './TokenLogo'
 import SwitchSwapWidget from './SwitchSwapWidget'
-import CrossChainSwap from './CrossChainSwap'
 import { useUserProfile } from '../context/UserProfileContext'
 
 // Ecosystem Live Price Estimates for Quick Board
@@ -37,8 +35,6 @@ const LIVE_DEX_FEED = [
 
 export default function DexView({ onSelectPairForChart, onOpenWalletModal }) {
   const { triggerSound } = useUserProfile()
-  const [dexSubTab, setDexSubTab] = useState('pulsechain') // 'pulsechain' | 'crosschain'
-
   const [copiedAddr, setCopiedAddr] = useState(null)
   const [selectedTargetToken, setSelectedTargetToken] = useState('0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39') // HEX by default
 
@@ -55,37 +51,18 @@ export default function DexView({ onSelectPairForChart, onOpenWalletModal }) {
     triggerSound('click')
   }
 
-  const handleSwitchDexTab = (tab) => {
-    setDexSubTab(tab)
-    triggerSound('click')
-  }
-
   return (
     <div className="dex-view-container">
       {/* =========================================================================
-          TOP INSTITUTIONAL TELEMETRY & SUBTAB NAVIGATION BAR
+          TOP INSTITUTIONAL TELEMETRY & ROUTER BAR
          ========================================================================= */}
       <div className="dex-subnav-bar glass-panel">
         <div className="dex-subnav-left">
-          {/* Segment Control Subtabs */}
-          <div className="dex-tab-toggle-group font-mono">
-            <button
-              type="button"
-              className={`dex-subtab-btn ${dexSubTab === 'pulsechain' ? 'active' : ''}`}
-              onClick={() => handleSwitchDexTab('pulsechain')}
-            >
+          <div className="flex items-center gap-2 font-mono">
+            <span className="dex-subtab-btn active">
               <Zap size={15} className="text-pulse-green" />
-              <span>PulseChain DEX</span>
-            </button>
-            <button
-              type="button"
-              className={`dex-subtab-btn ${dexSubTab === 'crosschain' ? 'active' : ''}`}
-              onClick={() => handleSwitchDexTab('crosschain')}
-            >
-              <ArrowLeftRight size={15} className="text-pulse-cyan" />
-              <span>Cross-Chain Swap</span>
-              <span className="tab-new-badge font-mono">LIBERTY</span>
-            </button>
+              <span>PulseChain DEX Aggregator</span>
+            </span>
           </div>
         </div>
 
@@ -93,9 +70,9 @@ export default function DexView({ onSelectPairForChart, onOpenWalletModal }) {
         <div className="dex-subnav-stats desktop-only">
           <span className="dex-stat-chip">
             <span className="live-dot"></span>
-            <span className="dex-stat-label">{dexSubTab === 'crosschain' ? 'Engine:' : 'Router:'}</span>
+            <span className="dex-stat-label">Router:</span>
             <span className="dex-stat-val text-white font-mono">
-              {dexSubTab === 'crosschain' ? 'Liberty Swap v1' : 'PulseX v2 (Online)'}
+              PulseX v2 (Online)
             </span>
           </span>
           <span className="dex-stat-chip">
@@ -105,28 +82,23 @@ export default function DexView({ onSelectPairForChart, onOpenWalletModal }) {
           </span>
           <span className="dex-stat-chip">
             <Activity size={12} className="text-pulse-green" />
-            <span className="dex-stat-label">{dexSubTab === 'crosschain' ? 'Networks:' : 'Block:'}</span>
+            <span className="dex-stat-label">Block:</span>
             <span className="dex-stat-val font-mono text-pulse-green">
-              {dexSubTab === 'crosschain' ? '6 Chains' : '3.0s'}
+              3.0s
             </span>
           </span>
         </div>
       </div>
 
       {/* =========================================================================
-          VIEW SWITCHER: CROSS-CHAIN SWAP vs PULSECHAIN DEX AGGREGATOR
+          PULSECHAIN DEX AGGREGATOR MAIN LAYOUT
          ========================================================================= */}
-      {dexSubTab === 'crosschain' ? (
-        <div className="dex-crosschain-embedded-wrapper animate-fade-in">
-          <CrossChainSwap onOpenWalletModal={onOpenWalletModal} />
-        </div>
-      ) : (
-        <div className="dex-main-layout animate-fade-in">
-          <div className="dex-swap-pro-grid">
-            {/* Left Column: Customized Switch.win Aggregator Widget (At the very top) */}
-            <div className="dex-swap-main-column">
-              <SwitchSwapWidget initialTo={selectedTargetToken} key={selectedTargetToken} />
-            </div>
+      <div className="dex-main-layout animate-fade-in">
+        <div className="dex-swap-pro-grid">
+          {/* Left Column: Customized Switch.win Aggregator Widget (At the very top) */}
+          <div className="dex-swap-main-column">
+            <SwitchSwapWidget initialTo={selectedTargetToken} key={selectedTargetToken} />
+          </div>
 
             {/* Right Column: Companion Live Utility & Intelligence Sidebar */}
             <div className="dex-swap-sidebar-column">
@@ -248,7 +220,6 @@ export default function DexView({ onSelectPairForChart, onOpenWalletModal }) {
             </div>
           </div>
         </div>
-      )}
     </div>
   )
 }

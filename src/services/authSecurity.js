@@ -1,7 +1,6 @@
 /**
  * PulseDex Advanced Authentication & Cryptographic Security Service
- * Implements PBKDF2 password derivation, session tokens, brute-force rate limiting,
- * and X.com (Twitter) active session challenge verification.
+ * Implements PBKDF2 password derivation, session tokens, and brute-force rate limiting.
  */
 
 const RATE_LIMIT_KEY = 'pulsedex_auth_ratelimit_v1'
@@ -47,33 +46,6 @@ export function generateSecureSessionToken() {
   return Array.from(bytes)
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('')
-}
-
-/**
- * Generates an active X.com (Twitter) ownership verification challenge
- */
-export function generateXAuthChallenge(handle) {
-  const clean = (handle || '').trim().toLowerCase().replace(/^@/, '')
-  const randomBytes = new Uint8Array(6)
-  crypto.getRandomValues(randomBytes)
-  const nonce = Array.from(randomBytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-    .toUpperCase()
-
-  const challengeCode = `PDX-${nonce}`
-  const timestamp = Date.now()
-
-  return {
-    handle: clean,
-    challengeCode,
-    nonce,
-    timestamp,
-    expiresAt: timestamp + 10 * 60 * 1000, // 10 mins validity
-    intentUrl: `https://x.com/intent/post?text=${encodeURIComponent(
-      `Verifying my PulseDex.net Web3 identity for @${clean} [Ref: ${challengeCode}] #PulseChain #PulseDex`
-    )}`,
-  }
 }
 
 /**
@@ -173,10 +145,10 @@ export function resetAuthRateLimit(identifier) {
 
 /**
  * Validates password complexity
- * @returns { isValid: boolean, score: number, feedback: string }
+ * @returns { isValid: boolean, score: number, feedback: string, level: string }
  */
 export function evaluatePasswordStrength(password) {
-  if (!password) return { isValid: false, score: 0, feedback: 'Password is required.' }
+  if (!password) return { isValid: false, score: 0, feedback: 'Password is required.', level: 'Weak' }
 
   let score = 0
   const feedback = []
@@ -193,9 +165,14 @@ export function evaluatePasswordStrength(password) {
   if (/[^A-Za-z0-9]/.test(password)) score += 1
   else feedback.push('A special character')
 
+  let level = 'Weak'
+  if (score >= 3 && password.length >= 8) level = 'Strong'
+  else if (score >= 2 || password.length >= 6) level = 'Medium'
+
   return {
     isValid: password.length >= 6,
-    score, // 0 to 4
+    score,
+    level,
     feedback: feedback.length > 0 ? `Include: ${feedback.join(', ')}` : 'Strong password',
   }
 }

@@ -328,39 +328,37 @@ export function UserProfileProvider({ children }) {
   // 4. Modal Open State
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
 
-  // Synchronize state when authenticated currentUser changes or resets on logout
+  // Synchronize state when authenticated currentUser changes
   useEffect(() => {
     if (currentUser) {
       if (currentUser.profile) {
-        setProfile((prev) => ({
-          ...DEFAULT_PROFILE,
-          ...prev,
-          ...currentUser.profile,
-          socials: { ...DEFAULT_PROFILE.socials, ...prev.socials, ...currentUser.profile.socials },
-          tradingAttributes: {
-            ...DEFAULT_PROFILE.tradingAttributes,
-            ...prev.tradingAttributes,
-            ...currentUser.profile.tradingAttributes,
-          },
-        }))
-        localStorage.setItem('pulsedex_user_profile', JSON.stringify({ ...profile, ...currentUser.profile }))
+        setProfile((prev) => {
+          const merged = {
+            ...DEFAULT_PROFILE,
+            ...prev,
+            ...currentUser.profile,
+            socials: { ...DEFAULT_PROFILE.socials, ...prev.socials, ...(currentUser.profile.socials || {}) },
+            tradingAttributes: {
+              ...DEFAULT_PROFILE.tradingAttributes,
+              ...prev.tradingAttributes,
+              ...(currentUser.profile.tradingAttributes || {}),
+            },
+          }
+          localStorage.setItem('pulsedex_user_profile', JSON.stringify(merged))
+          return merged
+        })
       }
       if (currentUser.preferences) {
-        setPreferences((prev) => ({ ...prev, ...currentUser.preferences }))
-        localStorage.setItem('pulsedex_user_preferences', JSON.stringify({ ...preferences, ...currentUser.preferences }))
+        setPreferences((prev) => {
+          const merged = { ...DEFAULT_PREFERENCES, ...prev, ...currentUser.preferences }
+          localStorage.setItem('pulsedex_user_preferences', JSON.stringify(merged))
+          return merged
+        })
       }
-      if (currentUser.tradeNotes && Array.isArray(currentUser.tradeNotes)) {
+      if (currentUser.tradeNotes && Array.isArray(currentUser.tradeNotes) && currentUser.tradeNotes.length > 0) {
         setTradeNotes(currentUser.tradeNotes)
         localStorage.setItem('pulsedex_trade_notes', JSON.stringify(currentUser.tradeNotes))
       }
-    } else {
-      // User logged out -> revert to guest defaults
-      setProfile(DEFAULT_PROFILE)
-      setPreferences(DEFAULT_PREFERENCES)
-      setTradeNotes(INITIAL_NOTES)
-      localStorage.removeItem('pulsedex_user_profile')
-      localStorage.removeItem('pulsedex_user_preferences')
-      localStorage.removeItem('pulsedex_trade_notes')
     }
   }, [currentUser])
 

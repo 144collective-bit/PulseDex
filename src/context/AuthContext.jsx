@@ -4,18 +4,12 @@ import {
   registerUser,
   authenticateUser,
   authenticateWithWallet,
-  authenticateWithTwitter,
   saveUser,
   getActiveSession,
   setActiveSession,
   clearActiveSession,
   setUserSecurityPin,
 } from '../services/userStorage'
-import {
-  checkAuthRateLimit,
-  evaluatePasswordStrength,
-  generateXAuthChallenge,
-} from '../services/authSecurity'
 
 const AuthContext = createContext(null)
 
@@ -108,22 +102,6 @@ export function AuthProvider({ children }) {
     []
   )
 
-  // Sign In with Twitter (X)
-  const signInWithTwitter = useCallback(
-    async (twitterData) => {
-      const user = await authenticateWithTwitter(twitterData)
-      setCurrentUser(user)
-      setActiveSession({
-        userId: user.id,
-        username: user.username,
-        signedInAt: new Date().toISOString(),
-      })
-      setIsAuthModalOpen(false)
-      return user
-    },
-    []
-  )
-
   // Set / Update Security PIN for User
   const updateSecurityPin = useCallback(
     async (pin) => {
@@ -160,32 +138,24 @@ export function AuthProvider({ children }) {
     [currentUser]
   )
 
-  return (
-    <AuthContext.Provider
-      value={{
-        currentUser,
-        isAuthenticated: Boolean(currentUser),
-        isLoadingAuth,
-        isAuthModalOpen,
-        authMode,
-        setAuthMode,
-        openAuthModal,
-        closeAuthModal,
-        signUp,
-        signIn,
-        signInWithWallet,
-        signInWithTwitter,
-        updateSecurityPin,
-        signOut,
-        updateCurrentUser,
-        checkAuthRateLimit,
-        evaluatePasswordStrength,
-        generateXAuthChallenge,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  )
+  const value = {
+    currentUser,
+    isAuthenticated: Boolean(currentUser),
+    isLoadingAuth,
+    isAuthModalOpen,
+    authMode,
+    setAuthMode,
+    openAuthModal,
+    closeAuthModal,
+    signUp,
+    signIn,
+    signInWithWallet,
+    signOut,
+    updateCurrentUser,
+    updateSecurityPin,
+  }
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {

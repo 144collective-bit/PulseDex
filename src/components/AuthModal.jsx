@@ -13,36 +13,17 @@ import {
   User,
   Mail,
   ArrowRight,
-  ExternalLink,
   KeyRound,
   CheckCircle2,
-  RefreshCw,
   Clock,
-  ShieldAlert,
+  Shield,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { playChimeSound } from '../context/UserProfileContext'
-import { fetchTwitterProfile } from '../services/twitterService'
 import {
-  generateXAuthChallenge,
   evaluatePasswordStrength,
   checkAuthRateLimit,
 } from '../services/authSecurity'
-
-// Official X (Twitter) Logo
-function TwitterXIcon({ size = 18, className = '' }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      className={className}
-    >
-      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-    </svg>
-  )
-}
 
 export default function AuthModal() {
   const { address, isConnected } = useAccount()
@@ -56,7 +37,6 @@ export default function AuthModal() {
     signUp,
     signIn,
     signInWithWallet,
-    signInWithTwitter,
   } = useAuth()
 
   // Standard Form Fields
@@ -70,20 +50,9 @@ export default function AuthModal() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [rateLimitInfo, setRateLimitInfo] = useState({ isLocked: false, remainingMs: 0 })
 
-  // 𝕏 (Twitter) Secure Dialog State
-  const [showXDialog, setShowXDialog] = useState(false)
-  const [xStep, setXStep] = useState(1) // 1: Enter Handle & Generate Nonce, 2: Active Session Handshake & PIN
-  const [xHandleInput, setXHandleInput] = useState('')
-  const [xLivePreview, setXLivePreview] = useState(null)
-  const [xChallenge, setXChallenge] = useState(null)
-  const [xSecurityPin, setXSecurityPin] = useState('')
-  const [showPinInput, setShowPinInput] = useState(false)
-  const [isFetchingX, setIsFetchingX] = useState(false)
-  const [isConnectingX, setIsConnectingX] = useState(false)
-
-  // Rate Limit Check interval
+  // Rate Limit Check
   useEffect(() => {
-    const identifier = (email || username || xHandleInput).trim()
+    const identifier = (email || username).trim()
     if (!identifier) return
 
     const status = checkAuthRateLimit(identifier)
@@ -97,616 +66,326 @@ export default function AuthModal() {
       }, 1000)
       return () => clearInterval(interval)
     }
-  }, [email, username, xHandleInput])
+  }, [email, username])
 
-  // Debounce fetch live 𝕏 profile info
-  useEffect(() => {
-    if (!xHandleInput.trim() || xHandleInput.length < 2) {
-      setXLivePreview(null)
-      setIsFetchingX(false)
-      setXChallenge(null)
-      return
-    }
+  if (!isAuthModalOpen) return null
 
-    const clean = xHandleInput.trim().replace(/^@/, '')
-    const timer = setTimeout(async () => {
-      setIsFetchingX(true)
+  const pwStrength = evaluatePasswordStrength(password)
+
+  const handleModeSwitch = (newMode) => {
+    setAuthMode(newMode)
+    setErrorMessage('')
+    playChimeSound('toggle')
+  }
+
+  // Handle Standard Sign In / Sign Up Form
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setErrorMessage('')
+
+    const cleanUsername = username.trim()
+    const cleanEmail = email.trim()
+
+    if (authMode === 'signup') {
+      if (!cleanUsername || cleanUsername.length < 3) {
+        setErrorMessage('Username must be at least 3 characters long.')
+        return
+      }
+      if (!password || password.length < 6) {
+        setErrorMessage('Password must be at least 6 characters long.')
+        return
+      }
+      if (password !== confirmPassword) {
+        setErrorMessage('Passwords do not match.')
+        return
+      }
+
+      setIsSubmitting(true)
       try {
-        const profileData = await fetchTwitterProfile(clean)
-        if (profileData) {
-          setXLivePreview(profileData)
-          const challenge = generateXAuthChallenge(clean)
-          setXChallenge(challenge)
-        }
+        await signUp({
+          username: cleanUsername,
+          email: cleanEmail,
+          password,
+          walletAddress: isConnected ? address : null,
+        })
+        playChimeSound('success')
+        closeAuthModal()
       } catch (err) {
-        console.debug('Error resolving 𝕏 preview:', err)
+        setErrorMessage(err.message || 'Registration failed.')
       } finally {
-        setIsFetchingX(false)
+        setIsSubmitting(false)
       }
-    }, 350)
-
-    return () => clearTimeout(timer)
-  }, [xHandleInput])
-
-  // Normal Sign Up Handler
-  const handleSignUpSubmit = async (e) => {
-    e.preventDefault()
-    setErrorMessage('')
-
-    if (rateLimitInfo.isLocked) {
-      setErrorMessage(`Account temporarily locked. Please wait ${Math.ceil(rateLimitInfo.remainingMs / 1000)}s.`)
-      return
-    }
-
-    if (!email.trim() && !username.trim()) {
-      setErrorMessage('Please enter an email or username.')
-      return
-    }
-
-    if (!password || password.length < 6) {
-      setErrorMessage('Password must be at least 6 characters.')
-      return
-    }
-
-    if (password !== confirmPassword) {
-      setErrorMessage('Passwords do not match.')
-      return
-    }
-
-    let finalUsername = username.trim()
-    if (!finalUsername && email.includes('@')) {
-      finalUsername = email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '')
-    }
-    if (!finalUsername) {
-      finalUsername = `trader_${Math.floor(Math.random() * 90000 + 10000)}`
-    }
-
-    setIsSubmitting(true)
-    try {
-      await signUp({
-        username: finalUsername,
-        displayName: finalUsername,
-        email: email.trim(),
-        password,
-        linkedWallet: isConnected && address ? address : '',
-      })
-      playChimeSound('success')
-    } catch (err) {
-      setErrorMessage(err.message || 'Failed to create account. Please try again.')
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  // Normal Sign In Handler
-  const handleSignInSubmit = async (e) => {
-    e.preventDefault()
-    setErrorMessage('')
-
-    if (rateLimitInfo.isLocked) {
-      setErrorMessage(`Account locked due to multiple failed attempts. Please retry in ${Math.ceil(rateLimitInfo.remainingMs / 1000)}s.`)
-      return
-    }
-
-    const identifier = (email || username).trim()
-    if (!identifier || !password) {
-      setErrorMessage('Please enter your email/username and password.')
-      return
-    }
-
-    setIsSubmitting(true)
-    try {
-      await signIn({
-        identifier,
-        password,
-      })
-      playChimeSound('success')
-    } catch (err) {
-      setErrorMessage(err.message || 'Invalid credentials. Please verify and try again.')
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  // Launch Active 𝕏 Handshake Window
-  const handleLaunchXIntent = () => {
-    if (!xChallenge?.intentUrl) return
-    const width = 600
-    const height = 500
-    const left = window.screen.width / 2 - width / 2
-    const top = window.screen.height / 2 - height / 2
-
-    window.open(
-      xChallenge.intentUrl,
-      'PulseDexXAuth',
-      `width=${width},height=${height},top=${top},left=${left},status=no,resizable=yes`
-    )
-    setIsXHandshakeLaunched(true)
-    setXStep(2)
-  }
-
-  // Complete Secure 𝕏 Sign-In Handler
-  const handleCompleteXSignIn = async (e) => {
-    e?.preventDefault()
-    if (!xHandleInput.trim()) return
-    setErrorMessage('')
-
-    setIsConnectingX(true)
-    try {
-      const cleanHandle = xHandleInput.trim().replace(/^@/, '')
-      const finalAvatar = xLivePreview?.avatarUrl || `https://unavatar.io/twitter/${cleanHandle}`
-      const finalName = xLivePreview?.displayName || `@${cleanHandle}`
-      const finalBio = xLivePreview?.bio || `PulseChain Trader | @${cleanHandle} on 𝕏`
-      const finalBanner = xLivePreview?.bannerUrl || ''
-
-      // If user has connected wallet, attempt cryptographic signature
-      let signature = ''
-      if (isConnected && address && signMessageAsync) {
-        try {
-          signature = await signMessageAsync({
-            message: `PulseDex Security Verification\nIdentity: @${cleanHandle}\nWallet: ${address}\nChallenge: ${xChallenge?.challengeCode || 'PDX-AUTH'}\nTimestamp: ${Date.now()}`,
-          })
-        } catch {
-          // Signature optional
-        }
+    } else {
+      // Sign In
+      const identifier = cleanUsername || cleanEmail
+      if (!identifier) {
+        setErrorMessage('Please enter your username or email.')
+        return
+      }
+      if (!password) {
+        setErrorMessage('Please enter your password.')
+        return
       }
 
-      await signInWithTwitter({
-        twitterHandle: cleanHandle,
-        displayName: finalName,
-        avatarUrl: finalAvatar,
-        bio: finalBio,
-        bannerUrl: finalBanner,
-        securityPin: xSecurityPin.trim(),
-        verificationChallenge: xChallenge?.challengeCode || '',
-        walletSignature: signature,
-      })
-
-      playChimeSound('success')
-      setShowXDialog(false)
-      setXStep(1)
-      setXSecurityPin('')
-    } catch (err) {
-      if (err.message === 'ACCOUNT_PIN_REQUIRED') {
-        setShowPinInput(true)
-        setErrorMessage('This 𝕏 account is protected with a Security PIN. Please enter your PIN.')
-      } else {
-        setErrorMessage(err.message || 'Failed to authenticate 𝕏 account.')
+      setIsSubmitting(true)
+      try {
+        await signIn({ identifier, password })
+        playChimeSound('success')
+        closeAuthModal()
+      } catch (err) {
+        setErrorMessage(err.message || 'Authentication failed.')
+      } finally {
+        setIsSubmitting(false)
       }
-    } finally {
-      setIsConnectingX(false)
     }
   }
 
-  // Web3 Wallet Sign-In
+  // 1-Click Sign In with Web3 Wallet
   const handleWalletSignIn = async () => {
-    setErrorMessage('')
     if (!isConnected || !address) {
       setErrorMessage('Please connect your Web3 wallet first.')
       return
     }
 
     setIsSubmitting(true)
+    setErrorMessage('')
     try {
+      if (signMessageAsync) {
+        await signMessageAsync({
+          message: `PulseDex Secure Sign In\nWallet: ${address}\nTimestamp: ${new Date().toISOString()}`,
+        })
+      }
       await signInWithWallet(address)
       playChimeSound('success')
+      closeAuthModal()
     } catch (err) {
-      setErrorMessage(err.message || 'Failed to authenticate wallet account.')
+      if (err.name === 'UserRejectedRequestError' || err.message?.includes('rejected')) {
+        setErrorMessage('Signature cancelled by user.')
+      } else {
+        setErrorMessage(err.message || 'Wallet authentication failed.')
+      }
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  if (!isAuthModalOpen) return null
-
-  const passwordStrength = evaluatePasswordStrength(password)
-
   return (
-    <div className="modal-backdrop" onClick={closeAuthModal}>
+    <div className="modal-backdrop-overlay animate-fade-in" onClick={closeAuthModal}>
       <div
-        className="auth-modal-card glass-panel font-mono"
+        className="modal-container auth-modal-container glass-panel animate-scale-up"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal Header */}
-        <div className="auth-modal-header">
-          <div className="auth-modal-title-box">
-            <div className="auth-icon-badge">
-              <ShieldCheck size={22} className="text-pulse-green" />
+        {/* Header */}
+        <div className="modal-header auth-modal-header">
+          <div className="flex items-center gap-2">
+            <div className="auth-header-icon-badge">
+              <ShieldCheck size={18} className="text-pulse-cyan" />
             </div>
             <div>
-              <h2 className="auth-modal-title">
-                {authMode === 'signup' ? 'Create PulseDex Account' : 'Welcome Back'}
+              <h2 className="modal-title font-mono">
+                {authMode === 'signup' ? 'Create PulseDex Account' : 'Sign In to PulseDex'}
               </h2>
-              <span className="auth-modal-sub">
+              <p className="modal-subtitle text-xs text-muted">
                 {authMode === 'signup'
-                  ? 'Sign up to persist notes, custom tokens & watchlists'
-                  : 'Sign in to access your PulseDex profile & secure vault'}
-              </span>
+                  ? 'Access your encrypted portfolio, notes & saved watchlists'
+                  : 'Welcome back! Enter your credentials to continue'}
+              </p>
             </div>
           </div>
-
-          <button className="wallet-modal-close-btn" onClick={closeAuthModal} title="Close">
+          <button
+            type="button"
+            className="modal-close-btn"
+            onClick={closeAuthModal}
+            aria-label="Close"
+          >
             <X size={18} />
           </button>
         </div>
 
-        {/* Modal Tab Switcher */}
-        <div className="auth-tabs-bar">
+        {/* Brute Force Rate Limit Lockout Banner */}
+        {rateLimitInfo.isLocked && (
+          <div className="auth-lockout-banner animate-fade-in font-mono">
+            <div className="flex items-center gap-2 text-pulse-red">
+              <Clock size={15} />
+              <span className="font-bold">Security Lockout Active</span>
+            </div>
+            <p className="text-xs text-slate-300 mt-1">
+              Too many failed login attempts. Retry in{' '}
+              <span className="text-pulse-yellow font-bold">
+                {Math.ceil(rateLimitInfo.remainingMs / 1000)}s
+              </span>
+            </p>
+          </div>
+        )}
+
+        {/* Segment Tabs (Sign In vs Sign Up) */}
+        <div className="auth-mode-switch-pills font-mono">
           <button
-            className={`auth-tab-btn ${authMode === 'signin' ? 'active' : ''}`}
-            onClick={() => {
-              setAuthMode('signin')
-              setErrorMessage('')
-              setShowXDialog(false)
-            }}
+            type="button"
+            className={`auth-mode-pill ${authMode === 'signin' ? 'active' : ''}`}
+            onClick={() => handleModeSwitch('signin')}
           >
             <LogIn size={14} />
             <span>Sign In</span>
           </button>
           <button
-            className={`auth-tab-btn ${authMode === 'signup' ? 'active' : ''}`}
-            onClick={() => {
-              setAuthMode('signup')
-              setErrorMessage('')
-              setShowXDialog(false)
-            }}
+            type="button"
+            className={`auth-mode-pill ${authMode === 'signup' ? 'active' : ''}`}
+            onClick={() => handleModeSwitch('signup')}
           >
             <UserPlus size={14} />
-            <span>Create Account</span>
+            <span>Sign Up</span>
           </button>
         </div>
 
-        {/* Rate Limit Security Lockout Banner */}
-        {rateLimitInfo.isLocked && (
-          <div className="auth-lockout-banner animate-fade-in font-mono text-xs">
-            <div className="flex items-center gap-2 text-pulse-red font-bold">
-              <ShieldAlert size={16} />
-              <span>Brute-Force Protection Active</span>
-            </div>
-            <p className="mt-1 text-muted text-[11px]">
-              Too many invalid login attempts. Temporary cooldown in effect:
-              <strong className="text-white ml-1 font-mono">
-                {Math.ceil(rateLimitInfo.remainingMs / 1000)}s
-              </strong>
-            </p>
-          </div>
-        )}
-
-        {/* Error Alert */}
-        {errorMessage && !rateLimitInfo.isLocked && (
-          <div className="auth-error-banner animate-fade-in">
-            <AlertCircle size={15} />
+        {/* Error Alert Message */}
+        {errorMessage && (
+          <div className="auth-error-alert animate-fade-in font-mono">
+            <AlertCircle size={15} className="flex-shrink-0" />
             <span>{errorMessage}</span>
           </div>
         )}
 
-        {/* 1. SOCIAL / 1-CLICK AUTH OPTIONS */}
-        <div className="auth-social-section">
-          {/* Twitter (X) Button */}
-          <button
-            type="button"
-            className="auth-btn-x-login font-mono"
-            onClick={() => {
-              setShowXDialog(true)
-              setErrorMessage('')
-              setXStep(1)
-            }}
-          >
-            <div className="flex items-center gap-2">
-              <TwitterXIcon size={16} />
-              <span>Continue with 𝕏 (Active Session)</span>
-            </div>
-            <span className="auth-x-verified-pill font-mono">Verified Handshake</span>
-          </button>
-
-          {/* Web3 Wallet Quick Connect */}
-          <button
-            type="button"
-            className={`auth-btn-wallet-login font-mono ${isConnected ? 'is-connected' : ''}`}
-            onClick={handleWalletSignIn}
-            disabled={isSubmitting}
-          >
-            <div className="flex items-center gap-2">
-              <Wallet size={15} className="text-pulse-green" />
-              <span>
-                {isConnected
-                  ? `Sign In as ${address.slice(0, 6)}...${address.slice(-4)}`
-                  : 'Sign In with Connected Web3 Wallet'}
-              </span>
-            </div>
-            <span className="badge badge-green text-[9px]">Web3 Auth</span>
-          </button>
-        </div>
-
-        {/* 𝕏 (Twitter) SECURE AUTHENTICATION DIALOG */}
-        {showXDialog && (
-          <div className="auth-x-dialog-box glass-panel animate-fade-in font-mono">
-            <div className="x-dialog-header">
-              <div className="flex items-center gap-2">
-                <TwitterXIcon size={16} className="text-white" />
-                <span className="font-bold text-white text-xs">
-                  {xStep === 1 ? 'Step 1: 𝕏 Ownership Verification' : 'Step 2: Confirm Active 𝕏 Session'}
-                </span>
-              </div>
-              <button
-                type="button"
-                className="text-muted hover:text-white text-xs p-1"
-                onClick={() => setShowXDialog(false)}
-              >
-                ✕
-              </button>
-            </div>
-
-            {xStep === 1 ? (
-              /* STEP 1: Enter Handle & Generate Cryptographic Nonce */
-              <div className="x-dialog-step-content">
-                <p className="text-[11px] text-muted leading-relaxed">
-                  To ensure security, PulseDex verifies that you are logged into your active 𝕏 account via an official cryptographic handshake.
-                </p>
-
-                <div className="auth-input-group mt-2">
-                  <div className="auth-input-icon-wrapper">
-                    <span className="text-pulse-cyan font-bold text-sm">@</span>
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Enter your 𝕏 handle (e.g. Satoshi)"
-                    value={xHandleInput}
-                    onChange={(e) => setXHandleInput(e.target.value)}
-                    className="auth-text-input font-mono"
-                    autoFocus
-                  />
-                  {isFetchingX && <RefreshCw size={13} className="animate-spin text-muted mr-2" />}
-                </div>
-
-                {/* Live Preview & Challenge Nonce */}
-                {xLivePreview && (
-                  <div className="x-preview-card glass-panel mt-2 animate-fade-in">
-                    <div className="flex items-center gap-2.5">
-                      <img
-                        src={xLivePreview.avatarUrl}
-                        alt={xLivePreview.displayName}
-                        className="x-preview-avatar"
-                        onError={(e) => {
-                          e.target.style.display = 'none'
-                        }}
-                      />
-                      <div className="flex-1 min-width-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-white text-xs truncate">
-                            {xLivePreview.displayName}
-                          </span>
-                          <span className="text-pulse-cyan text-[10px]">✓</span>
-                        </div>
-                        <span className="text-muted text-[11px]">@{xLivePreview.handle}</span>
-                      </div>
-                    </div>
-
-                    {xChallenge && (
-                      <div className="challenge-nonce-box mt-2 flex items-center justify-between">
-                        <span className="text-[10px] text-muted">Session Nonce:</span>
-                        <code className="text-pulse-cyan font-mono text-[10px] font-bold">
-                          {xChallenge.challengeCode}
-                        </code>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  disabled={!xHandleInput.trim() || isFetchingX}
-                  className="btn-primary w-full mt-3 font-mono text-xs justify-center py-2.5 btn-glow-pulse"
-                  onClick={handleLaunchXIntent}
-                >
-                  <div className="flex items-center gap-2">
-                    <ExternalLink size={13} />
-                    <span>Launch 𝕏 Verification Handshake</span>
-                  </div>
-                </button>
-              </div>
-            ) : (
-              /* STEP 2: Active Session Confirmation & Security PIN */
-              <div className="x-dialog-step-content animate-fade-in">
-                <div className="handshake-verified-pill text-xs text-pulse-green flex items-center gap-1.5 p-2 rounded bg-pulse-green-bg mb-2">
-                  <CheckCircle2 size={15} />
-                  <span>𝕏 Verification Window Triggered</span>
-                </div>
-
-                <p className="text-[11px] text-muted">
-                  Confirming active session for <strong className="text-white">@{xHandleInput.replace(/^@/, '')}</strong>.
-                </p>
-
-                {/* Security PIN Field (Optional on first setup, mandatory if protected) */}
-                <div className="auth-input-group mt-3">
-                  <div className="auth-input-icon-wrapper">
-                    <KeyRound size={15} className="text-pulse-yellow" />
-                  </div>
-                  <input
-                    type="password"
-                    placeholder={showPinInput ? 'Enter Security PIN (Required)' : 'Set/Enter Security PIN (Optional)'}
-                    value={xSecurityPin}
-                    onChange={(e) => setXSecurityPin(e.target.value)}
-                    className="auth-text-input font-mono"
-                    maxLength={8}
-                  />
-                </div>
-                <span className="text-[10px] text-muted block mt-1">
-                  Protects your 𝕏 handle from unauthorized access by third parties.
-                </span>
-
-                <div className="flex gap-2 mt-4">
-                  <button
-                    type="button"
-                    className="btn-secondary flex-1 font-mono text-xs justify-center"
-                    onClick={() => setXStep(1)}
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isConnectingX}
-                    className="btn-primary flex-1 font-mono text-xs justify-center py-2.5 btn-glow-pulse"
-                    onClick={handleCompleteXSignIn}
-                  >
-                    {isConnectingX ? (
-                      <RefreshCw size={13} className="animate-spin" />
-                    ) : (
-                      <div className="flex items-center gap-1.5">
-                        <ShieldCheck size={14} />
-                        <span>Authenticate & Sign In</span>
-                      </div>
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Divider */}
-        <div className="auth-divider-row">
-          <div className="auth-divider-line"></div>
-          <span className="auth-divider-text">OR EMAIL / USERNAME</span>
-          <div className="auth-divider-line"></div>
-        </div>
-
-        {/* 2. STANDARD EMAIL / USERNAME & PASSWORD FORM */}
-        <form onSubmit={authMode === 'signup' ? handleSignUpSubmit : handleSignInSubmit}>
-          <div className="auth-form-fields">
-            {/* Username / Identifier Input */}
-            <div className="auth-input-group">
-              <div className="auth-input-icon-wrapper">
-                <User size={15} className="text-muted" />
-              </div>
+        {/* Main Form */}
+        <form onSubmit={handleSubmit} className="auth-form font-mono">
+          <div className="form-group">
+            <label className="form-label">
+              {authMode === 'signup' ? 'Username' : 'Username or Email'}
+            </label>
+            <div className="input-with-icon">
+              <User size={15} className="input-icon text-muted" />
               <input
                 type="text"
-                placeholder={authMode === 'signup' ? 'Choose Username' : 'Email or Username'}
-                value={authMode === 'signup' ? username : email || username}
-                onChange={(e) => {
-                  if (authMode === 'signup') setUsername(e.target.value)
-                  else {
-                    setEmail(e.target.value)
-                    setUsername(e.target.value)
-                  }
-                }}
-                className="auth-text-input font-mono"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder={authMode === 'signup' ? 'e.g. pulse_whale' : 'Enter username or email'}
+                className="form-input"
+                autoComplete="username"
+                disabled={isSubmitting || rateLimitInfo.isLocked}
                 required
+                autoFocus
               />
             </div>
+          </div>
 
-            {/* Email Input (Sign Up Only) */}
-            {authMode === 'signup' && (
-              <div className="auth-input-group">
-                <div className="auth-input-icon-wrapper">
-                  <Mail size={15} className="text-muted" />
-                </div>
+          {authMode === 'signup' && (
+            <div className="form-group animate-fade-in">
+              <label className="form-label">Email Address (Optional)</label>
+              <div className="input-with-icon">
+                <Mail size={15} className="input-icon text-muted" />
                 <input
                   type="email"
-                  placeholder="Email Address (Optional)"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="auth-text-input font-mono"
+                  placeholder="name@domain.com"
+                  className="form-input"
+                  autoComplete="email"
+                  disabled={isSubmitting || rateLimitInfo.isLocked}
                 />
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Password Input */}
-            <div className="auth-input-group">
-              <div className="auth-input-icon-wrapper">
-                <Lock size={15} className="text-muted" />
-              </div>
+          <div className="form-group">
+            <div className="flex items-center justify-between">
+              <label className="form-label">Password</label>
+              {authMode === 'signup' && password && (
+                <span className={`text-[11px] font-bold ${
+                  pwStrength.level === 'Strong' ? 'text-pulse-green' :
+                  pwStrength.level === 'Medium' ? 'text-pulse-yellow' : 'text-pulse-red'
+                }`}>
+                  {pwStrength.level} Password
+                </span>
+              )}
+            </div>
+            <div className="input-with-icon">
+              <Lock size={15} className="input-icon text-muted" />
               <input
                 type={showPassword ? 'text' : 'password'}
-                placeholder="Password (min 6 characters)"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="auth-text-input font-mono"
+                placeholder="Enter password (min 6 chars)"
+                className="form-input"
+                autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
+                disabled={isSubmitting || rateLimitInfo.isLocked}
                 required
               />
               <button
                 type="button"
-                className="auth-show-pwd-btn text-muted"
+                className="input-eye-btn"
                 onClick={() => setShowPassword(!showPassword)}
-                title={showPassword ? 'Hide password' : 'Show password'}
+                tabIndex={-1}
               >
                 {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
             </div>
+          </div>
 
-            {/* Password Strength Indicator on Sign Up */}
-            {authMode === 'signup' && password.length > 0 && (
-              <div className="pwd-strength-meter font-mono text-[10px]">
-                <div className="flex items-center justify-between text-muted">
-                  <span>Password Security:</span>
-                  <span
-                    className={
-                      passwordStrength.score >= 3
-                        ? 'text-pulse-green'
-                        : passwordStrength.score >= 2
-                        ? 'text-pulse-yellow'
-                        : 'text-pulse-red'
-                    }
-                  >
-                    {passwordStrength.score >= 3
-                      ? 'Strong'
-                      : passwordStrength.score >= 2
-                      ? 'Medium'
-                      : 'Weak'}
-                  </span>
-                </div>
-                <div className="strength-bar-track mt-1">
-                  <div
-                    className={`strength-bar-fill strength-${passwordStrength.score}`}
-                    style={{ width: `${Math.max(15, (passwordStrength.score / 4) * 100)}%` }}
-                  ></div>
-                </div>
-                <span className="text-[9px] text-muted mt-0.5 block">{passwordStrength.feedback}</span>
-              </div>
-            )}
-
-            {/* Confirm Password (Sign Up Only) */}
-            {authMode === 'signup' && (
-              <div className="auth-input-group">
-                <div className="auth-input-icon-wrapper">
-                  <Lock size={15} className="text-muted" />
-                </div>
+          {authMode === 'signup' && (
+            <div className="form-group animate-fade-in">
+              <label className="form-label">Confirm Password</label>
+              <div className="input-with-icon">
+                <Lock size={15} className="input-icon text-muted" />
                 <input
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="Confirm Password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="auth-text-input font-mono"
+                  placeholder="Repeat your password"
+                  className="form-input"
+                  autoComplete="new-password"
+                  disabled={isSubmitting || rateLimitInfo.isLocked}
                   required
                 />
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Submit Action Button */}
-            <button
-              type="submit"
-              disabled={isSubmitting || rateLimitInfo.isLocked}
-              className="btn-primary w-full mt-2 font-mono font-bold justify-center py-3 btn-glow-pulse"
-            >
-              {isSubmitting ? (
-                <div className="flex items-center gap-2">
-                  <RefreshCw size={15} className="animate-spin" />
-                  <span>Verifying Credentials...</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <span>{authMode === 'signup' ? 'Create Account' : 'Sign In'}</span>
-                  <ArrowRight size={15} />
-                </div>
-              )}
-            </button>
-          </div>
+          {/* Submit Button */}
+          <button
+            type="submit"
+            className="btn-primary auth-submit-btn btn-glow-pulse font-mono mt-2"
+            disabled={isSubmitting || rateLimitInfo.isLocked}
+          >
+            {isSubmitting ? (
+              <span>Processing...</span>
+            ) : authMode === 'signup' ? (
+              <>
+                <span>Create Account</span>
+                <ArrowRight size={15} />
+              </>
+            ) : (
+              <>
+                <span>Sign In</span>
+                <ArrowRight size={15} />
+              </>
+            )}
+          </button>
         </form>
 
-        {/* Footnote Security Badge */}
-        <div className="auth-security-footer font-mono text-[10px] text-muted text-center mt-2">
-          <ShieldCheck size={12} className="inline mr-1 text-pulse-green" />
-          <span>PBKDF2-SHA256 Encrypted Vault • Rate-Limited Brute-Force Defense</span>
+        {/* Divider */}
+        <div className="auth-divider">
+          <span>OR CONTINUE WITH</span>
+        </div>
+
+        {/* Web3 Wallet Quick Sign In */}
+        <button
+          type="button"
+          className="auth-wallet-btn font-mono"
+          onClick={handleWalletSignIn}
+          disabled={isSubmitting}
+        >
+          <Wallet size={16} className="text-pulse-green" />
+          <span>
+            {isConnected && address
+              ? `Sign In with Wallet (${address.slice(0, 6)}...${address.slice(-4)})`
+              : 'Connect & Sign In with Web3 Wallet'}
+          </span>
+        </button>
+
+        {/* Footer info */}
+        <div className="auth-modal-footer font-mono">
+          <Shield size={12} className="text-pulse-cyan" />
+          <span>Encrypted Vault Security • PBKDF2 Password Protection</span>
         </div>
       </div>
     </div>

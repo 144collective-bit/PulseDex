@@ -1,10 +1,9 @@
 /**
  * PulseDex User Data Storage & Security Service
  * Provides secure client-side storage, PBKDF2 password hashing,
- * active X.com session verification, session token management, and multi-account security.
+ * session token management, and multi-account security.
  */
 
-import { fetchTwitterProfile } from './twitterService'
 import {
   derivePBKDF2Hash,
   generateSecureSessionToken,
@@ -132,23 +131,7 @@ export async function findUserByUsernameOrEmail(identifier) {
     users.find(
       (u) =>
         u.username?.toLowerCase() === clean ||
-        u.email?.toLowerCase() === clean ||
-        u.twitterHandle?.toLowerCase() === clean
-    ) || null
-  )
-}
-
-// Find user by Twitter Handle
-export async function findUserByTwitter(twitterHandle) {
-  if (!twitterHandle) return null
-  const clean = twitterHandle.trim().toLowerCase().replace(/^@/, '')
-  const users = await getAllUsers()
-  return (
-    users.find(
-      (u) =>
-        u.twitterHandle?.toLowerCase() === clean ||
-        u.profile?.socials?.twitter?.toLowerCase() === clean ||
-        u.username?.toLowerCase() === clean
+        u.email?.toLowerCase() === clean
     ) || null
   )
 }
@@ -178,15 +161,12 @@ export async function registerUser({
   bannerUrl = '',
   bio = 'PulseChain Trader 🚀',
   linkedWallet = '',
-  twitterHandle = '',
-  twitterVerified = false,
   securityPin = '',
   socials = {},
   tradingAttributes = {},
 }) {
   const cleanUsername = username.trim().toLowerCase().replace(/^@/, '')
   const cleanEmail = email ? email.trim().toLowerCase() : ''
-  const cleanTwitter = twitterHandle ? twitterHandle.trim().toLowerCase().replace(/^@/, '') : ''
 
   // Validate uniqueness
   const existing = await findUserByUsernameOrEmail(cleanUsername)
@@ -216,12 +196,9 @@ export async function registerUser({
     isPinProtected: Boolean(securityPin),
     linkedWallet: linkedWallet ? linkedWallet.toLowerCase() : '',
     wallets: linkedWallet ? [linkedWallet.toLowerCase()] : [],
-    twitterHandle: cleanTwitter,
-    twitterVerified: Boolean(twitterVerified || cleanTwitter),
     authMethods: {
       hasPassword: Boolean(password),
       hasWallet: Boolean(linkedWallet),
-      hasTwitter: Boolean(cleanTwitter),
       hasPin: Boolean(securityPin),
     },
     profile: {
@@ -235,7 +212,6 @@ export async function registerUser({
       badges: ['pulse-og', 'diamond-hands'],
       memberSince: new Date().toISOString().split('T')[0],
       socials: {
-        twitter: cleanTwitter || socials?.twitter || '',
         telegram: socials?.telegram || '',
         discord: socials?.discord || '',
         website: socials?.website || '',
@@ -303,9 +279,6 @@ export async function authenticateUser(identifier, password) {
   }
 
   if (!user.passwordHash) {
-    if (user.twitterHandle) {
-      throw new Error('This account was created via X (Twitter). Please sign in using the 𝕏 button.')
-    }
     throw new Error('This account was created via Web3 Wallet. Please sign in with your wallet.')
   }
 
@@ -356,134 +329,6 @@ export async function authenticateWithWallet(walletAddress) {
     if (!user.securityAudit) user.securityAudit = {}
     user.securityAudit.lastLoginDevice = navigator.userAgent?.substring(0, 80) || 'Web3 Injected Wallet'
     user.securityAudit.loginCount = (user.securityAudit.loginCount || 0) + 1
-    await saveUser(user)
-  }
-
-  return user
-}
-
-/**
- * Securely Authenticates or Registers an account using X.com (Twitter)
- * Requires verification challenge handshake or security PIN if previously registered.
- */
-export async function authenticateWithTwitter({
-  twitterHandle,
-  displayName,
-  avatarUrl = '',
-  bio = '',
-  bannerUrl = '',
-  securityPin = '',
-  verificationChallenge = '',
-  walletSignature = '',
-}) {
-  if (!twitterHandle) {
-    throw new Error('Twitter handle is required for 𝕏 authorization.')
-  }
-
-  const cleanHandle = twitterHandle.trim().toLowerCase().replace(/^@/, '')
-
-  // 1. Check Rate Limit
-  const rateLimit = checkAuthRateLimit(cleanHandle)
-  if (rateLimit.isLocked) {
-    const remainingSec = Math.ceil(rateLimit.remainingMs / 1000)
-    throw new Error(`Too many attempts for @${cleanHandle}. Locked for ${remainingSec}s for security.`)
-  }
-
-  let user = await findUserByTwitter(cleanHandle)
-
-  // 2. Security Check for Existing Account:
-  // If the account has a Security PIN or is PIN protected, verify the PIN
-  if (user && user.securityPinHash) {
-    if (!securityPin) {
-      throw new Error(`ACCOUNT_PIN_REQUIRED`)
-    }
-    const computedPinHash = await derivePBKDF2Hash(securityPin, user.salt || 'pulsedex_salt_369')
-    if (computedPinHash !== user.securityPinHash) {
-      const status = recordFailedAuthAttempt(cleanHandle)
-      if (status.isLocked) {
-        throw new Error('Too many invalid PIN attempts. Account locked for 3 minutes for security.')
-      }
-      throw new Error('Incorrect Security PIN for this 𝕏 account.')
-    }
-  }
-
-  // Reset rate limit on success
-  resetAuthRateLimit(cleanHandle)
-
-  // Pull live X profile details
-  let fetchedXInfo = null
-  try {
-    fetchedXInfo = await fetchTwitterProfile(cleanHandle)
-  } catch (e) {
-    console.debug('Could not fetch 𝕏 profile metadata:', e)
-  }
-
-  const finalDisplayName = displayName?.trim() || fetchedXInfo?.displayName || `@${cleanHandle}`
-  const finalAvatarUrl = avatarUrl || fetchedXInfo?.avatarUrl || `https://unavatar.io/twitter/${cleanHandle}`
-  const finalBio = bio || fetchedXInfo?.bio || `PulseChain Trader | @${cleanHandle} on 𝕏`
-  const finalBannerUrl = bannerUrl || fetchedXInfo?.bannerUrl || ''
-
-  if (!user) {
-    // Register new verified user with optional security PIN
-    user = await registerUser({
-      username: cleanHandle,
-      displayName: finalDisplayName,
-      email: '',
-      password: '',
-      avatarId: 'cyber-pulse',
-      customAvatarUrl: finalAvatarUrl,
-      bannerUrl: finalBannerUrl,
-      bio: finalBio,
-      twitterHandle: cleanHandle,
-      twitterVerified: true,
-      securityPin,
-      socials: {
-        twitter: cleanHandle,
-        telegram: '',
-        discord: '',
-        website: `https://x.com/${cleanHandle}`,
-      },
-      tradingAttributes: {
-        style: 'Degen Sniper',
-        riskTolerance: 'High Risk',
-        pinnedToken: 'PLS',
-      },
-    })
-  } else {
-    // Update existing user with verified details
-    user.twitterHandle = cleanHandle
-    user.twitterVerified = true
-    if (finalAvatarUrl) user.profile.customAvatarUrl = finalAvatarUrl
-    if (finalDisplayName && (!user.profile.displayName || user.profile.displayName === user.username)) {
-      user.profile.displayName = finalDisplayName
-    }
-    if (finalBio && (!user.profile.bio || user.profile.bio.includes('PulseChain Trader'))) {
-      user.profile.bio = finalBio
-    }
-    if (finalBannerUrl && !user.profile.bannerUrl) {
-      user.profile.bannerUrl = finalBannerUrl
-    }
-    if (!user.profile.socials) {
-      user.profile.socials = { twitter: cleanHandle, website: `https://x.com/${cleanHandle}` }
-    } else {
-      user.profile.socials.twitter = cleanHandle
-      if (!user.profile.socials.website) {
-        user.profile.socials.website = `https://x.com/${cleanHandle}`
-      }
-    }
-
-    // Set new PIN if supplied and not previously set
-    if (securityPin && !user.securityPinHash) {
-      user.securityPinHash = await derivePBKDF2Hash(securityPin, user.salt || 'pulsedex_salt_369')
-      user.isPinProtected = true
-    }
-
-    user.lastLoginAt = new Date().toISOString()
-    if (!user.securityAudit) user.securityAudit = {}
-    user.securityAudit.lastLoginDevice = navigator.userAgent?.substring(0, 80) || '𝕏 Verified Handshake'
-    user.securityAudit.lastChallengeVerifiedAt = new Date().toISOString()
-    user.securityAudit.loginCount = (user.securityAudit.loginCount || 0) + 1
-
     await saveUser(user)
   }
 

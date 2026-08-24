@@ -6,7 +6,6 @@ import {
   PieChart,
   Star,
   User,
-  ArrowLeftRight,
 } from 'lucide-react'
 import { useUserProfile } from '../context/UserProfileContext'
 
@@ -27,16 +26,6 @@ export default function MobileBottomNav({
           <TrendingUp size={18} />
         </div>
         <span className="mobile-nav-label">Screener</span>
-      </button>
-
-      <button
-        className={`mobile-nav-item ${activeTab === 'crosschain' ? 'active' : ''}`}
-        onClick={() => setActiveTab('crosschain')}
-      >
-        <div className="mobile-nav-icon-wrapper">
-          <ArrowLeftRight size={18} className="text-pulse-cyan" />
-        </div>
-        <span className="mobile-nav-label">Bridge</span>
       </button>
 
       <button
