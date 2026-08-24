@@ -19,6 +19,7 @@ import PortfolioView from './components/PortfolioView'
 import WatchlistView from './components/WatchlistView'
 import TrenchesView from './components/TrenchesView'
 import DexView from './components/DexView'
+import CrossChainSwap from './components/CrossChainSwap'
 import WalletConnectModal from './components/WalletConnectModal'
 import UserProfileModal from './components/UserProfileModal'
 import AuthModal from './components/AuthModal'
@@ -219,7 +220,14 @@ function MainApp() {
         )}
 
         {activeTab === 'dex' && (
-          <DexView onSelectPairForChart={handleSelectPair} />
+          <DexView
+            onSelectPairForChart={handleSelectPair}
+            onOpenWalletModal={() => setShowWalletModal(true)}
+          />
+        )}
+
+        {activeTab === 'crosschain' && (
+          <CrossChainSwap onOpenWalletModal={() => setShowWalletModal(true)} />
         )}
 
         {activeTab === 'markets' && (

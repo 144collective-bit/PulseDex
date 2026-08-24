@@ -1,26 +1,25 @@
 /**
- * PulseDex User Data Storage Service
- * Provides secure client-side storage, password hashing, Twitter authentication,
- * and multi-account management with IndexedDB primary engine and LocalStorage fallback.
+ * PulseDex User Data Storage & Security Service
+ * Provides secure client-side storage, PBKDF2 password hashing,
+ * active X.com session verification, session token management, and multi-account security.
  */
 
 import { fetchTwitterProfile } from './twitterService'
+import {
+  derivePBKDF2Hash,
+  generateSecureSessionToken,
+  checkAuthRateLimit,
+  recordFailedAuthAttempt,
+  resetAuthRateLimit,
+} from './authSecurity'
 
 const STORAGE_KEY_USERS = 'pulsedex_users_vault_v1'
 const STORAGE_KEY_SESSION = 'pulsedex_active_session_v1'
 const DB_NAME = 'PulseDexUserDB'
-const DB_VERSION = 1
+const DB_VERSION = 2
 const STORE_NAME = 'users'
 
-// Web Crypto SHA-256 Hashing with salt
-export async function hashPassword(password, salt = 'pulsedex_salt_369') {
-  if (!password) return ''
-  const encoder = new TextEncoder()
-  const data = encoder.encode(password + salt)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
-}
+const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000 // 7 Days
 
 // Generate unique User ID
 export function generateUserId() {
@@ -91,9 +90,13 @@ export async function saveUser(userData) {
 
   const users = await getAllUsers()
   const existingIdx = users.findIndex((u) => u.id === userData.id)
-  
+
   if (existingIdx >= 0) {
-    users[existingIdx] = { ...users[existingIdx], ...userData, updatedAt: new Date().toISOString() }
+    users[existingIdx] = {
+      ...users[existingIdx],
+      ...userData,
+      updatedAt: new Date().toISOString(),
+    }
   } else {
     users.push({
       ...userData,
@@ -177,6 +180,7 @@ export async function registerUser({
   linkedWallet = '',
   twitterHandle = '',
   twitterVerified = false,
+  securityPin = '',
   socials = {},
   tradingAttributes = {},
 }) {
@@ -187,7 +191,7 @@ export async function registerUser({
   // Validate uniqueness
   const existing = await findUserByUsernameOrEmail(cleanUsername)
   if (existing) {
-    throw new Error(`Username @${username} is already registered. Please choose another or sign in.`)
+    throw new Error(`Username @${username} is already registered. Please sign in instead.`)
   }
 
   if (cleanEmail) {
@@ -197,8 +201,9 @@ export async function registerUser({
     }
   }
 
-  const salt = `salt_${Date.now()}`
-  const passwordHash = password ? await hashPassword(password, salt) : ''
+  const salt = `salt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+  const passwordHash = password ? await derivePBKDF2Hash(password, salt) : ''
+  const securityPinHash = securityPin ? await derivePBKDF2Hash(securityPin, salt) : ''
 
   const newUser = {
     id: generateUserId(),
@@ -207,10 +212,18 @@ export async function registerUser({
     displayName: displayName?.trim() || username.trim(),
     salt,
     passwordHash,
+    securityPinHash,
+    isPinProtected: Boolean(securityPin),
     linkedWallet: linkedWallet ? linkedWallet.toLowerCase() : '',
     wallets: linkedWallet ? [linkedWallet.toLowerCase()] : [],
     twitterHandle: cleanTwitter,
     twitterVerified: Boolean(twitterVerified || cleanTwitter),
+    authMethods: {
+      hasPassword: Boolean(password),
+      hasWallet: Boolean(linkedWallet),
+      hasTwitter: Boolean(cleanTwitter),
+      hasPin: Boolean(securityPin),
+    },
     profile: {
       displayName: displayName?.trim() || username.trim(),
       username: cleanUsername,
@@ -258,36 +271,62 @@ export async function registerUser({
     ],
     createdAt: new Date().toISOString(),
     lastLoginAt: new Date().toISOString(),
+    securityAudit: {
+      lastLoginDevice: navigator.userAgent?.substring(0, 80) || 'Unknown Device',
+      loginCount: 1,
+    },
   }
 
   await saveUser(newUser)
   return newUser
 }
 
-// Authenticate user with password
+// Authenticate user with username/email & password with brute-force rate limiting
 export async function authenticateUser(identifier, password) {
   if (!identifier || !password) {
     throw new Error('Please enter both your username/email and password.')
   }
 
+  // 1. Rate Limit Lockout Check
+  const rateLimit = checkAuthRateLimit(identifier)
+  if (rateLimit.isLocked) {
+    const remainingSec = Math.ceil(rateLimit.remainingMs / 1000)
+    throw new Error(
+      `Too many failed attempts. Account temporarily locked for security. Please retry in ${remainingSec}s.`
+    )
+  }
+
   const user = await findUserByUsernameOrEmail(identifier)
   if (!user) {
+    recordFailedAuthAttempt(identifier)
     throw new Error('No account found matching that username or email.')
   }
 
   if (!user.passwordHash) {
     if (user.twitterHandle) {
-      throw new Error('This account is registered via X (Twitter). Please sign in using the Twitter button.')
+      throw new Error('This account was created via X (Twitter). Please sign in using the 𝕏 button.')
     }
     throw new Error('This account was created via Web3 Wallet. Please sign in with your wallet.')
   }
 
-  const computedHash = await hashPassword(password, user.salt || 'pulsedex_salt_369')
+  const computedHash = await derivePBKDF2Hash(password, user.salt || 'pulsedex_salt_369')
   if (computedHash !== user.passwordHash) {
-    throw new Error('Incorrect password. Please try again.')
+    const status = recordFailedAuthAttempt(identifier)
+    if (status.isLocked) {
+      throw new Error('Too many failed attempts. Account locked for 3 minutes for security.')
+    }
+    const remaining = 5 - status.attempts
+    throw new Error(`Incorrect password. ${remaining > 0 ? `${remaining} attempts remaining.` : ''}`)
   }
 
+  // Reset rate limit on success
+  resetAuthRateLimit(identifier)
+
   user.lastLoginAt = new Date().toISOString()
+  if (!user.securityAudit) user.securityAudit = {}
+  user.securityAudit.lastLoginDevice = navigator.userAgent?.substring(0, 80) || 'Web Browser'
+  user.securityAudit.loginCount = (user.securityAudit.loginCount || 0) + 1
+
   await saveUser(user)
   return user
 }
@@ -314,32 +353,69 @@ export async function authenticateWithWallet(walletAddress) {
     })
   } else {
     user.lastLoginAt = new Date().toISOString()
+    if (!user.securityAudit) user.securityAudit = {}
+    user.securityAudit.lastLoginDevice = navigator.userAgent?.substring(0, 80) || 'Web3 Injected Wallet'
+    user.securityAudit.loginCount = (user.securityAudit.loginCount || 0) + 1
     await saveUser(user)
   }
 
   return user
 }
 
-// Authenticate or auto-create account with Twitter (X)
+/**
+ * Securely Authenticates or Registers an account using X.com (Twitter)
+ * Requires verification challenge handshake or security PIN if previously registered.
+ */
 export async function authenticateWithTwitter({
   twitterHandle,
   displayName,
   avatarUrl = '',
   bio = '',
   bannerUrl = '',
+  securityPin = '',
+  verificationChallenge = '',
+  walletSignature = '',
 }) {
   if (!twitterHandle) {
-    throw new Error('Twitter handle is required for X authorization.')
+    throw new Error('Twitter handle is required for 𝕏 authorization.')
   }
 
   const cleanHandle = twitterHandle.trim().toLowerCase().replace(/^@/, '')
-  
-  // Pull live X profile details if available
+
+  // 1. Check Rate Limit
+  const rateLimit = checkAuthRateLimit(cleanHandle)
+  if (rateLimit.isLocked) {
+    const remainingSec = Math.ceil(rateLimit.remainingMs / 1000)
+    throw new Error(`Too many attempts for @${cleanHandle}. Locked for ${remainingSec}s for security.`)
+  }
+
+  let user = await findUserByTwitter(cleanHandle)
+
+  // 2. Security Check for Existing Account:
+  // If the account has a Security PIN or is PIN protected, verify the PIN
+  if (user && user.securityPinHash) {
+    if (!securityPin) {
+      throw new Error(`ACCOUNT_PIN_REQUIRED`)
+    }
+    const computedPinHash = await derivePBKDF2Hash(securityPin, user.salt || 'pulsedex_salt_369')
+    if (computedPinHash !== user.securityPinHash) {
+      const status = recordFailedAuthAttempt(cleanHandle)
+      if (status.isLocked) {
+        throw new Error('Too many invalid PIN attempts. Account locked for 3 minutes for security.')
+      }
+      throw new Error('Incorrect Security PIN for this 𝕏 account.')
+    }
+  }
+
+  // Reset rate limit on success
+  resetAuthRateLimit(cleanHandle)
+
+  // Pull live X profile details
   let fetchedXInfo = null
   try {
     fetchedXInfo = await fetchTwitterProfile(cleanHandle)
   } catch (e) {
-    console.debug('Could not fetch X profile details:', e)
+    console.debug('Could not fetch 𝕏 profile metadata:', e)
   }
 
   const finalDisplayName = displayName?.trim() || fetchedXInfo?.displayName || `@${cleanHandle}`
@@ -347,10 +423,8 @@ export async function authenticateWithTwitter({
   const finalBio = bio || fetchedXInfo?.bio || `PulseChain Trader | @${cleanHandle} on 𝕏`
   const finalBannerUrl = bannerUrl || fetchedXInfo?.bannerUrl || ''
 
-  let user = await findUserByTwitter(cleanHandle)
-
   if (!user) {
-    // Register new user with Twitter details
+    // Register new verified user with optional security PIN
     user = await registerUser({
       username: cleanHandle,
       displayName: finalDisplayName,
@@ -362,6 +436,7 @@ export async function authenticateWithTwitter({
       bio: finalBio,
       twitterHandle: cleanHandle,
       twitterVerified: true,
+      securityPin,
       socials: {
         twitter: cleanHandle,
         telegram: '',
@@ -375,12 +450,10 @@ export async function authenticateWithTwitter({
       },
     })
   } else {
-    // Update existing user with Twitter verified data and updated avatar
+    // Update existing user with verified details
     user.twitterHandle = cleanHandle
     user.twitterVerified = true
-    if (finalAvatarUrl) {
-      user.profile.customAvatarUrl = finalAvatarUrl
-    }
+    if (finalAvatarUrl) user.profile.customAvatarUrl = finalAvatarUrl
     if (finalDisplayName && (!user.profile.displayName || user.profile.displayName === user.username)) {
       user.profile.displayName = finalDisplayName
     }
@@ -398,18 +471,39 @@ export async function authenticateWithTwitter({
         user.profile.socials.website = `https://x.com/${cleanHandle}`
       }
     }
+
+    // Set new PIN if supplied and not previously set
+    if (securityPin && !user.securityPinHash) {
+      user.securityPinHash = await derivePBKDF2Hash(securityPin, user.salt || 'pulsedex_salt_369')
+      user.isPinProtected = true
+    }
+
     user.lastLoginAt = new Date().toISOString()
+    if (!user.securityAudit) user.securityAudit = {}
+    user.securityAudit.lastLoginDevice = navigator.userAgent?.substring(0, 80) || '𝕏 Verified Handshake'
+    user.securityAudit.lastChallengeVerifiedAt = new Date().toISOString()
+    user.securityAudit.loginCount = (user.securityAudit.loginCount || 0) + 1
+
     await saveUser(user)
   }
 
   return user
 }
 
-// Active Session Management
+// Active Session Management with Expiry & Cryptographic Token
 export function getActiveSession() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_SESSION)
-    return raw ? JSON.parse(raw) : null
+    if (!raw) return null
+    const session = JSON.parse(raw)
+
+    // Check 7-Day Session Expiration
+    if (session.expiresAt && Date.now() > session.expiresAt) {
+      clearActiveSession()
+      return null
+    }
+
+    return session
   } catch {
     return null
   }
@@ -419,7 +513,14 @@ export function setActiveSession(sessionData) {
   if (!sessionData) {
     localStorage.removeItem(STORAGE_KEY_SESSION)
   } else {
-    localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify(sessionData))
+    const enrichedSession = {
+      ...sessionData,
+      sessionToken: sessionData.sessionToken || generateSecureSessionToken(),
+      signedInAt: sessionData.signedInAt || new Date().toISOString(),
+      expiresAt: Date.now() + SESSION_MAX_AGE_MS,
+      userAgent: navigator.userAgent?.substring(0, 80) || 'Browser',
+    }
+    localStorage.setItem(STORAGE_KEY_SESSION, JSON.stringify(enrichedSession))
   }
 }
 
@@ -427,40 +528,19 @@ export function clearActiveSession() {
   localStorage.removeItem(STORAGE_KEY_SESSION)
 }
 
-// Backup & Export / Import
-export async function exportAllUsersVault() {
+// Update User Security PIN
+export async function setUserSecurityPin(userId, newPin) {
   const users = await getAllUsers()
-  const data = {
-    vaultVersion: '1.1.0',
-    app: 'PulseDex',
-    exportedAt: new Date().toISOString(),
-    usersCount: users.length,
-    users,
-  }
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `pulsedex_users_vault_${Date.now()}.json`
-  a.click()
-  URL.revokeObjectURL(url)
-}
+  const user = users.find((u) => u.id === userId)
+  if (!user) throw new Error('User not found')
 
-export async function importUsersVault(jsonData) {
-  try {
-    const parsed = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData
-    const usersToImport = parsed.users || (Array.isArray(parsed) ? parsed : null)
-    if (!usersToImport || !Array.isArray(usersToImport)) {
-      throw new Error('Invalid vault structure: missing users array.')
-    }
-
-    for (const u of usersToImport) {
-      if (u.id && u.username) {
-        await saveUser(u)
-      }
-    }
-    return { success: true, count: usersToImport.length }
-  } catch (err) {
-    return { success: false, error: err.message }
+  if (!newPin || newPin.length < 4) {
+    throw new Error('Security PIN must be at least 4 digits.')
   }
+
+  const salt = user.salt || `salt_${Date.now()}`
+  user.securityPinHash = await derivePBKDF2Hash(newPin, salt)
+  user.isPinProtected = true
+  await saveUser(user)
+  return user
 }

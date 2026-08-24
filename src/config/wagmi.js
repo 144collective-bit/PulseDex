@@ -1,9 +1,10 @@
 import { http, createConfig } from 'wagmi'
 import { injected } from 'wagmi/connectors'
+import { mainnet, base, bsc, polygon, arbitrum } from 'viem/chains'
 import { pulsechain } from './pulsechain'
 
 export const wagmiConfig = createConfig({
-  chains: [pulsechain],
+  chains: [pulsechain, mainnet, base, bsc, arbitrum, polygon],
   connectors: [
     // 1. Rabby Wallet (EIP-6963 & window.rabby)
     injected({
@@ -64,6 +65,11 @@ export const wagmiConfig = createConfig({
   ],
   transports: {
     [pulsechain.id]: http('https://rpc.pulsechain.com'),
+    [mainnet.id]: http('https://eth.llamarpc.com'),
+    [base.id]: http('https://mainnet.base.org'),
+    [bsc.id]: http('https://binance.llamarpc.com'),
+    [arbitrum.id]: http('https://arb1.arbitrum.io/rpc'),
+    [polygon.id]: http('https://polygon-rpc.com'),
   },
 })
 

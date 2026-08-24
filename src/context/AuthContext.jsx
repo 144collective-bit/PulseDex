@@ -9,7 +9,13 @@ import {
   getActiveSession,
   setActiveSession,
   clearActiveSession,
+  setUserSecurityPin,
 } from '../services/userStorage'
+import {
+  checkAuthRateLimit,
+  evaluatePasswordStrength,
+  generateXAuthChallenge,
+} from '../services/authSecurity'
 
 const AuthContext = createContext(null)
 
@@ -54,7 +60,7 @@ export function AuthProvider({ children }) {
     setIsAuthModalOpen(false)
   }, [])
 
-  // Sign Up
+  // Sign Up with email/username + password
   const signUp = useCallback(
     async (userData) => {
       const newUser = await registerUser(userData)
@@ -118,6 +124,17 @@ export function AuthProvider({ children }) {
     []
   )
 
+  // Set / Update Security PIN for User
+  const updateSecurityPin = useCallback(
+    async (pin) => {
+      if (!currentUser?.id) return null
+      const updated = await setUserSecurityPin(currentUser.id, pin)
+      setCurrentUser(updated)
+      return updated
+    },
+    [currentUser]
+  )
+
   // Sign Out
   const signOut = useCallback(() => {
     setCurrentUser(null)
@@ -158,8 +175,12 @@ export function AuthProvider({ children }) {
         signIn,
         signInWithWallet,
         signInWithTwitter,
+        updateSecurityPin,
         signOut,
         updateCurrentUser,
+        checkAuthRateLimit,
+        evaluatePasswordStrength,
+        generateXAuthChallenge,
       }}
     >
       {children}

@@ -16,6 +16,7 @@ import {
   EyeOff,
   UserPlus,
   LogIn,
+  ArrowLeftRight,
 } from 'lucide-react'
 import { searchPulsePairs, getNativePlsPrice, getPulseGasPrice } from '../services/dexscreener'
 import TokenLogo from './TokenLogo'
@@ -176,6 +177,14 @@ export default function Navbar({
             >
               <Zap size={16} className="text-pulse-green" />
               <span>DEX</span>
+            </button>
+            <button
+              className={`btn-tab ${activeTab === 'crosschain' ? 'active' : ''}`}
+              onClick={() => setActiveTab('crosschain')}
+            >
+              <ArrowLeftRight size={16} className="text-pulse-cyan" />
+              <span>Cross-Chain Swap</span>
+              <span className="tab-new-badge font-mono">LIBERTY</span>
             </button>
             <button
               className={`btn-tab ${activeTab === 'markets' ? 'active' : ''}`}
