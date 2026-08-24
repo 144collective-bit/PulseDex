@@ -274,7 +274,7 @@ export default function Navbar({
           )}
         </div>
 
-        {/* Right Action: Mobile Search Trigger + Auth / Profile + Connect Wallet */}
+        {/* Right Action: Mobile Search Trigger + Buy DEX + Auth / Profile */}
         <div className="nav-right">
           {/* Mobile Search Icon Button */}
           <button
@@ -282,20 +282,18 @@ export default function Navbar({
             onClick={openMobileSearch}
             title="Search PulseChain Pairs"
           >
-            <Search size={17} />
+            <Search size={16} />
           </button>
 
-          {/* User Profile / Auth Button */}
-          {/* 🚀 Bold Glowing "Buy $DEX" Platform Token Button */}
+          {/* 🚀 Harmonious Glowing "Buy $DEX" Platform Token Button */}
           <button
             type="button"
             className="btn-buy-dex-glow font-mono"
             onClick={() => setActiveTab('dex')}
             title="Buy PulseDex Platform Token ($DEX)"
           >
-            <Sparkles size={13} className="buy-dex-sparkle" />
+            <Zap size={13} className="buy-dex-zap" />
             <span className="buy-dex-text">BUY $DEX</span>
-            <span className="buy-dex-badge">HOT</span>
           </button>
 
           {isAuthenticated ? (
@@ -393,7 +391,7 @@ export default function Navbar({
           ) : (
             <div className="guest-auth-btn-group">
               <button
-                className="btn-secondary btn-sm font-mono guest-signin-btn"
+                className="btn-guest-signin font-mono"
                 onClick={() => openAuthModal('signin')}
                 title="Sign In with Username or Web3 Wallet"
               >
@@ -401,7 +399,7 @@ export default function Navbar({
                 <span className="desktop-only">Sign In</span>
               </button>
               <button
-                className="btn-primary btn-sm font-mono guest-signup-btn btn-glow-pulse"
+                className="btn-guest-signup font-mono"
                 onClick={() => openAuthModal('signup')}
                 title="Create a PulseDex Account"
               >
