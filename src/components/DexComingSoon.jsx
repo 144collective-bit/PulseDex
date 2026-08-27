@@ -1,40 +1,4 @@
-import { Route, Gauge, ShieldCheck, PenLine, Layers, Activity } from 'lucide-react'
-
-/* Build board — reads like a status feed rather than marketing copy. */
-const MODULES = [
-  {
-    id: '01',
-    name: 'Pair & Liquidity Indexer',
-    detail: 'Pool discovery, reserve reads, depth snapshots',
-    status: 'online',
-  },
-  {
-    id: '02',
-    name: 'Multi-AMM Route Solver',
-    detail: 'Split-path search across v1 / v2 / 9mm pools',
-    status: 'building',
-  },
-  {
-    id: '03',
-    name: 'Price Impact Engine',
-    detail: 'Slippage and impact quoted against real pool depth',
-    status: 'building',
-  },
-  {
-    id: '04',
-    name: 'Pre-Trade Safety Checks',
-    detail: 'Honeypot, transfer tax and liquidity-lock screening',
-    status: 'queued',
-  },
-  {
-    id: '05',
-    name: 'Wallet Signing & Broadcast',
-    detail: 'Route execution against the connected wallet',
-    status: 'queued',
-  },
-]
-
-const STATUS_LABEL = { online: 'Online', building: 'Building', queued: 'Queued' }
+import { Route, Gauge, ShieldCheck, PenLine, Layers } from 'lucide-react'
 
 const CAPABILITIES = [
   {
@@ -62,8 +26,6 @@ const CAPABILITIES = [
 const VENUES = ['PulseX v1', 'PulseX v2', '9mm', 'Piteas', 'PulseX Stable']
 
 export default function DexComingSoon() {
-  const online = MODULES.filter((m) => m.status === 'online').length
-
   return (
     <div className="dex-soon-view">
       {/* ── Header ── */}
@@ -96,39 +58,8 @@ export default function DexComingSoon() {
               <dt>Venues</dt>
               <dd>{VENUES.length} routed</dd>
             </div>
-            <div className="dex-soon-meta-item">
-              <dt>Modules</dt>
-              <dd>
-                {online} / {MODULES.length} online
-              </dd>
-            </div>
           </dl>
         </div>
-      </section>
-
-      {/* ── Build board ── */}
-      <section className="dex-soon-panel">
-        <header className="dex-soon-panel-head">
-          <Activity size={13} className="text-pulse-cyan" />
-          <h2 className="dex-soon-panel-title font-mono">Build Status</h2>
-          <span className="dex-soon-panel-note font-mono">{MODULES.length} subsystems</span>
-        </header>
-
-        <ul className="dex-soon-modules">
-          {MODULES.map((m) => (
-            <li key={m.id} className={`dex-soon-module status-${m.status}`}>
-              <span className="dex-soon-module-id font-mono">{m.id}</span>
-              <span className="dex-soon-module-body">
-                <span className="dex-soon-module-name">{m.name}</span>
-                <span className="dex-soon-module-detail">{m.detail}</span>
-              </span>
-              <span className="dex-soon-status font-mono">
-                <span className="dex-soon-status-led" aria-hidden="true" />
-                {STATUS_LABEL[m.status]}
-              </span>
-            </li>
-          ))}
-        </ul>
       </section>
 
       {/* ── Capabilities ── */}

@@ -13798,83 +13798,6 @@
   color: var(--text-muted);
 }
 
-/* ── Build board rows ── */
-.dex-soon-modules {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.dex-soon-module {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  transition: background 0.15s ease;
-}
-
-.dex-soon-module:last-child { border-bottom: 0; }
-.dex-soon-module:hover { background: rgba(255, 255, 255, 0.02); }
-
-.dex-soon-module-id {
-  font-size: 10.5px;
-  font-weight: 700;
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
-}
-
-.dex-soon-module-body {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-
-.dex-soon-module-name {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.dex-soon-module-detail {
-  font-size: 10.5px;
-  line-height: 1.45;
-  color: var(--text-muted);
-}
-
-.dex-soon-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
-  flex-shrink: 0;
-  padding: 3px 8px;
-  border-radius: var(--radius-full);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
-  border: 1px solid var(--status-c, rgba(255, 255, 255, 0.12));
-  color: var(--status-c, var(--text-muted));
-  background: rgba(0, 0, 0, 0.3);
-}
-
-.dex-soon-status-led {
-  width: 5px;
-  height: 5px;
-  border-radius: var(--radius-full);
-  background: currentColor;
-  box-shadow: 0 0 6px currentColor;
-}
-
-.dex-soon-module.status-online   { --status-c: var(--pulse-green); }
-.dex-soon-module.status-building { --status-c: var(--pulse-yellow); }
-.dex-soon-module.status-queued   { --status-c: #64748b; }
-
-.dex-soon-module.status-queued .dex-soon-status-led { box-shadow: none; }
-
 /* ── Capability cards ── */
 .dex-soon-caps {
   display: grid;
@@ -13942,8 +13865,6 @@
   .dex-soon-caps { grid-template-columns: 1fr; }
   .dex-soon-head-inner { padding: 16px; }
   .dex-soon-title { font-size: 26px; }
-  .dex-soon-module { flex-wrap: wrap; }
-  .dex-soon-status { margin-left: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
