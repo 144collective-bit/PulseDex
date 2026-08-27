@@ -9,6 +9,7 @@ import {
   Share2,
   Check,
 } from 'lucide-react'
+import { buildPulseXSwapUrl } from '../utils/formatters'
 
 export default function TradingChart({ pair, pairAddress }) {
   const chartWrapperRef = useRef(null)
@@ -24,7 +25,7 @@ export default function TradingChart({ pair, pairAddress }) {
 
   // Official DexScreener Real-Time Live Embed URL for PulseChain (Sound Muted)
   const embedUrl = `https://dexscreener.com/pulsechain/${activePairAddress}?embed=1&theme=dark&trades=0&info=0&sound=0`
-  const swapUrl = `https://app.pulsex.com/swap?inputCurrency=${pair?.quoteToken?.address || 'PLS'}&outputCurrency=${pair?.baseToken?.address || ''}`
+  const swapUrl = buildPulseXSwapUrl(pair?.quoteToken?.address, pair?.baseToken?.address)
 
   // Fullscreen Toggle
   const toggleFullscreen = () => {

@@ -101,3 +101,31 @@ export function calculateTokenMarketScore(pair) {
 
   return volumeScore + liquidityScore + mcapScore + txnScore
 }
+
+/**
+ * Allow-lists external URLs before they reach an href.
+ * Token socials and websites come straight from the DexScreener API, which means
+ * a token deployer controls the string — a `javascript:` URL there would execute
+ * in our origin. Anything that isn't http(s) is dropped for the fallback.
+ */
+export function safeExternalUrl(url, fallback = null) {
+  if (!url || typeof url !== 'string') return fallback
+  try {
+    const parsed = new URL(url.trim(), window.location.origin)
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:'
+      ? parsed.href
+      : fallback
+  } catch {
+    return fallback
+  }
+}
+
+/**
+ * Builds a PulseX swap deep-link with both contract addresses escaped, so an
+ * odd address from the API can't inject extra query parameters.
+ */
+export function buildPulseXSwapUrl(inputAddress, outputAddress) {
+  const input = encodeURIComponent(inputAddress || 'PLS')
+  const output = encodeURIComponent(outputAddress || '')
+  return `https://app.pulsex.com/swap?inputCurrency=${input}&outputCurrency=${output}`
+}

@@ -7,6 +7,8 @@ import {
   Layers,
 } from 'lucide-react'
 import TokenLogo from './TokenLogo'
+import { buildPulseXSwapUrl } from '../utils/formatters'
+import { getNativePlsPrice } from '../services/dexscreener'
 import { useUserProfile } from '../context/UserProfileContext'
 
 export default function QuickSwap({ pair }) {
@@ -27,25 +29,45 @@ export default function QuickSwap({ pair }) {
 
   const base = pair?.baseToken || { symbol: 'PLSX' }
   const quote = pair?.quoteToken || { symbol: 'PLS' }
-  const priceUsd = parseFloat(pair?.priceUsd || '0.00001455')
-  const plsPrice = 0.00001455
+  const priceUsd = parseFloat(pair?.priceUsd || '0')
+
+  // Live PLS/USD off the WPLS-DAI pool, refreshed on the market-data cadence.
+  // Quotes stay blank until it arrives rather than showing a stale constant.
+  const [plsPrice, setPlsPrice] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadPlsPrice() {
+      const price = await getNativePlsPrice()
+      if (!cancelled && price > 0) setPlsPrice(price)
+    }
+    loadPlsPrice()
+    const interval = setInterval(loadPlsPrice, 30000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [])
 
   const fromToken = isReversed ? base : quote
   const toToken = isReversed ? quote : base
 
-  // Calculation
+  // Calculation — only meaningful once both legs have a live price
   const numericFrom = parseFloat(fromAmount || '0')
-  let estimatedTo = '0'
-  if (!isReversed) {
-    const fromUsd = numericFrom * plsPrice
-    estimatedTo = priceUsd > 0 ? (fromUsd / priceUsd).toFixed(2) : '0'
-  } else {
-    const fromUsd = numericFrom * priceUsd
-    estimatedTo = plsPrice > 0 ? (fromUsd / plsPrice).toFixed(2) : '0'
+  const canQuote = plsPrice !== null && priceUsd > 0
+  const fromPrice = isReversed ? priceUsd : plsPrice
+  const toPrice = isReversed ? plsPrice : priceUsd
+
+  let estimatedTo = ''
+  if (canQuote && numericFrom > 0) {
+    estimatedTo = ((numericFrom * fromPrice) / toPrice).toFixed(2)
   }
 
+  const formatUsdEstimate = (amount, price) =>
+    canQuote && amount > 0 ? `≈ ${(amount * price).toFixed(2)} USD` : '—'
+
   const effectiveSlippage = customSlippage.trim() !== '' ? customSlippage : slippage
-  const pulseXSwapUrl = `https://app.pulsex.com/swap?outputCurrency=${base.address || ''}`
+  const pulseXSwapUrl = buildPulseXSwapUrl(quote.address, base.address)
 
   const handleQuickPercent = (pct) => {
     const maxVal = isReversed ? 10000 : 500000
@@ -150,7 +172,7 @@ export default function QuickSwap({ pair }) {
               </div>
             </div>
             <div className="swap-usd-estimate font-mono text-muted text-xs mt-1">
-              ≈ ${(numericFrom * (isReversed ? priceUsd : plsPrice)).toFixed(2)} USD
+              {formatUsdEstimate(numericFrom, fromPrice)}
             </div>
           </div>
 
@@ -171,7 +193,7 @@ export default function QuickSwap({ pair }) {
             <div className="swap-input-top">
               <span className="swap-input-label font-mono">You Receive (Est.)</span>
               <span className="swap-balance font-mono text-muted text-xs">
-                ≈ ${(parseFloat(estimatedTo) * (isReversed ? plsPrice : priceUsd)).toFixed(2)} USD
+                {formatUsdEstimate(parseFloat(estimatedTo || '0'), toPrice)}
               </span>
             </div>
             <div className="swap-input-row">
@@ -179,6 +201,7 @@ export default function QuickSwap({ pair }) {
                 type="text"
                 readOnly
                 value={estimatedTo}
+                placeholder={canQuote ? '0.0' : 'Fetching price…'}
                 className="swap-number-input font-mono readonly"
               />
               <div className="swap-token-badge font-mono flex items-center gap-1.5">
@@ -197,7 +220,7 @@ export default function QuickSwap({ pair }) {
             <div className="rate-row">
               <span className="text-muted">Rate</span>
               <span>
-                1 {base.symbol} ≈ {priceUsd > 0 ? (priceUsd / plsPrice).toFixed(4) : '0'} PLS
+                {canQuote ? `1 ${base.symbol} ≈ ${(priceUsd / plsPrice).toFixed(4)} PLS` : 'Fetching live rate…'}
               </span>
             </div>
             <div className="rate-row">

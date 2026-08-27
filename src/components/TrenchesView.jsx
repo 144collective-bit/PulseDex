@@ -17,6 +17,7 @@ import {
   Globe,
 } from 'lucide-react'
 import { useUserProfile } from '../context/UserProfileContext'
+import { safeExternalUrl } from '../utils/formatters'
 
 // Default Curated Ecosystem Links with Verified Logos
 const DEFAULT_ECOSYSTEM_APPS = [
@@ -216,6 +217,7 @@ export default function TrenchesView() {
   const [newAppUrl, setNewAppUrl] = useState('')
   const [newAppCategory, setNewAppCategory] = useState('launchpads')
   const [newAppDesc, setNewAppDesc] = useState('')
+  const [addAppError, setAddAppError] = useState('')
 
   // Load custom links from localStorage
   useEffect(() => {
@@ -235,11 +237,15 @@ export default function TrenchesView() {
 
   const handleAddCustomApp = (e) => {
     e.preventDefault()
+    setAddAppError('')
     if (!newAppName.trim() || !newAppUrl.trim()) return
 
-    let formattedUrl = newAppUrl.trim()
-    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
-      formattedUrl = `https://${formattedUrl}`
+    const rawUrl = newAppUrl.trim()
+    const hasScheme = /^https?:\/\//i.test(rawUrl)
+    const formattedUrl = safeExternalUrl(hasScheme ? rawUrl : `https://${rawUrl}`)
+    if (!formattedUrl) {
+      setAddAppError('Enter a valid web address, for example pulsex.com')
+      return
     }
 
     const newItem = {
@@ -644,6 +650,9 @@ export default function TrenchesView() {
                   className="modal-input text-xs"
                   required
                 />
+                {addAppError && (
+                  <span className="text-[10.5px] text-pulse-red font-mono">{addAppError}</span>
+                )}
               </div>
 
               <div className="form-group flex flex-col gap-1">

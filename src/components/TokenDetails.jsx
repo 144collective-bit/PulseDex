@@ -19,7 +19,7 @@ import {
 import TokenLogo from './TokenLogo'
 import SwitchSwapWidget from './SwitchSwapWidget'
 import { useUserProfile } from '../context/UserProfileContext'
-import { formatCryptoPrice, formatUsd } from '../utils/formatters'
+import { formatCryptoPrice, safeExternalUrl, buildPulseXSwapUrl } from '../utils/formatters'
 
 const NATIVE_PLS_ADDRESS = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
 
@@ -154,13 +154,13 @@ export default function TokenDetails({
   // Social Links extraction
   const websites = pair.info?.websites || []
   const socials = pair.info?.socials || []
-  const websiteUrl = websites[0]?.url || `https://scan.pulsechain.com/token/${base.address}`
+  const websiteUrl = safeExternalUrl(websites[0]?.url, `https://scan.pulsechain.com/token/${base.address}`)
   const twitterObj = socials.find((s) => s.type?.toLowerCase() === 'twitter' || s.platform?.toLowerCase() === 'twitter')
-  const twitterUrl = twitterObj?.url || `https://twitter.com/search?q=%24${base.symbol}`
+  const twitterUrl = safeExternalUrl(twitterObj?.url, `https://twitter.com/search?q=%24${base.symbol}`)
   const telegramObj = socials.find((s) => s.type?.toLowerCase() === 'telegram' || s.platform?.toLowerCase() === 'telegram')
-  const telegramUrl = telegramObj?.url || 'https://t.me/PulseChainCom'
+  const telegramUrl = safeExternalUrl(telegramObj?.url, 'https://t.me/PulseChainCom')
 
-  const swapUrl = `https://app.pulsex.com/swap?inputCurrency=${quote.address || 'PLS'}&outputCurrency=${base.address}`
+  const swapUrl = buildPulseXSwapUrl(quote.address, base.address)
 
   return (
     <div className="dex-sidebar-card">

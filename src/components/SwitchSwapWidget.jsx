@@ -36,7 +36,7 @@ const QUICK_PAIRS = [
   {
     name: 'PLS ➔ TEXAN',
     from: NATIVE_PLS_ADDRESS,
-    to: '0x0cb6f5a34ad42ec934882a05265a7d5f59b51a2f',
+    to: '0xcFCFfE432A48dB53F59c301422d2EdD77B2A88d7',
   },
 ]
 
@@ -188,7 +188,8 @@ export default function SwitchSwapWidget({
         <iframe
           key={`${refreshKey}-${borderColorTheme}-${fromToken}-${toToken}`}
           src={iframeSrc}
-          allow="clipboard-read; clipboard-write"
+          sandbox="allow-scripts allow-forms allow-popups allow-same-origin"
+          allow="clipboard-write"
           width="100%"
           height={widgetHeight}
           className="switch-iframe"
