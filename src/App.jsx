@@ -19,12 +19,14 @@ import PortfolioView from './components/PortfolioView'
 import WatchlistView from './components/WatchlistView'
 import TrenchesView from './components/TrenchesView'
 import DexView from './components/DexView'
+import DexComingSoon from './components/DexComingSoon'
 import WalletConnectModal from './components/WalletConnectModal'
 import UserProfileModal from './components/UserProfileModal'
 import ProfileView from './components/ProfileView'
 import AuthModal from './components/AuthModal'
 import { AuthProvider } from './context/AuthContext'
 import { UserProfileProvider } from './context/UserProfileContext'
+import { FEATURES } from './config/features'
 
 import './App.css'
 
@@ -219,14 +221,17 @@ function MainApp() {
           <TrenchesView onSelectPairForChart={handleSelectPair} />
         )}
 
-        {activeTab === 'dex' && (
-          <DexView
-            onSelectPairForChart={handleSelectPair}
-            onOpenWalletModal={() => setShowWalletModal(true)}
-          />
-        )}
+        {activeTab === 'dex' &&
+          (FEATURES.dexLive ? (
+            <DexView
+              onSelectPairForChart={handleSelectPair}
+              onOpenWalletModal={() => setShowWalletModal(true)}
+            />
+          ) : (
+            <DexComingSoon />
+          ))}
 
-        {activeTab === 'markets' && (
+        {FEATURES.markets && activeTab === 'markets' && (
           <MarketOverview
             pairs={topPairs}
             isLoading={isLoadingTopPairs}
@@ -249,7 +254,7 @@ function MainApp() {
           />
         )}
 
-        {activeTab === 'profile' && (
+        {FEATURES.profile && activeTab === 'profile' && (
           <ProfileView onOpenWalletModal={() => setShowWalletModal(true)} />
         )}
       </main>
@@ -268,10 +273,10 @@ function MainApp() {
       />
 
       {/* Global User Profile & Settings Modal */}
-      <UserProfileModal />
+      {FEATURES.profile && <UserProfileModal />}
 
       {/* Global Auth Sign Up / Sign In Modal */}
-      <AuthModal />
+      {FEATURES.auth && <AuthModal />}
     </div>
   )
 }

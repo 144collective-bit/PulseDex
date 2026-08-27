@@ -1,21 +1,18 @@
 import {
   TrendingUp,
-  Flame,
+  Wrench,
   Zap,
   Radio,
   PieChart,
   Star,
-  User,
 } from 'lucide-react'
-import { useUserProfile } from '../context/UserProfileContext'
+import { FEATURES } from '../config/features'
 
 export default function MobileBottomNav({
   activeTab,
   setActiveTab,
   watchlistCount = 0,
 }) {
-  const { openProfileModal, activeAvatarDef, profile } = useUserProfile()
-
   return (
     <nav className="mobile-bottom-nav font-mono">
       <button
@@ -29,6 +26,16 @@ export default function MobileBottomNav({
       </button>
 
       <button
+        className={`mobile-nav-item ${activeTab === 'trenches' ? 'active' : ''}`}
+        onClick={() => setActiveTab('trenches')}
+      >
+        <div className="mobile-nav-icon-wrapper">
+          <Wrench size={18} className="text-pulse-cyan" />
+        </div>
+        <span className="mobile-nav-label">Tools</span>
+      </button>
+
+      <button
         className={`mobile-nav-item ${activeTab === 'dex' ? 'active' : ''}`}
         onClick={() => setActiveTab('dex')}
       >
@@ -38,26 +45,17 @@ export default function MobileBottomNav({
         <span className="mobile-nav-label">DEX</span>
       </button>
 
-      <button
-        className={`mobile-nav-item ${activeTab === 'trenches' ? 'active' : ''}`}
-        onClick={() => setActiveTab('trenches')}
-      >
-        <div className="mobile-nav-icon-wrapper">
-          <Flame size={18} className="text-pulse-amber" />
-          <span className="mobile-hot-dot"></span>
-        </div>
-        <span className="mobile-nav-label">Trenches</span>
-      </button>
-
-      <button
-        className={`mobile-nav-item ${activeTab === 'markets' ? 'active' : ''}`}
-        onClick={() => setActiveTab('markets')}
-      >
-        <div className="mobile-nav-icon-wrapper">
-          <Radio size={18} />
-        </div>
-        <span className="mobile-nav-label">Markets</span>
-      </button>
+      {FEATURES.markets && (
+        <button
+          className={`mobile-nav-item ${activeTab === 'markets' ? 'active' : ''}`}
+          onClick={() => setActiveTab('markets')}
+        >
+          <div className="mobile-nav-icon-wrapper">
+            <Radio size={18} />
+          </div>
+          <span className="mobile-nav-label">Markets</span>
+        </button>
+      )}
 
       <button
         className={`mobile-nav-item ${activeTab === 'portfolio' ? 'active' : ''}`}
@@ -82,35 +80,6 @@ export default function MobileBottomNav({
         <span className="mobile-nav-label">Watchlist</span>
       </button>
 
-      <button
-        className={`mobile-nav-item mobile-profile-nav-item ${activeTab === 'profile' ? 'active' : ''}`}
-        onClick={() => {
-          setActiveTab('profile')
-        }}
-      >
-        <div className="mobile-nav-icon-wrapper">
-          <div
-            className="mobile-nav-avatar-mini"
-            style={{
-              background: activeAvatarDef?.bg || 'linear-gradient(135deg, #00ff9d, #0066ff)',
-            }}
-          >
-            {profile.customAvatarUrl ? (
-              <img
-                src={profile.customAvatarUrl}
-                alt={profile.displayName}
-                className="mobile-nav-avatar-img"
-                onError={(e) => {
-                  e.target.style.display = 'none'
-                }}
-              />
-            ) : (
-              <span>{activeAvatarDef?.icon || '⚡'}</span>
-            )}
-          </div>
-        </div>
-        <span className="mobile-nav-label">Profile</span>
-      </button>
     </nav>
   )
 }

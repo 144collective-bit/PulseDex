@@ -3,6 +3,7 @@ import { useAccount, useDisconnect } from 'wagmi'
 import {
   Search,
   Flame,
+  Wrench,
   Wallet,
   TrendingUp,
   PieChart,
@@ -22,6 +23,7 @@ import { searchPulsePairs, getNativePlsPrice, getPulseGasPrice } from '../servic
 import TokenLogo from './TokenLogo'
 import { useUserProfile } from '../context/UserProfileContext'
 import { useAuth } from '../context/AuthContext'
+import { FEATURES } from '../config/features'
 export default function Navbar({
   activeTab,
   setActiveTab,
@@ -167,9 +169,8 @@ export default function Navbar({
               className={`btn-tab ${activeTab === 'trenches' ? 'active' : ''}`}
               onClick={() => setActiveTab('trenches')}
             >
-              <Flame size={16} className="text-pulse-amber" />
-              <span>Trenches</span>
-              <span className="tab-hot-badge font-mono">HOT</span>
+              <Wrench size={16} className="text-pulse-cyan" />
+              <span>Tools</span>
             </button>
             <button
               className={`btn-tab ${activeTab === 'dex' ? 'active' : ''}`}
@@ -178,13 +179,15 @@ export default function Navbar({
               <Zap size={16} className="text-pulse-green" />
               <span>DEX</span>
             </button>
-            <button
-              className={`btn-tab ${activeTab === 'markets' ? 'active' : ''}`}
-              onClick={() => setActiveTab('markets')}
-            >
-              <Radio size={16} />
-              <span>Markets</span>
-            </button>
+            {FEATURES.markets && (
+              <button
+                className={`btn-tab ${activeTab === 'markets' ? 'active' : ''}`}
+                onClick={() => setActiveTab('markets')}
+              >
+                <Radio size={16} />
+                <span>Markets</span>
+              </button>
+            )}
             <button
               className={`btn-tab ${activeTab === 'portfolio' ? 'active' : ''}`}
               onClick={() => setActiveTab('portfolio')}
@@ -200,13 +203,15 @@ export default function Navbar({
               <span>Watchlist</span>
               {watchlistCount > 0 && <span className="tab-count-badge">{watchlistCount}</span>}
             </button>
-            <button
-              className={`btn-tab ${activeTab === 'profile' ? 'active' : ''}`}
-              onClick={() => setActiveTab('profile')}
-            >
-              <User size={16} className="text-pulse-cyan" />
-              <span>Profile</span>
-            </button>
+            {FEATURES.profile && (
+              <button
+                className={`btn-tab ${activeTab === 'profile' ? 'active' : ''}`}
+                onClick={() => setActiveTab('profile')}
+              >
+                <User size={16} className="text-pulse-cyan" />
+                <span>Profile</span>
+              </button>
+            )}
           </nav>
         </div>
 
@@ -296,7 +301,7 @@ export default function Navbar({
             <span className="buy-dex-text">BUY $DEX</span>
           </button>
 
-          {isAuthenticated ? (
+          {FEATURES.auth && (isAuthenticated ? (
             <div className="user-profile-menu-wrapper" ref={userMenuRef}>
               <button
                 className="btn-secondary nav-profile-trigger-btn is-authenticated"
@@ -398,7 +403,7 @@ export default function Navbar({
               <LogIn size={13} className="text-pulse-cyan" />
               <span>Sign In</span>
             </button>
-          )}
+          ))}
 
           {/* Connect Web3 Wallet - Temporarily hidden from UI; underlying functionality preserved */}
           {/*
