@@ -515,6 +515,58 @@
   top: 84px;
 }
 
+/* Multi-column screener (>1024px): the grid row is as tall as its tallest
+   column, so with `align-items: start` the pairs sidebar and the trades panel
+   stopped short and left a ragged bottom edge. Stretch every column to the
+   row height and let the pair list and trade table absorb the slack, so all
+   columns finish on the same line. */
+@media (min-width: 1025px) {
+  .screener-pro-layout {
+    align-items: stretch;
+  }
+
+  .screener-sidebar-wrapper,
+  .screener-main-col,
+  .screener-side-col {
+    min-height: 0;
+  }
+
+  .screener-sidebar-wrapper .sidebar-pairs-container,
+  .screener-sidebar-wrapper .sidebar-pairs-collapsed {
+    height: 100%;
+    max-height: none;
+    position: static;
+  }
+
+  /* Chart and header keep their natural size; the trade feed takes the rest.
+     TradeHistory is rendered inside a plain wrapper div, so the wrapper has to
+     carry the growth for the panel itself to reach the bottom. */
+  .screener-main-col > *:last-child {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .screener-main-col .trades-panel {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  /* `flex-basis: 0` keeps these scroll panes out of the row's intrinsic
+     height: they claim only leftover space and scroll internally, rather
+     than expanding to their full content and stretching the page. */
+  .screener-sidebar-wrapper .sidebar-list,
+  .screener-main-col .trades-table-container {
+    flex: 1 1 0;
+    max-height: none;
+    min-height: 240px;
+    overflow-y: auto;
+  }
+}
+
 @media (max-width: 1540px) {
   .screener-pro-layout {
     grid-template-columns: 275px 1fr 375px;
