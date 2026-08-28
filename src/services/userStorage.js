@@ -136,34 +136,14 @@ export async function findUserByUsernameOrEmail(identifier) {
   )
 }
 
-// Find user by linked wallet address
-export async function findUserByWallet(walletAddress) {
-  if (!walletAddress) return null
-  const clean = walletAddress.trim().toLowerCase()
-  const users = await getAllUsers()
-  return (
-    users.find(
-      (u) =>
-        u.linkedWallet?.toLowerCase() === clean ||
-        u.wallets?.some((w) => w.toLowerCase() === clean)
-    ) || null
-  )
-}
-
 // Register a new User account
 export async function registerUser({
   username,
   email,
   password,
   displayName,
-  avatarId = 'cyber-pulse',
-  customAvatarUrl = '',
-  bannerUrl = '',
   bio = 'PulseChain Trader 🚀',
-  linkedWallet = '',
   securityPin = '',
-  socials = {},
-  tradingAttributes = {},
 }) {
   const cleanUsername = username.trim().toLowerCase().replace(/^@/, '')
   const cleanEmail = email ? email.trim().toLowerCase() : ''
@@ -194,34 +174,14 @@ export async function registerUser({
     passwordHash,
     securityPinHash,
     isPinProtected: Boolean(securityPin),
-    linkedWallet: linkedWallet ? linkedWallet.toLowerCase() : '',
-    wallets: linkedWallet ? [linkedWallet.toLowerCase()] : [],
     authMethods: {
       hasPassword: Boolean(password),
-      hasWallet: Boolean(linkedWallet),
       hasPin: Boolean(securityPin),
     },
     profile: {
       displayName: displayName?.trim() || username.trim(),
       username: cleanUsername,
-      avatarId,
-      customAvatarUrl,
-      bannerUrl: bannerUrl || 'linear-gradient(135deg, rgba(0, 255, 157, 0.2) 0%, rgba(0, 102, 255, 0.2) 100%)',
       bio,
-      tier: 'Pulse Veteran',
-      badges: ['pulse-og', 'diamond-hands'],
-      memberSince: new Date().toISOString().split('T')[0],
-      socials: {
-        telegram: socials?.telegram || '',
-        discord: socials?.discord || '',
-        website: socials?.website || '',
-      },
-      tradingAttributes: {
-        style: tradingAttributes?.style || 'Degen Sniper',
-        riskTolerance: tradingAttributes?.riskTolerance || 'Moderate',
-        pinnedToken: tradingAttributes?.pinnedToken || 'PLS',
-        timezone: tradingAttributes?.timezone || 'UTC',
-      },
     },
     preferences: {
       slippage: '0.5',
@@ -301,37 +261,6 @@ export async function authenticateUser(identifier, password) {
   user.securityAudit.loginCount = (user.securityAudit.loginCount || 0) + 1
 
   await saveUser(user)
-  return user
-}
-
-// Authenticate or auto-create account with Web3 Wallet
-export async function authenticateWithWallet(walletAddress) {
-  if (!walletAddress || !walletAddress.startsWith('0x') || walletAddress.length !== 42) {
-    throw new Error('Invalid PulseChain wallet address.')
-  }
-
-  const cleanAddr = walletAddress.toLowerCase()
-  let user = await findUserByWallet(cleanAddr)
-
-  if (!user) {
-    const shortAddr = `${cleanAddr.slice(2, 6)}_${cleanAddr.slice(-4)}`
-    user = await registerUser({
-      username: `pulse_${shortAddr}`,
-      email: '',
-      password: '',
-      displayName: `Trader ${cleanAddr.slice(0, 6)}`,
-      avatarId: 'cyber-pulse',
-      bio: 'Verified PulseChain Web3 Trader ⚡',
-      linkedWallet: cleanAddr,
-    })
-  } else {
-    user.lastLoginAt = new Date().toISOString()
-    if (!user.securityAudit) user.securityAudit = {}
-    user.securityAudit.lastLoginDevice = navigator.userAgent?.substring(0, 80) || 'Web3 Injected Wallet'
-    user.securityAudit.loginCount = (user.securityAudit.loginCount || 0) + 1
-    await saveUser(user)
-  }
-
   return user
 }
 

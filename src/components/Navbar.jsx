@@ -347,9 +347,6 @@ export default function Navbar({
                   <div className="user-dropdown-header">
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-white text-xs">{currentUser?.displayName || profile.displayName}</span>
-                      {currentUser?.twitterVerified && (
-                        <span className="twitter-verified-chip text-xs">𝕏 Verified</span>
-                      )}
                     </div>
                     <span className="text-muted text-xs">@{currentUser?.username || profile.username}</span>
                   </div>

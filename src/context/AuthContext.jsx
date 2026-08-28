@@ -3,7 +3,6 @@ import {
   getAllUsers,
   registerUser,
   authenticateUser,
-  authenticateWithWallet,
   saveUser,
   getActiveSession,
   setActiveSession,
@@ -86,22 +85,6 @@ export function AuthProvider({ children }) {
     []
   )
 
-  // Sign In with Web3 Wallet
-  const signInWithWallet = useCallback(
-    async (walletAddress) => {
-      const user = await authenticateWithWallet(walletAddress)
-      setCurrentUser(user)
-      setActiveSession({
-        userId: user.id,
-        username: user.username,
-        signedInAt: new Date().toISOString(),
-      })
-      setIsAuthModalOpen(false)
-      return user
-    },
-    []
-  )
-
   // Set / Update Security PIN for User
   const updateSecurityPin = useCallback(
     async (pin) => {
@@ -149,7 +132,6 @@ export function AuthProvider({ children }) {
     closeAuthModal,
     signUp,
     signIn,
-    signInWithWallet,
     signOut,
     updateCurrentUser,
     updateSecurityPin,

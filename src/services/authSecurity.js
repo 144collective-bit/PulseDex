@@ -26,7 +26,7 @@ export async function derivePBKDF2Hash(password, salt) {
     {
       name: 'PBKDF2',
       salt: saltBuffer,
-      iterations: 10000,
+      iterations: 600000,
       hash: 'SHA-256',
     },
     passwordKey,

@@ -63,40 +63,6 @@ export const PRESET_AVATARS = [
   },
 ]
 
-// Curated Preset Profile Banners
-export const PRESET_BANNERS = [
-  {
-    id: 'banner-aurora',
-    name: 'Pulse Aurora',
-    style: 'linear-gradient(135deg, #080b11 0%, #00ff9d22 50%, #0066ff33 100%)',
-    accent: '#00ff9d',
-  },
-  {
-    id: 'banner-trenches',
-    name: 'Cyber Trenches',
-    style: 'linear-gradient(135deg, #0d0614 0%, #d946ef33 50%, #f43f5e22 100%)',
-    accent: '#d946ef',
-  },
-  {
-    id: 'banner-matrix',
-    name: 'Matrix Grid',
-    style: 'linear-gradient(135deg, #04100c 0%, #10b98133 50%, #064e3b44 100%)',
-    accent: '#10b981',
-  },
-  {
-    id: 'banner-void',
-    name: 'Midnight Void',
-    style: 'linear-gradient(135deg, #040508 0%, #7c3aed22 50%, #00e5ff18 100%)',
-    accent: '#a855f7',
-  },
-  {
-    id: 'banner-solar',
-    name: 'Solar Pulse',
-    style: 'linear-gradient(135deg, #120b04 0%, #fbbf2433 50%, #f9731622 100%)',
-    accent: '#fbbf24',
-  },
-]
-
 export const THEMES = [
   { id: 'theme-pulse-neon', name: 'Pulse Neon', color: '#00ff9d', desc: 'Emerald & Pulse Magenta' },
   { id: 'theme-cyber-cyan', name: 'Cyber Cyan', color: '#00e5ff', desc: 'Electric Cyan & Deep Blue' },
@@ -105,45 +71,10 @@ export const THEMES = [
   { id: 'theme-solar-gold', name: 'Solar Gold', color: '#fbbf24', desc: 'Amber Gold & Rose' },
 ]
 
-export const AVAILABLE_BADGES = [
-  { id: 'pulse-og', label: 'PulseChain OG', icon: '👑', desc: 'PulseChain Mainnet Pioneer' },
-  { id: 'diamond-hands', label: 'Diamond Hands', icon: '💎', desc: 'Staking & Long-term HODLer' },
-  { id: 'trenches-scout', label: 'Trenches Hunter', icon: '🔥', desc: 'Early Liquidity & Fair-Launch Trader' },
-  { id: 'whale-status', label: 'Whale Watcher', icon: '🐋', desc: 'High Volume Portfolio Tracker' },
-  { id: 'chart-pro', label: 'Chart Master', icon: '📊', desc: 'Technical Analysis Screener User' },
-  { id: 'liquidity-provider', label: 'LP Farmer', icon: '🌾', desc: 'PulseX Yield & Liquidity Contributor' },
-]
-
-export const TRADING_STYLES = [
-  { id: 'Degen Sniper', label: 'Trenches Sniper 🎯', desc: 'Fast execution on fresh liquidity pools' },
-  { id: 'Swing Trader', label: 'Swing Trader 🌊', desc: 'Capturing multi-day market momentum swings' },
-  { id: 'LP Farmer', label: 'Yield Farmer 🌾', desc: 'Providing DEX liquidity & harvesting fees' },
-  { id: 'Diamond HODLer', label: 'Diamond HODLer 💎', desc: 'Long-term believer in PulseChain ecosystem' },
-  { id: 'TA Master', label: 'Technical Analyst 📊', desc: 'Chart patterns, support/resistance & indicators' },
-]
-
 const DEFAULT_PROFILE = {
   displayName: 'Pulse Trader',
   username: 'pulse_degen',
-  avatarId: 'cyber-pulse',
-  customAvatarUrl: '',
-  bannerUrl: PRESET_BANNERS[0].style,
   bio: 'Hunting alpha on PulseChain 🚀',
-  tier: 'Pulse Veteran',
-  badges: ['pulse-og', 'diamond-hands', 'trenches-scout'],
-  memberSince: '2023-05-13',
-  socials: {
-    twitter: '',
-    telegram: '',
-    discord: '',
-    website: '',
-  },
-  tradingAttributes: {
-    style: 'Degen Sniper',
-    riskTolerance: 'Moderate',
-    pinnedToken: 'PLS',
-    timezone: 'UTC',
-  },
 }
 
 const DEFAULT_PREFERENCES = {
@@ -333,17 +264,7 @@ export function UserProfileProvider({ children }) {
     if (currentUser) {
       if (currentUser.profile) {
         setProfile((prev) => {
-          const merged = {
-            ...DEFAULT_PROFILE,
-            ...prev,
-            ...currentUser.profile,
-            socials: { ...DEFAULT_PROFILE.socials, ...prev.socials, ...(currentUser.profile.socials || {}) },
-            tradingAttributes: {
-              ...DEFAULT_PROFILE.tradingAttributes,
-              ...prev.tradingAttributes,
-              ...(currentUser.profile.tradingAttributes || {}),
-            },
-          }
+          const merged = { ...DEFAULT_PROFILE, ...prev, ...currentUser.profile }
           localStorage.setItem('pulsedex_user_profile', JSON.stringify(merged))
           return merged
         })
@@ -366,14 +287,7 @@ export function UserProfileProvider({ children }) {
   const updateProfile = useCallback(
     (updates) => {
       setProfile((prev) => {
-        const next = {
-          ...prev,
-          ...updates,
-          socials: updates.socials ? { ...prev.socials, ...updates.socials } : prev.socials,
-          tradingAttributes: updates.tradingAttributes
-            ? { ...prev.tradingAttributes, ...updates.tradingAttributes }
-            : prev.tradingAttributes,
-        }
+        const next = { ...prev, ...updates }
         localStorage.setItem('pulsedex_user_profile', JSON.stringify(next))
         if (currentUser) {
           updateCurrentUser({ profile: next })

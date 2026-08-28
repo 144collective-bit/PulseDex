@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react'
-import { useAccount, useSignMessage } from 'wagmi'
 import {
   X,
   UserPlus,
   LogIn,
-  Wallet,
   ShieldCheck,
   Eye,
   EyeOff,
@@ -13,8 +11,6 @@ import {
   User,
   Mail,
   ArrowRight,
-  KeyRound,
-  CheckCircle2,
   Clock,
   Shield,
 } from 'lucide-react'
@@ -26,9 +22,6 @@ import {
 } from '../services/authSecurity'
 
 export default function AuthModal() {
-  const { address, isConnected } = useAccount()
-  const { signMessageAsync } = useSignMessage()
-
   const {
     isAuthModalOpen,
     authMode,
@@ -36,7 +29,6 @@ export default function AuthModal() {
     closeAuthModal,
     signUp,
     signIn,
-    signInWithWallet,
   } = useAuth()
 
   // Standard Form Fields
@@ -106,7 +98,6 @@ export default function AuthModal() {
           username: cleanUsername,
           email: cleanEmail,
           password,
-          walletAddress: isConnected ? address : null,
         })
         playChimeSound('success')
         closeAuthModal()
@@ -137,35 +128,6 @@ export default function AuthModal() {
       } finally {
         setIsSubmitting(false)
       }
-    }
-  }
-
-  // 1-Click Sign In with Web3 Wallet
-  const handleWalletSignIn = async () => {
-    if (!isConnected || !address) {
-      setErrorMessage('Please connect your Web3 wallet first.')
-      return
-    }
-
-    setIsSubmitting(true)
-    setErrorMessage('')
-    try {
-      if (signMessageAsync) {
-        await signMessageAsync({
-          message: `PulseDex Secure Sign In\nWallet: ${address}\nTimestamp: ${new Date().toISOString()}`,
-        })
-      }
-      await signInWithWallet(address)
-      playChimeSound('success')
-      closeAuthModal()
-    } catch (err) {
-      if (err.name === 'UserRejectedRequestError' || err.message?.includes('rejected')) {
-        setErrorMessage('Signature cancelled by user.')
-      } else {
-        setErrorMessage(err.message || 'Wallet authentication failed.')
-      }
-    } finally {
-      setIsSubmitting(false)
     }
   }
 
@@ -391,30 +353,10 @@ export default function AuthModal() {
           )}
         </div>
 
-        {/* Divider */}
-        <div className="auth-divider">
-          <span>OR QUICK ACCESS</span>
-        </div>
-
-        {/* Web3 Wallet Quick Sign In */}
-        <button
-          type="button"
-          className="auth-wallet-btn font-mono"
-          onClick={handleWalletSignIn}
-          disabled={isSubmitting}
-        >
-          <Wallet size={16} className="text-pulse-green" />
-          <span>
-            {isConnected && address
-              ? `Sign In with Wallet (${address.slice(0, 6)}...${address.slice(-4)})`
-              : 'Connect & Sign In with Web3 Wallet'}
-          </span>
-        </button>
-
         {/* Footer info */}
         <div className="auth-modal-footer font-mono">
           <Shield size={12} className="text-pulse-cyan" />
-          <span>Encrypted Vault Security • PBKDF2 Password Protection</span>
+          <span>Encrypted vault, stored only on this device — not synced or recoverable elsewhere.</span>
         </div>
       </div>
     </div>

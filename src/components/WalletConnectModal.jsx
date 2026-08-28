@@ -117,6 +117,19 @@ const SUPPORTED_WALLETS = [
   },
 ]
 
+// Matches a wagmi connector (manually configured or EIP-6963 auto-discovered)
+// against one of our curated wallet definitions by id/name substring.
+function matchesWallet(connector, walletId) {
+  const id = connector.id?.toLowerCase() || ''
+  const name = connector.name?.toLowerCase() || ''
+
+  if (walletId === 'metamask') return id.includes('metamask') || name.includes('metamask')
+  if (walletId === 'rabby') return id.includes('rabby') || name.includes('rabby')
+  if (walletId === 'internetmoney') return id.includes('internet') || name.includes('internet')
+  if (walletId === 'zkxwallet') return id.includes('zkx') || name.includes('zkx')
+  return false
+}
+
 export default function WalletConnectModal({ isOpen, onClose }) {
   const { address, isConnected } = useAccount()
   const { connectors, connect, isPending, error } = useConnect()
@@ -155,27 +168,34 @@ export default function WalletConnectModal({ isOpen, onClose }) {
     setConnectingWalletId(walletDef.id)
 
     try {
-      // Find matching connector in wagmi list
-      let connector = connectors.find((c) => {
-        const id = c.id?.toLowerCase() || ''
-        const name = c.name?.toLowerCase() || ''
-        const targetId = walletDef.id.toLowerCase()
+      // Several connectors can match the same wallet name: our manually
+      // configured one (from src/config/wagmi.js) plus any EIP-6963
+      // auto-discovered connector for that same wallet. With more than one
+      // wallet extension installed, only one can own `window.ethereum` at a
+      // time, so the manual connector's provider can resolve to nothing even
+      // though the wallet is genuinely installed. Try every match in order
+      // and use the first one whose provider actually resolves.
+      const candidates = connectors.filter((c) => matchesWallet(c, walletDef.id.toLowerCase()))
 
-        if (targetId === 'metamask') return id.includes('meta') || name.includes('meta')
-        if (targetId === 'rabby') return id.includes('rabby') || name.includes('rabby')
-        if (targetId === 'internetmoney') return id.includes('internet') || name.includes('internet')
-        if (targetId === 'zkxwallet') return id.includes('zkx') || name.includes('zkx')
-        return false
-      })
+      let connector = null
+      for (const candidate of candidates) {
+        const provider = await candidate.getProvider().catch(() => undefined)
+        if (provider) {
+          connector = candidate
+          break
+        }
+      }
 
-      // Fallback to general injected connector
+      // Fallback to the generic injected connector (bare `window.ethereum`)
       if (!connector) {
-        connector = connectors.find((c) => c.id === 'injected' || c.type === 'injected') || connectors[0]
+        const generic = connectors.find((c) => c.id === 'injected' || c.type === 'injected')
+        const provider = generic ? await generic.getProvider().catch(() => undefined) : undefined
+        if (provider) connector = generic
       }
 
       if (connector) {
         await connect({ connector })
-      } else if (!walletDef.detect()) {
+      } else {
         window.open(walletDef.downloadUrl, '_blank')
         setConnectingWalletId(null)
       }
@@ -298,7 +318,15 @@ export default function WalletConnectModal({ isOpen, onClose }) {
 
             <div className="wallet-options-list">
               {SUPPORTED_WALLETS.map((w) => {
-                const isDetected = w.detect()
+                // `w.detect()` only sees whichever wallet currently owns
+                // `window.ethereum`. Also trust EIP-6963 auto-discovered
+                // connectors (their id is the wallet's dotted rdns, e.g.
+                // "io.rabby") since their presence in `connectors` means that
+                // wallet genuinely announced itself, regardless of which
+                // extension is dominant.
+                const isDetected =
+                  w.detect() ||
+                  connectors.some((c) => c.id?.includes('.') && matchesWallet(c, w.id.toLowerCase()))
                 const isThisConnecting = isPending && connectingWalletId === w.id
 
                 return (

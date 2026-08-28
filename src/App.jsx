@@ -254,9 +254,7 @@ function MainApp() {
           />
         )}
 
-        {FEATURES.profile && activeTab === 'profile' && (
-          <ProfileView onOpenWalletModal={() => setShowWalletModal(true)} />
-        )}
+        {FEATURES.profile && activeTab === 'profile' && <ProfileView />}
       </main>
 
       {/* Mobile Native Bottom Navigation */}
