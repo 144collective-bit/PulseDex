@@ -20,6 +20,7 @@ import WatchlistView from './components/WatchlistView'
 import TrenchesView from './components/TrenchesView'
 import DexView from './components/DexView'
 import DexComingSoon from './components/DexComingSoon'
+import TokenLaunchView from './components/TokenLaunchView'
 import WalletConnectModal from './components/WalletConnectModal'
 import UserProfileModal from './components/UserProfileModal'
 import ProfileView from './components/ProfileView'
@@ -255,6 +256,8 @@ function MainApp() {
         )}
 
         {FEATURES.profile && activeTab === 'profile' && <ProfileView />}
+
+        {activeTab === 'token' && <TokenLaunchView />}
       </main>
 
       {/* Mobile Native Bottom Navigation */}

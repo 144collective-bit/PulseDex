@@ -294,8 +294,8 @@ export default function Navbar({
           <button
             type="button"
             className="btn-buy-dex-glow font-mono"
-            onClick={() => setActiveTab('dex')}
-            title="Buy PulseDex Platform Token ($DEX)"
+            onClick={() => setActiveTab('token')}
+            title="$DEX Platform Token"
           >
             <Zap size={13} className="buy-dex-zap" />
             <span className="buy-dex-text">BUY $DEX</span>
