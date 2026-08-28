@@ -827,6 +827,8 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .sidebar-rank-num {
@@ -899,6 +901,9 @@
   align-items: center;
   gap: 2px;
   white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sidebar-base-sym {
@@ -906,6 +911,9 @@
   font-size: 12.5px;
   color: #ffffff;
   letter-spacing: 0.2px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sidebar-quote-sym {
@@ -931,6 +939,9 @@
   align-items: center;
   gap: 5px;
   font-size: 9.5px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .sidebar-dex-badge {
@@ -986,6 +997,7 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 1px;
+  flex-shrink: 0;
 }
 
 .sidebar-pair-price {
@@ -6309,6 +6321,58 @@
    BREAKPOINTS: TABLET & MOBILE RESPONSIVENESS
    ========================================================================== */
 
+/* Tablet nav (max-width: 1150px)
+   The full desktop bar — logo wordmark + 6 tabs + 440px search + actions —
+   needs ~1150px. Below that it used to overflow the viewport and make the
+   whole page scroll sideways, since the desktop nav only collapsed at 768px.
+   Drop the search to its icon trigger and compact the bar so it always fits. */
+@media (max-width: 1150px) {
+  .main-nav {
+    padding: 10px 14px;
+    gap: 10px;
+  }
+
+  .nav-left {
+    gap: 12px;
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+  }
+
+  .desktop-search {
+    display: none !important;
+  }
+
+  .mobile-search-trigger-btn {
+    display: flex;
+  }
+
+  .nav-right {
+    flex-shrink: 0;
+  }
+
+  .brand-text-img {
+    display: none !important;
+  }
+
+  .nav-tabs {
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .nav-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .btn-tab {
+    padding: 8px 11px;
+    font-size: 13px;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+}
+
 /* Tablets & Small Laptops (max-width: 1024px) */
 @media (max-width: 1024px) {
   .screener-pro-layout {
@@ -6360,7 +6424,7 @@
 
   .app-main-content {
     padding: 10px 10px 85px;
-    max-width: 100vw;
+    max-width: 100%;
     box-sizing: border-box;
   }
 
@@ -10282,6 +10346,16 @@
     grid-template-columns: 1fr;
     gap: 24px;
   }
+
+  /* Tighten the shell alongside the single-column hero so the header text
+     lines up with the section content below it instead of sitting inset. */
+  .trenches-page-container {
+    padding: 16px 18px;
+  }
+
+  .trenches-hero {
+    padding: 20px 18px;
+  }
 }
 
 .trenches-badge {
@@ -10772,16 +10846,19 @@
     touch-action: manipulation;
   }
 
+  /* 100vw counts the vertical scrollbar, so it renders wider than the actual
+     content box and silently clips a few px on the right. 100% tracks the
+     real available width. */
   .app-shell {
-    width: 100vw;
-    max-width: 100vw;
+    width: 100%;
+    max-width: 100%;
     overflow-x: hidden;
   }
 
   .app-main-content {
     padding: 8px 10px calc(72px + env(safe-area-inset-bottom, 0px)) !important;
-    width: 100vw;
-    max-width: 100vw;
+    width: 100%;
+    max-width: 100%;
     box-sizing: border-box;
   }
 
@@ -11118,13 +11195,13 @@
   }
 
   /* 8. Trenches View on Mobile */
-  .trenches-view-container {
-    padding: 0 0 10px;
+  .trenches-page-container {
+    padding: 12px 12px 10px;
     gap: 14px;
   }
 
-  .trenches-hero-section {
-    padding: 16px 12px;
+  .trenches-hero {
+    padding: 16px 14px;
     border-radius: var(--radius-xl);
   }
 
