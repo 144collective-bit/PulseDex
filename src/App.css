@@ -27,8 +27,8 @@
   top: 0;
   z-index: 50;
   background: rgba(8, 11, 17, 0.9);
-  backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -1418,8 +1418,8 @@
   padding: 8px 14px;
   border-bottom: 1px solid var(--border-subtle);
   background: rgba(13, 18, 28, 0.95);
-  backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   flex-wrap: wrap;
   gap: 10px;
 }
@@ -2799,8 +2799,8 @@
   position: fixed;
   inset: 0;
   background: rgba(4, 6, 12, 0.84);
-  backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -6243,8 +6243,8 @@
   inset: 0;
   z-index: 2000;
   background: rgba(8, 11, 17, 0.96);
-  backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
   padding: 14px;
   display: flex;
   flex-direction: column;
@@ -6311,8 +6311,8 @@
   height: calc(60px + env(safe-area-inset-bottom, 0px));
   padding-bottom: env(safe-area-inset-bottom, 0px);
   background: rgba(10, 14, 22, 0.96);
-  backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   z-index: 999;
   justify-content: space-around;
@@ -7007,8 +7007,8 @@
   inset: 0;
   z-index: 9999;
   background: rgba(0, 0, 0, 0.78);
-  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -11072,8 +11072,8 @@
     height: calc(56px + env(safe-area-inset-bottom, 0px));
     padding-bottom: env(safe-area-inset-bottom, 0px);
     background: rgba(8, 12, 20, 0.95);
-    backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: blur(24px);
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.7);
     z-index: 1000;
@@ -12010,8 +12010,8 @@
 .pf-section-card {
   position: relative;
   background: rgba(12, 16, 26, 0.9);
-  backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.068);
   border-radius: 16px;
   overflow: hidden;
@@ -13107,8 +13107,8 @@
   display: flex;
   flex-direction: column;
   background: var(--bg-card);
-  backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   box-shadow:
@@ -14050,8 +14050,8 @@
     rgba(10, 14, 22, 0.92),
     rgba(8, 11, 17, 0.82)
   );
-  backdrop-filter: blur(22px) saturate(140%);
   -webkit-backdrop-filter: blur(22px) saturate(140%);
+  backdrop-filter: blur(22px) saturate(140%);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 30px rgba(0, 0, 0, 0.35);
 }
 
