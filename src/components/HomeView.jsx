@@ -1,12 +1,4 @@
-import {
-  Activity,
-  AlertTriangle,
-  TrendingUp,
-  TrendingDown,
-  Layers,
-  BarChart3,
-  Droplets,
-} from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import CoreAssetCard from './CoreAssetCard'
 import { useCoreAssets } from '../hooks/useCoreAssets'
 import { CORE_ASSETS } from '../config/coreAssets'
@@ -42,16 +34,11 @@ function CardSkeleton() {
  * Built as its own glass panel rather than a cell in a strip, so the summary
  * row belongs to the same family as the asset cards below it.
  */
-function SummaryTile({ label, value, tone = '', icon: Icon, accent = 'cyan' }) {
+function SummaryTile({ label, value, tone = '', accent = 'cyan' }) {
   return (
     <div className={`home-tile accent-${accent}`}>
-      <span className="home-tile-icon" aria-hidden="true">
-        {Icon && <Icon size={15} />}
-      </span>
-      <span className="home-tile-body">
-        <span className="home-tile-label">{label}</span>
-        <span className={`home-tile-val ${tone}`}>{value}</span>
-      </span>
+      <span className="home-tile-label">{label}</span>
+      <span className={`home-tile-val ${tone}`}>{value}</span>
     </div>
   )
 }
@@ -82,8 +69,6 @@ export default function HomeView({ onSelectPairForChart }) {
   const avgChange = weighted.cap > 0 ? weighted.sum / weighted.cap : null
   const avgUp = avgChange !== null && avgChange >= 0
 
-  const gainers = rows.filter((a) => a.change24h > 0).length
-
   const openChart = (asset) => {
     if (asset.pair) onSelectPairForChart?.(asset.pair)
   }
@@ -108,33 +93,23 @@ export default function HomeView({ onSelectPairForChart }) {
             <SummaryTile
               label="Combined Cap"
               value={formatUsd(totalMarketCap, 1)}
-              icon={Layers}
               accent="cyan"
             />
             <SummaryTile
               label="24h Volume"
               value={formatUsd(totalVolume, 1)}
-              icon={BarChart3}
               accent="purple"
             />
             <SummaryTile
               label="Liquidity"
               value={formatUsd(totalLiquidity, 1)}
-              icon={Droplets}
               accent="blue"
             />
             <SummaryTile
               label="Avg 24h"
               value={formatPercent(avgChange, 2) || '—'}
               tone={avgChange === null ? '' : avgUp ? 'is-up' : 'is-down'}
-              icon={avgUp ? TrendingUp : TrendingDown}
               accent={avgUp ? 'green' : 'red'}
-            />
-            <SummaryTile
-              label="Gainers"
-              value={`${gainers}/${rows.length}`}
-              icon={Activity}
-              accent="green"
             />
           </div>
         )}
