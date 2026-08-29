@@ -18,10 +18,16 @@ export const FEATURES = {
   /** The live DEX aggregator. When false the DEX tab shows the launch notice
    *  instead; DexView.jsx is untouched and ready for when you finalise it. */
   dexLive: false,
+
+  /** The Trenches tab shows the live pump.tires bonding-curve board. When
+   *  false it falls back to the curated ecosystem link directory, which is
+   *  kept intact in EcosystemDirectory.jsx. */
+  trenchesLive: true,
 }
 
 /** Tabs shown in the main nav, in order. */
 export const VISIBLE_TABS = [
+  'home',
   'screener',
   'trenches',
   'dex',

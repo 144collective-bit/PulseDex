@@ -1,6 +1,7 @@
 import {
+  Home,
   TrendingUp,
-  Wrench,
+  Flame,
   Zap,
   Radio,
   PieChart,
@@ -16,6 +17,16 @@ export default function MobileBottomNav({
   return (
     <nav className="mobile-bottom-nav font-mono">
       <button
+        className={`mobile-nav-item ${activeTab === 'home' ? 'active' : ''}`}
+        onClick={() => setActiveTab('home')}
+      >
+        <div className="mobile-nav-icon-wrapper">
+          <Home size={18} className="text-pulse-cyan" />
+        </div>
+        <span className="mobile-nav-label">Home</span>
+      </button>
+
+      <button
         className={`mobile-nav-item ${activeTab === 'screener' ? 'active' : ''}`}
         onClick={() => setActiveTab('screener')}
       >
@@ -30,9 +41,9 @@ export default function MobileBottomNav({
         onClick={() => setActiveTab('trenches')}
       >
         <div className="mobile-nav-icon-wrapper">
-          <Wrench size={18} className="text-pulse-cyan" />
+          <Flame size={18} className="text-pulse-cyan" />
         </div>
-        <span className="mobile-nav-label">Tools</span>
+        <span className="mobile-nav-label">Trenches</span>
       </button>
 
       <button

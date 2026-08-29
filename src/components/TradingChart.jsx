@@ -11,12 +11,87 @@ import {
 } from 'lucide-react'
 import { buildPulseXSwapUrl } from '../utils/formatters'
 
+const CHART_HEIGHT_KEY = 'pulsedex_chart_height'
+const MIN_CHART_HEIGHT = 260
+const MAX_CHART_HEIGHT = 1400
+const HEIGHT_STEP = 40
+
 export default function TradingChart({ pair, pairAddress }) {
   const chartWrapperRef = useRef(null)
+  const frameRef = useRef(null)
+  const dragRef = useRef(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [keyCounter, setKeyCounter] = useState(0)
   const [isReloading, setIsReloading] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
+  const [isResizing, setIsResizing] = useState(false)
+
+  // null = follow the responsive default height from CSS
+  const [chartHeight, setChartHeight] = useState(() => {
+    try {
+      const saved = Number(localStorage.getItem(CHART_HEIGHT_KEY))
+      return saved >= MIN_CHART_HEIGHT && saved <= MAX_CHART_HEIGHT ? saved : null
+    } catch {
+      return null
+    }
+  })
+
+  const clampHeight = (h) => Math.min(MAX_CHART_HEIGHT, Math.max(MIN_CHART_HEIGHT, Math.round(h)))
+
+  const persistHeight = (h) => {
+    try {
+      localStorage.setItem(CHART_HEIGHT_KEY, String(h))
+    } catch {
+      // Storage unavailable (private mode) — the height still applies for this session.
+    }
+  }
+
+  const startResize = (e) => {
+    if (isFullscreen || !frameRef.current) return
+    e.preventDefault()
+    dragRef.current = { startY: e.clientY, startHeight: frameRef.current.offsetHeight }
+    setIsResizing(true)
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+  }
+
+  const onResizeMove = (e) => {
+    if (!dragRef.current) return
+    const { startY, startHeight } = dragRef.current
+    setChartHeight(clampHeight(startHeight + (e.clientY - startY)))
+  }
+
+  const endResize = (e) => {
+    if (!dragRef.current) return
+    dragRef.current = null
+    setIsResizing(false)
+    e.currentTarget.releasePointerCapture?.(e.pointerId)
+    if (frameRef.current) persistHeight(frameRef.current.offsetHeight)
+  }
+
+  // Keyboard resizing so the handle is usable without a pointer
+  const onHandleKeyDown = (e) => {
+    if (!frameRef.current) return
+    const current = frameRef.current.offsetHeight
+    let next = null
+    if (e.key === 'ArrowUp') next = clampHeight(current - HEIGHT_STEP)
+    else if (e.key === 'ArrowDown') next = clampHeight(current + HEIGHT_STEP)
+    else if (e.key === 'Home') next = MIN_CHART_HEIGHT
+    else if (e.key === 'End') next = MAX_CHART_HEIGHT
+    if (next === null) return
+    e.preventDefault()
+    setChartHeight(next)
+    persistHeight(next)
+  }
+
+  // Double-click the handle to return to the responsive default
+  const resetHeight = () => {
+    setChartHeight(null)
+    try {
+      localStorage.removeItem(CHART_HEIGHT_KEY)
+    } catch {
+      // Nothing to clear if storage is unavailable.
+    }
+  }
 
   const activePairAddress =
     pairAddress || pair?.pairAddress || '0x1b45b9148791d3a104184Cd5DFE5CE57193a3ee9'
@@ -58,8 +133,9 @@ export default function TradingChart({ pair, pairAddress }) {
 
   return (
     <div
-      className={`trading-chart-wrapper glass-panel ${isFullscreen ? 'fullscreen-chart' : ''}`}
+      className={`trading-chart-wrapper glass-panel ${isFullscreen ? 'fullscreen-chart' : ''} ${isResizing ? 'is-resizing' : ''}`}
       ref={chartWrapperRef}
+      style={chartHeight ? { '--chart-h': `${chartHeight}px` } : undefined}
     >
       {/* Pro Chart Top Header */}
       <div className="chart-header">
@@ -141,7 +217,7 @@ export default function TradingChart({ pair, pairAddress }) {
       </div>
 
       {/* Embedded Real-Time DexScreener Chart Frame */}
-      <div className="chart-iframe-container">
+      <div className="chart-iframe-container" ref={frameRef}>
         <iframe
           key={`${activePairAddress}-${keyCounter}`}
           src={embedUrl}
@@ -151,6 +227,26 @@ export default function TradingChart({ pair, pairAddress }) {
           loading="eager"
         ></iframe>
       </div>
+
+      {/* Drag to resize the chart; the panels below take up the slack. */}
+      {!isFullscreen && (
+        <div
+          className="chart-resize-handle"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="Resize chart height"
+          tabIndex={0}
+          onPointerDown={startResize}
+          onPointerMove={onResizeMove}
+          onPointerUp={endResize}
+          onPointerCancel={endResize}
+          onKeyDown={onHandleKeyDown}
+          onDoubleClick={resetHeight}
+          title="Drag to resize · double-click to reset"
+        >
+          <span className="chart-resize-grip" aria-hidden="true" />
+        </div>
+      )}
     </div>
   )
 }

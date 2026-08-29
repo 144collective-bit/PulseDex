@@ -24,3 +24,14 @@ dist-ssr
 *.sw?
 
 .vercel
+
+# Working folders that live alongside the app but are not part of it.
+Designs/
+PulseDexBot/
+Trad-Fi Token/
+Twitter/
+photo_*.jpg
+scratch/
+*.bak
+__pycache__/
+*.pyc

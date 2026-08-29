@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAccount, useDisconnect } from 'wagmi'
 import {
+  Home,
   Search,
   Flame,
-  Wrench,
   Wallet,
   TrendingUp,
   PieChart,
@@ -159,6 +159,13 @@ export default function Navbar({
           {/* Desktop Navigation Tabs (Hidden on mobile <768px, shown in bottom nav) */}
           <nav className="nav-tabs desktop-only-nav">
             <button
+              className={`btn-tab ${activeTab === 'home' ? 'active' : ''}`}
+              onClick={() => setActiveTab('home')}
+            >
+              <Home size={16} className="text-pulse-cyan" />
+              <span>Home</span>
+            </button>
+            <button
               className={`btn-tab ${activeTab === 'screener' ? 'active' : ''}`}
               onClick={() => setActiveTab('screener')}
             >
@@ -169,8 +176,8 @@ export default function Navbar({
               className={`btn-tab ${activeTab === 'trenches' ? 'active' : ''}`}
               onClick={() => setActiveTab('trenches')}
             >
-              <Wrench size={16} className="text-pulse-cyan" />
-              <span>Tools</span>
+              <Flame size={16} className="text-pulse-cyan" />
+              <span>Trenches</span>
             </button>
             <button
               className={`btn-tab ${activeTab === 'dex' ? 'active' : ''}`}

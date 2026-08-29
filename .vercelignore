@@ -1,0 +1,14 @@
+# Nothing here is part of the deployed app. Without this file Vercel falls back
+# to .gitignore, which does not cover these, and would upload ~23MB of
+# unrelated working files - including personal photos.
+Designs/
+PulseDexBot/
+Trad-Fi Token/
+Twitter/
+photo_*.jpg
+scratch/
+*.bak
+
+# Built locally; Vercel builds its own.
+dist/
+node_modules/

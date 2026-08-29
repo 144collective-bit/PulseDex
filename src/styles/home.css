@@ -1,0 +1,310 @@
+/* ==========================================================================
+   HOME - core PulseChain assets
+
+   Card layout follows the plsfolio reference: identity and actions on top, a
+   headline price with its 24h move, then supply/burned, then the market row.
+   Palette and chrome stay PulseDex's so it sits with the rest of the app.
+   ========================================================================== */
+
+.home-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 14px 18px 28px;
+
+  /* Figures are read down the column across cards, so digits must not jitter. */
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------------------
+   Header
+   -------------------------------------------------------------------------- */
+.home-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.home-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.home-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  padding: 5px 12px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--text-primary);
+  background: rgba(0, 229, 255, 0.08);
+  border: 1px solid rgba(0, 229, 255, 0.28);
+  border-radius: var(--radius-full);
+}
+
+.home-sub {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.home-totals {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+}
+
+.home-total {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.home-total-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-muted);
+}
+
+.home-total-val {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.home-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 30px;
+  font-size: 12px;
+  color: var(--pulse-red);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+/* --------------------------------------------------------------------------
+   Grid
+   -------------------------------------------------------------------------- */
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+/* --------------------------------------------------------------------------
+   Card
+   -------------------------------------------------------------------------- */
+.core-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 20px 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.core-card:hover {
+  border-color: rgba(0, 229, 255, 0.28);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+/* Header: logo, identity, actions */
+.cc-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.cc-ident {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.cc-symbol-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cc-symbol {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.cc-verified {
+  color: #3b9dff;
+  flex-shrink: 0;
+}
+
+.cc-name {
+  font-size: 13px;
+  color: var(--text-muted);
+  min-width: 0;
+}
+
+.cc-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.cc-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.cc-action:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+/* Price */
+.cc-price-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cc-price {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.cc-change {
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cc-change.is-up { color: #22c55e; }
+.cc-change.is-down { color: var(--pulse-red); }
+
+/* Stat rows */
+.cc-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cc-market {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cc-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.cc-stat.align-center { align-items: center; text-align: center; }
+.cc-stat.align-right { align-items: flex-end; text-align: right; }
+
+.cc-stat-label {
+  font-size: 12.5px;
+  color: var(--pulse-cyan);
+  opacity: 0.85;
+}
+
+.cc-stat-val {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+   Skeleton
+   -------------------------------------------------------------------------- */
+.core-card.is-skeleton { pointer-events: none; }
+
+.ccs {
+  display: block;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.08) 37%,
+    rgba(255, 255, 255, 0.04) 63%
+  );
+  background-size: 400% 100%;
+  animation: ccShimmer 1.3s ease-in-out infinite;
+}
+
+@keyframes ccShimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+.ccs-logo { width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0; }
+.ccs-symbol { width: 68px; height: 16px; margin-bottom: 6px; }
+.ccs-name { width: 104px; height: 11px; }
+.ccs-price { width: 62%; height: 26px; }
+.ccs-line { height: 30px; }
+
+/* --------------------------------------------------------------------------
+   Responsive
+   -------------------------------------------------------------------------- */
+@media (max-width: 1200px) {
+  .home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 760px) {
+  .home-page { padding: 10px 12px 24px; gap: 12px; }
+
+  .home-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .home-head { gap: 12px; }
+  .home-sub { display: none; }
+  .home-totals { gap: 18px; }
+  .home-total-val { font-size: 13px; }
+
+  .core-card { padding: 15px 16px 17px; gap: 13px; }
+  .cc-price { font-size: 23px; }
+  .cc-change { font-size: 15px; }
+  .cc-symbol { font-size: 17px; }
+
+  /* Labels shrink before values do - the figure is what's being read. */
+  .cc-stat-label { font-size: 11.5px; }
+  .cc-stat-val { font-size: 13px; }
+}

@@ -6,6 +6,7 @@ import { DEFAULT_PAIR_ADDRESS } from './config/pulsechain'
 import { getPulsePair, getTopPulsePairs } from './services/dexscreener'
 import { TrendingUp, Zap, Layers, Flame } from 'lucide-react'
 
+import HomeView from './components/HomeView'
 import Navbar from './components/Navbar'
 import MobileBottomNav from './components/MobileBottomNav'
 import TickerMarquee from './components/TickerMarquee'
@@ -34,7 +35,7 @@ import './App.css'
 const queryClient = new QueryClient()
 
 function MainApp() {
-  const [activeTab, setActiveTab] = useState('screener')
+  const [activeTab, setActiveTab] = useState('home')
   const [currentPair, setCurrentPair] = useState(null)
   const [topPairs, setTopPairs] = useState([])
   const [isLoadingTopPairs, setIsLoadingTopPairs] = useState(true)
@@ -216,6 +217,10 @@ function MainApp() {
               </div>
             </div>
           </div>
+        )}
+
+        {activeTab === 'home' && (
+          <HomeView onSelectPairForChart={handleSelectPair} />
         )}
 
         {activeTab === 'trenches' && (

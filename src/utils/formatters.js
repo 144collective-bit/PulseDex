@@ -3,9 +3,30 @@
  * Handles extreme sub-penny / sub-satoshi micro-prices without ever showing false zeros ($0.00)
  */
 
+const SUBSCRIPT_DIGITS = '₀₁₂₃₄₅₆₇₈₉'
+
+/** Render a run length as subscript digits, e.g. 4 -> "₄". */
+function toSubscript(count) {
+  return String(count)
+    .split('')
+    .map((d) => SUBSCRIPT_DIGITS[Number(d)])
+    .join('')
+}
+
 /**
- * Format any USD price with dynamic precision based on magnitude
- * NEVER returns $0.00 for non-zero prices!
+ * Threshold at which a run of leading zeros is collapsed into a subscript
+ * count. Three zeros still read fine inline ($0.0001128); four or more turn
+ * into an unreadable smear, so those become $0.0₄1227.
+ */
+const SUBSCRIPT_MIN_ZEROS = 4
+
+/**
+ * Format any USD price with dynamic precision based on magnitude.
+ *
+ * Sub-penny prices keep four significant digits and collapse long zero runs
+ * into a subscript count - the notation screeners use so a micro-price fits a
+ * table cell without becoming a wall of zeros. NEVER returns $0.00 for a
+ * non-zero price.
  */
 export function formatCryptoPrice(val) {
   if (val === null || val === undefined || val === '') return '$0.00'
@@ -13,56 +34,48 @@ export function formatCryptoPrice(val) {
 
   if (isNaN(num) || num === 0) return '$0.00'
 
+  const sign = num < 0 ? '-' : ''
+  const abs = Math.abs(num)
+
   // Large prices ($1,000+)
-  if (num >= 1000) {
-    return `$${num.toLocaleString('en-US', {
+  if (abs >= 1000) {
+    return `${sign}$${abs.toLocaleString('en-US', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`
   }
 
   // Standard prices ($1.00 - $999.99)
-  if (num >= 1) {
-    return `$${num.toLocaleString('en-US', {
+  if (abs >= 1) {
+    return `${sign}$${abs.toLocaleString('en-US', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 4,
     })}`
   }
 
-  // Cent prices ($0.01 - $0.9999)
-  if (num >= 0.01) {
-    return `$${num.toFixed(4)}`
+  // Below $1: four significant digits, with the leading zero run measured from
+  // the exponent so float noise can't miscount it.
+  const [mantissa, exponent] = abs.toExponential(3).split('e')
+  const exp = parseInt(exponent, 10)
+  const digits = mantissa.replace('.', '')
+  const zeros = -exp - 1
+
+  if (zeros >= SUBSCRIPT_MIN_ZEROS) {
+    return `${sign}$0.0${toSubscript(zeros)}${digits}`
   }
 
-  // Sub-cent prices ($0.0001 - $0.009999)
-  if (num >= 0.0001) {
-    return `$${num.toFixed(6)}`
-  }
-
-  // Micro prices ($0.000001 - $0.00009999)
-  if (num >= 0.000001) {
-    return `$${num.toFixed(8)}`
-  }
-
-  // Ultra-micro prices ($0.0000000001 - $0.0000009999)
-  if (num >= 0.0000000001) {
-    return `$${num.toFixed(10)}`
-  }
-
-  // Extreme micro prices (e.g. 1.25e-12) - convert scientific notation to readable fixed string
-  const str = num.toFixed(14)
-  const trimmed = str.replace(/0+$/, '')
-  return `$${trimmed}`
+  return `${sign}$0.${'0'.repeat(Math.max(0, zeros))}${digits}`
 }
 
 /**
  * Format Compact USD values ($1.25B, $45.2M, $120.5K, $450)
  */
-export function formatUsd(num) {
+export function formatUsd(num, digits = 2) {
   const val = parseFloat(num || '0')
   if (isNaN(val) || val === 0) return '$0'
-  if (val >= 1e9) return `$${(val / 1e9).toFixed(2)}B`
-  if (val >= 1e6) return `$${(val / 1e6).toFixed(2)}M`
+  if (val >= 1e12) return `$${(val / 1e12).toFixed(digits)}T`
+  if (val >= 1e9) return `$${(val / 1e9).toFixed(digits)}B`
+  if (val >= 1e6) return `$${(val / 1e6).toFixed(digits)}M`
   if (val >= 1e3) return `$${(val / 1e3).toFixed(1)}K`
   if (val >= 1) return `$${val.toFixed(2)}`
   return `$${val.toFixed(4)}`
@@ -71,13 +84,16 @@ export function formatUsd(num) {
 /**
  * Format Compact count or number (e.g. transactions, tokens)
  */
-export function formatCompactCount(num) {
+export function formatCompactCount(num, digits = 2) {
   const val = parseFloat(num || '0')
   if (isNaN(val) || val === 0) return '0'
-  if (val >= 1e9) return `${(val / 1e9).toFixed(2)}B`
-  if (val >= 1e6) return `${(val / 1e6).toFixed(2)}M`
-  if (val >= 1e3) return `${(val / 1e3).toFixed(1)}K`
-  return val.toLocaleString()
+  if (val >= 1e12) return `${(val / 1e12).toFixed(digits)}T`
+  if (val >= 1e9) return `${(val / 1e9).toFixed(digits)}B`
+  if (val >= 1e6) return `${(val / 1e6).toFixed(digits)}M`
+  if (val >= 1e3) return `${(val / 1e3).toFixed(digits)}K`
+  // Sub-thousand values are capped at two decimals so a raw token balance
+  // doesn't print as 320.967.
+  return val.toLocaleString('en-US', { maximumFractionDigits: 2 })
 }
 
 /**
@@ -128,4 +144,42 @@ export function buildPulseXSwapUrl(inputAddress, outputAddress) {
   const input = encodeURIComponent(inputAddress || 'PLS')
   const output = encodeURIComponent(outputAddress || '')
   return `https://app.pulsex.com/swap?inputCurrency=${input}&outputCurrency=${output}`
+}
+
+/**
+ * Compact "time since" label for launch and trade timestamps.
+ * Accepts a unix timestamp in seconds, as returned by the launchpad API.
+ */
+export function formatTimeAgo(unixSeconds) {
+  const ts = Number(unixSeconds || 0)
+  if (!ts) return '—'
+
+  const diff = Math.floor(Date.now() / 1000) - ts
+  if (diff < 0) return 'now'
+  if (diff < 60) return `${diff}s`
+  if (diff < 3600) return `${Math.floor(diff / 60)}m`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h`
+  if (diff < 2592000) return `${Math.floor(diff / 86400)}d`
+  return `${Math.floor(diff / 2592000)}mo`
+}
+
+/**
+ * Shorten a 0x address for display: 0x1234...abcd
+ */
+export function formatAddress(address, lead = 4, tail = 4) {
+  if (!address || typeof address !== 'string') return ''
+  const clean = address.trim()
+  if (clean.length <= lead + tail + 2) return clean
+  return `${clean.slice(0, lead + 2)}...${clean.slice(-tail)}`
+}
+
+/**
+ * Signed percentage label, e.g. +12.4% / -3.1%. Returns null for missing data
+ * so callers can render a placeholder instead of a misleading 0%.
+ */
+export function formatPercent(value, digits = 1) {
+  if (value === null || value === undefined) return null
+  const num = parseFloat(value)
+  if (!isFinite(num)) return null
+  return `${num >= 0 ? '+' : ''}${num.toFixed(digits)}%`
 }

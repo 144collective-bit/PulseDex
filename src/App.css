@@ -1555,7 +1555,9 @@
 }
 
 .chart-iframe-container {
-  height: 560px;
+  /* --chart-h is set inline by TradingChart once the user drags the handle;
+     until then each breakpoint's own height below applies. */
+  height: var(--chart-h, 560px);
   width: 100%;
   position: relative;
   background: #080b11;
@@ -1566,6 +1568,65 @@
   height: 100%;
   border: none;
   display: block;
+}
+
+/* ── Chart resize handle ── */
+.chart-resize-handle {
+  flex: 0 0 auto;
+  height: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ns-resize;
+  background: rgba(13, 18, 28, 0.95);
+  border-top: 1px solid var(--border-subtle);
+  touch-action: none;
+  transition: background 0.15s ease;
+}
+
+.chart-resize-handle:hover,
+.chart-resize-handle:focus-visible {
+  background: rgba(0, 229, 255, 0.1);
+  outline: none;
+}
+
+.chart-resize-grip {
+  width: 42px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.22);
+  transition: background 0.15s ease, width 0.15s ease;
+}
+
+.chart-resize-handle:hover .chart-resize-grip,
+.chart-resize-handle:focus-visible .chart-resize-grip {
+  background: var(--pulse-cyan);
+  width: 60px;
+}
+
+/* While dragging, stop the iframe from swallowing pointer events. */
+.trading-chart-wrapper.is-resizing .dexscreener-iframe {
+  pointer-events: none;
+}
+
+.trading-chart-wrapper.is-resizing .chart-resize-grip {
+  background: var(--pulse-cyan);
+  width: 60px;
+}
+
+/* Below 1024px each breakpoint sets its own chart height, so --chart-h does
+   not apply and there is nothing for the handle to drag. */
+@media (max-width: 1024px) {
+  .chart-resize-handle {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chart-resize-handle,
+  .chart-resize-grip {
+    transition: none;
+  }
 }
 
 /* ==========================================================================
@@ -6403,8 +6464,10 @@
     flex-shrink: 0;
   }
 
+  /* Wordmark stays visible on tablet, just scaled to the shorter bar. */
   .brand-text-img {
-    display: none !important;
+    height: 34px;
+    max-width: 150px;
   }
 
   .nav-tabs {
@@ -6510,7 +6573,8 @@
   }
 
   .brand-text-img {
-    display: none !important;
+    height: 28px;
+    max-width: 124px;
   }
 
   .wallet-addr-label {
@@ -10934,8 +10998,11 @@
     filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.8));
   }
 
+  /* Phone: the wordmark is the brand, so it shrinks rather than disappears. */
   .brand-text-img {
-    display: none !important;
+    height: 24px;
+    max-width: 104px;
+    filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.45));
   }
 
   .nav-right {
