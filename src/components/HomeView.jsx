@@ -1,8 +1,16 @@
-import { Home, AlertTriangle } from 'lucide-react'
+import {
+  Activity,
+  AlertTriangle,
+  TrendingUp,
+  TrendingDown,
+  Layers,
+  BarChart3,
+  Droplets,
+} from 'lucide-react'
 import CoreAssetCard from './CoreAssetCard'
 import { useCoreAssets } from '../hooks/useCoreAssets'
 import { CORE_ASSETS } from '../config/coreAssets'
-import { formatUsd } from '../utils/formatters'
+import { formatUsd, formatPercent } from '../utils/formatters'
 import '../styles/home.css'
 
 /** Placeholder card so the grid holds its shape before data lands. */
@@ -17,15 +25,33 @@ function CardSkeleton() {
         </div>
       </div>
       <span className="ccs ccs-price" />
+      <div className="cc-momentum">
+        {[0, 1, 2, 3].map((i) => <span key={i} className="ccs ccs-mo" />)}
+      </div>
       <div className="cc-stats">
-        <span className="ccs ccs-line" />
-        <span className="ccs ccs-line" />
+        {[0, 1, 2, 3, 4, 5].map((i) => <span key={i} className="ccs ccs-line" />)}
       </div>
-      <div className="cc-market">
-        <span className="ccs ccs-line" />
-        <span className="ccs ccs-line" />
-        <span className="ccs ccs-line" />
-      </div>
+      <span className="ccs ccs-foot" />
+    </div>
+  )
+}
+
+/**
+ * One aggregate figure in the page header.
+ *
+ * Built as its own glass panel rather than a cell in a strip, so the summary
+ * row belongs to the same family as the asset cards below it.
+ */
+function SummaryTile({ label, value, tone = '', icon: Icon, accent = 'cyan' }) {
+  return (
+    <div className={`home-tile accent-${accent}`}>
+      <span className="home-tile-icon" aria-hidden="true">
+        {Icon && <Icon size={15} />}
+      </span>
+      <span className="home-tile-body">
+        <span className="home-tile-label">{label}</span>
+        <span className={`home-tile-val ${tone}`}>{value}</span>
+      </span>
     </div>
   )
 }
@@ -37,12 +63,26 @@ function CardSkeleton() {
  * since no market API carries them.
  */
 export default function HomeView({ onSelectPairForChart }) {
-  const { data: assets, isLoading, isError } = useCoreAssets()
+  const { data: assets, isLoading, isError, isFetching } = useCoreAssets()
   const rows = assets || []
 
-  // Combined liquidity across the core set, as a header read on the ecosystem.
   const totalLiquidity = rows.reduce((sum, a) => sum + (a.liquidityUsd || 0), 0)
   const totalVolume = rows.reduce((sum, a) => sum + (a.volume24h || 0), 0)
+  const totalMarketCap = rows.reduce((sum, a) => sum + (a.marketCap || 0), 0)
+
+  // Aggregate move, weighted by market cap - a plain average would let the
+  // smallest asset swing the headline as hard as PLS.
+  const weighted = rows.reduce(
+    (acc, a) => {
+      if (a.change24h === null || !(a.marketCap > 0)) return acc
+      return { sum: acc.sum + a.change24h * a.marketCap, cap: acc.cap + a.marketCap }
+    },
+    { sum: 0, cap: 0 }
+  )
+  const avgChange = weighted.cap > 0 ? weighted.sum / weighted.cap : null
+  const avgUp = avgChange !== null && avgChange >= 0
+
+  const gainers = rows.filter((a) => a.change24h > 0).length
 
   const openChart = (asset) => {
     if (asset.pair) onSelectPairForChart?.(asset.pair)
@@ -51,38 +91,57 @@ export default function HomeView({ onSelectPairForChart }) {
   return (
     <div className="home-page">
       <header className="home-head">
-        <div className="home-brand">
-          <div className="home-badge">
-            <Home size={13} className="text-pulse-cyan" />
-            <span>CORE ASSETS</span>
+        <div className="home-title-block">
+          <div className="home-eyebrow">
+            <span className={`home-pulse ${isFetching ? 'is-live' : ''}`} aria-hidden="true" />
+            <span>PULSECHAIN · CORE ASSETS</span>
           </div>
+          <h1 className="home-title">Market Overview</h1>
           <p className="home-sub">
-            The backbone of the PulseChain ecosystem, priced live with on-chain supply.
+            The backbone of the ecosystem — priced live, with supply read straight
+            from the chain.
           </p>
         </div>
 
         {rows.length > 0 && (
-          <div className="home-totals font-mono">
-            <div className="home-total">
-              <span className="home-total-label">Assets</span>
-              <span className="home-total-val">{rows.length}</span>
-            </div>
-            <div className="home-total">
-              <span className="home-total-label">24h Volume</span>
-              <span className="home-total-val">{formatUsd(totalVolume, 1)}</span>
-            </div>
-            <div className="home-total">
-              <span className="home-total-label">Liquidity</span>
-              <span className="home-total-val text-pulse-green">
-                {formatUsd(totalLiquidity, 1)}
-              </span>
-            </div>
+          <div className="home-tiles">
+            <SummaryTile
+              label="Combined Cap"
+              value={formatUsd(totalMarketCap, 1)}
+              icon={Layers}
+              accent="cyan"
+            />
+            <SummaryTile
+              label="24h Volume"
+              value={formatUsd(totalVolume, 1)}
+              icon={BarChart3}
+              accent="purple"
+            />
+            <SummaryTile
+              label="Liquidity"
+              value={formatUsd(totalLiquidity, 1)}
+              icon={Droplets}
+              accent="blue"
+            />
+            <SummaryTile
+              label="Avg 24h"
+              value={formatPercent(avgChange, 2) || '—'}
+              tone={avgChange === null ? '' : avgUp ? 'is-up' : 'is-down'}
+              icon={avgUp ? TrendingUp : TrendingDown}
+              accent={avgUp ? 'green' : 'red'}
+            />
+            <SummaryTile
+              label="Gainers"
+              value={`${gainers}/${rows.length}`}
+              icon={Activity}
+              accent="green"
+            />
           </div>
         )}
       </header>
 
       {isError && !rows.length && (
-        <div className="home-state font-mono">
+        <div className="home-state">
           <AlertTriangle size={16} />
           <span>Market data unavailable right now.</span>
         </div>

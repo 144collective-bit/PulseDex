@@ -181,5 +181,11 @@ export function formatPercent(value, digits = 1) {
   if (value === null || value === undefined) return null
   const num = parseFloat(value)
   if (!isFinite(num)) return null
-  return `${num >= 0 ? '+' : ''}${num.toFixed(digits)}%`
+
+  const rounded = num.toFixed(digits)
+  // A move too small to survive rounding has no direction worth showing;
+  // without this a -0.04% tick prints as the nonsensical "-0.0%".
+  if (parseFloat(rounded) === 0) return `${Math.abs(Number(rounded)).toFixed(digits)}%`
+
+  return `${num >= 0 ? '+' : ''}${rounded}%`
 }

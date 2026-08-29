@@ -181,9 +181,12 @@
 }
 
 .brand-logo-img {
-  height: 56px;
-  width: 56px;
-  min-width: 56px;
+  /* Both marks scale from --brand-h on .logo-box (see the fluid tiers below),
+     so the brand grows with the header instead of stepping between fixed
+     sizes and leaving slack at every width in between. */
+  height: var(--brand-h, 74px);
+  width: var(--brand-h, 74px);
+  min-width: var(--brand-h, 74px);
   object-fit: contain;
   filter: drop-shadow(0 0 10px rgba(0, 229, 255, 0.9)) drop-shadow(0 0 20px rgba(217, 70, 239, 0.5));
   transition: all 0.25s ease;
@@ -196,8 +199,9 @@
 }
 
 .brand-text-img {
-  height: 54px;
-  max-width: 280px;
+  /* Slightly shorter than the mark so the two read as a matched pair. */
+  height: calc(var(--brand-h, 74px) * 0.86);
+  max-width: none;
   object-fit: contain;
   display: block;
   filter: drop-shadow(0 0 14px rgba(0, 229, 255, 0.5)) drop-shadow(0 0 28px rgba(0, 255, 157, 0.3));
@@ -6464,12 +6468,6 @@
     flex-shrink: 0;
   }
 
-  /* Wordmark stays visible on tablet, just scaled to the shorter bar. */
-  .brand-text-img {
-    height: 34px;
-    max-width: 150px;
-  }
-
   .nav-tabs {
     min-width: 0;
     overflow-x: auto;
@@ -6570,11 +6568,6 @@
   .logo-image-container {
     width: 42px;
     height: 42px;
-  }
-
-  .brand-text-img {
-    height: 28px;
-    max-width: 124px;
   }
 
   .wallet-addr-label {
@@ -10980,9 +10973,9 @@
 
   /* 2. Top Header & Navbar */
   .main-nav {
-    padding: 6px 10px;
+    padding: 8px 10px;
     height: auto;
-    min-height: 50px;
+    min-height: 58px;
   }
 
   .logo-box {
@@ -10991,18 +10984,9 @@
     padding: 2px 0;
   }
 
-  .brand-logo-img {
-    width: 32px;
-    height: 32px;
-    min-width: 32px;
-    filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.8));
-  }
 
-  /* Phone: the wordmark is the brand, so it shrinks rather than disappears. */
   .brand-text-img {
-    height: 24px;
-    max-width: 104px;
-    filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.45));
+    filter: drop-shadow(0 0 9px rgba(0, 229, 255, 0.5));
   }
 
   .nav-right {
@@ -13942,4 +13926,173 @@
 
 @media (prefers-reduced-motion: reduce) {
   .token-launch-dot { animation: none; }
+}
+
+/* ==========================================================================
+   NARROW PHONES (<=360px)
+   The 768px tier sizes the brand against the ~126px of slack a 375px header
+   carries. At 320px that slack is only 9px, so the mark and wordmark step
+   down rather than crowd the BUY $DEX button.
+   ========================================================================== */
+@media (max-width: 360px) {
+
+  .main-nav {
+    min-height: 52px;
+  }
+}
+
+/* ==========================================================================
+   MEDIUM VIEW (769-1150px) - header rebalance
+
+   Between the mobile bottom nav and the full desktop bar, six labelled tabs
+   plus the brand plus the BUY button do not fit: at 1024px the tab strip was
+   already overflowing its own container (578px of tabs in 576px of space) and
+   scrolling sideways, which left the brand looking cramped and undersized.
+
+   Space is reclaimed from the tab strip so the brand can grow into the header
+   it already occupies, rather than the other way round.
+   ========================================================================== */
+@media (min-width: 769px) and (max-width: 1150px) {
+  .main-nav {
+    padding: 10px 16px;
+    gap: 14px;
+  }
+
+  .nav-left { gap: 14px; }
+  .logo-box { gap: 10px; flex-shrink: 0; }
+
+  /*
+   * The tab strip is centred in whatever space is left between the brand and
+   * the actions. Previously it sat hard against the brand and all the slack
+   * collected in one dead gap before the BUY button, which left the brand
+   * looking stranded at the far left of an empty bar.
+   */
+  .nav-tabs {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* Compact tabs: the space the brand needs comes from here. */
+  .btn-tab {
+    padding: 7px 9px;
+    font-size: 12px;
+    gap: 5px;
+  }
+
+  .btn-tab svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+/* Below ~900px even compact labels stop fitting. Inactive tabs fall back to
+   their icon while the active one keeps its label, so the bar still says where
+   you are without scrolling sideways. */
+@media (min-width: 769px) and (max-width: 1150px) {
+  .btn-tab {
+    padding: 7px 10px;
+  }
+
+  .btn-tab > span {
+    display: none;
+  }
+
+  .btn-tab.active > span {
+    display: inline;
+  }
+
+  .btn-tab svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+/* With the tab strip reduced to icons, the freed width goes to the brand -
+   this is the range where it previously looked smallest. */
+/* The narrow end of the range cannot carry the full-size brand alongside six
+   icons and the actions, so it steps back down. */
+@media (min-width: 769px) and (max-width: 849px) {
+  .main-nav { padding: 10px 12px; gap: 10px; }
+  .nav-left { gap: 10px; }
+
+}
+
+/*
+ * 1151-1340px: the desktop search input returns here, and full-size tabs
+ * (674px) plus the larger brand overflowed the bar by ~84px. Tabs keep their
+ * labels but stay compact through this band so the search has room to breathe
+ * instead of collapsing to a stub.
+ */
+@media (min-width: 1151px) and (max-width: 1340px) {
+  .btn-tab {
+    padding: 7px 9px;
+    font-size: 12px;
+    gap: 5px;
+  }
+
+  .btn-tab svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .nav-left { gap: 14px; }
+  .logo-box { gap: 10px; flex-shrink: 0; }
+}
+
+/* ==========================================================================
+   GLASS SURFACES
+   The page background carries soft radial washes, so translucent chrome with a
+   real blur has something to refract instead of looking like flat grey.
+   ========================================================================== */
+.navbar-container {
+  background: linear-gradient(
+    180deg,
+    rgba(10, 14, 22, 0.92),
+    rgba(8, 11, 17, 0.82)
+  );
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04), 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+/* ==========================================================================
+   BRAND SCALE
+
+   One fluid height drives the mark and the wordmark. The bands differ only in
+   how much of the bar is already spoken for:
+
+   - up to 768px the tab strip is gone (the bottom nav takes over), so the
+     header is nearly empty and the brand can grow into it. This band was
+     previously stuck at the 42px phone size, leaving ~600px of blank bar at
+     737px wide - the width this was reported at.
+   - from 769px the tab strip returns and the brand is sized against what is
+     left after it and the actions.
+   ========================================================================== */
+.logo-box {
+  --brand-h: 74px;
+}
+
+@media (max-width: 768px) {
+  .logo-box {
+    --brand-h: clamp(42px, 10vw, 74px);
+  }
+}
+
+/* Smallest phones: the actions leave too little room for the fluid floor. */
+@media (max-width: 360px) {
+  .logo-box {
+    --brand-h: 34px;
+  }
+}
+
+/*
+ * 769px and up: the space left after the tab strip and the actions is roughly
+ * (viewport - 520px), and the brand occupies about five times its own height
+ * once the wordmark is counted - hence the divisor. Clamped so it never
+ * crowds the tabs at the low end or becomes oversized at the high end.
+ */
+@media (min-width: 769px) {
+  .logo-box {
+    --brand-h: clamp(60px, calc((100vw - 520px) / 5), 84px);
+  }
 }

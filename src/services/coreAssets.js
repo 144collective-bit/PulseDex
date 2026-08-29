@@ -146,13 +146,25 @@ export async function getCoreAssets() {
       pairAddress: pair?.pairAddress || null,
       logoUrl: pair?.info?.imageUrl || null,
       priceUsd,
+      // Four windows of momentum, which is what the card charts instead of a
+      // sparkline - there is no free price history endpoint for these pairs,
+      // and these values are reported directly.
+      change5m: pair?.priceChange?.m5 ?? null,
+      change1h: pair?.priceChange?.h1 ?? null,
+      change6h: pair?.priceChange?.h6 ?? null,
       change24h: pair?.priceChange?.h24 ?? null,
+
       volume24h: parseFloat(pair?.volume?.h24 || 0),
       liquidityUsd: parseFloat(pair?.liquidity?.usd || 0),
       marketCap,
       supply,
       // Native PLS has no ERC20 burn balance to read.
       burned: asset.isNative ? null : onChain.burned ?? null,
+
+      // Order flow over the last day, used for the buy/sell pressure bar.
+      buys24h: pair?.txns?.h24?.buys ?? 0,
+      sells24h: pair?.txns?.h24?.sells ?? 0,
+      venue: pair?.dexId || null,
     }
   })
 }
