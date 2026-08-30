@@ -1,0 +1,219 @@
+/* ==========================================================================
+   PORTFOLIO SECTION
+
+   Header and chrome deliberately mirror the Home board: same eyebrow, same
+   gradient title, same glass surfaces and numeric typeface, so moving between
+   the two tabs feels like one product rather than two.
+   ========================================================================== */
+
+.pf-section {
+  --pf-hairline: rgba(255, 255, 255, 0.06);
+  --pf-surface: rgba(16, 22, 34, 0.72);
+  --pf-label: rgba(148, 163, 184, 0.85);
+
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px 20px 34px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--pf-hairline);
+}
+
+.pf-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.pf-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-numeric);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--pulse-cyan);
+}
+
+.pf-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pulse-cyan);
+  box-shadow: 0 0 8px var(--pulse-cyan);
+}
+
+.pf-title {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+  color: var(--text-primary);
+  background: linear-gradient(180deg, #ffffff 25%, #b9c6d8 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.pf-sub {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  max-width: 48ch;
+}
+
+/* Segmented control, built on the same glass panel as the Home tiles. */
+.pf-switch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--pf-hairline);
+  border-radius: var(--radius-md);
+  background: var(--pf-surface);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  backdrop-filter: blur(14px) saturate(130%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 10px 26px rgba(0, 0, 0, 0.22);
+}
+
+.pf-switch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.pf-switch-btn:hover { color: var(--text-primary); }
+
+.pf-switch-btn.active {
+  color: var(--text-primary);
+  background: linear-gradient(
+    180deg,
+    rgba(0, 229, 255, 0.14),
+    rgba(0, 229, 255, 0.04) 70%
+  );
+  border-color: rgba(0, 229, 255, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.pf-switch-count {
+  padding: 1px 7px;
+  font-family: var(--font-numeric);
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--pulse-yellow);
+  background: rgba(251, 191, 36, 0.14);
+  border-radius: var(--radius-full);
+}
+
+.pf-body { min-height: 0; }
+
+/* The wrapper already supplies the page padding. */
+.pf-body > * { padding-left: 0; padding-right: 0; }
+
+@media (max-width: 760px) {
+  .pf-section { padding: 14px 12px 26px; gap: 14px; }
+  .pf-head { gap: 14px; padding-bottom: 14px; }
+  .pf-title { font-size: 23px; }
+  .pf-sub { display: none; }
+  .pf-switch { width: 100%; }
+  .pf-switch-btn { flex: 1; justify-content: center; padding: 10px 8px; }
+}
+
+/* --------------------------------------------------------------------------
+   Inner content, restyled to the Home language
+
+   PortfolioView and WatchlistView predate the Home redesign, so rather than
+   rewriting both they are brought up to the same surface treatment here.
+   Scoped to .pf-section so nothing else in the app shifts.
+   -------------------------------------------------------------------------- */
+
+/* Figures use the interface typeface, as on Home. Addresses and hashes keep
+   the mono face, which is what it is actually for. */
+.pf-section .font-mono:not(.pf-address):not(code) {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Panels pick up the card treatment: blur, lit rim, layered shadow. */
+.pf-section .glass-panel,
+.pf-section .portfolio-card {
+  background:
+    radial-gradient(130% 90% at 0% 0%, rgba(0, 229, 255, 0.04), transparent 62%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 30%),
+    var(--pf-surface);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+  backdrop-filter: blur(16px) saturate(130%);
+  border: 1px solid var(--pf-hairline);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 2px 8px rgba(0, 0, 0, 0.24),
+    0 16px 40px rgba(0, 0, 0, 0.22);
+  transition:
+    border-color 0.22s ease,
+    transform 0.22s cubic-bezier(0.2, 0.8, 0.3, 1),
+    box-shadow 0.22s ease;
+}
+
+.pf-section .portfolio-card:hover {
+  border-color: rgba(0, 229, 255, 0.22);
+  transform: translateY(-4px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 4px 14px rgba(0, 0, 0, 0.3),
+    0 26px 60px rgba(0, 0, 0, 0.42);
+}
+
+/* Section headings match the card labels on Home: small, wide, receding. */
+.pf-section .card-title {
+  font-family: var(--font-numeric);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--pf-label);
+}
+
+/* The headline balance is the page's equivalent of a card price. */
+.pf-section .net-worth-value {
+  font-family: var(--font-numeric);
+  font-size: 34px;
+  font-weight: 780;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-section .net-worth-sub {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 760px) {
+  .pf-section .net-worth-value { font-size: 27px; }
+}

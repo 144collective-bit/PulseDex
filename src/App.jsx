@@ -16,8 +16,7 @@ import TradingChart from './components/TradingChart'
 import TradeHistory from './components/TradeHistory'
 import TokenDetails from './components/TokenDetails'
 import MarketOverview from './components/MarketOverview'
-import PortfolioView from './components/PortfolioView'
-import WatchlistView from './components/WatchlistView'
+import PortfolioSection from './components/PortfolioSection'
 import TrenchesView from './components/TrenchesView'
 import DexView from './components/DexView'
 import DexComingSoon from './components/DexComingSoon'
@@ -247,12 +246,10 @@ function MainApp() {
           />
         )}
 
-        {activeTab === 'portfolio' && (
-          <PortfolioView onSelectTokenForChart={handleSelectPair} />
-        )}
-
-        {activeTab === 'watchlist' && (
-          <WatchlistView
+        {/* Watchlist now lives inside the portfolio section rather than in
+            its own nav slot - both are ways of tracking assets you care about. */}
+        {(activeTab === 'portfolio' || activeTab === 'watchlist') && (
+          <PortfolioSection
             watchlist={watchlist}
             pairs={topPairs}
             onSelectPair={handleSelectPair}

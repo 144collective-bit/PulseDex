@@ -6,7 +6,22 @@
  * would happily show an impostor.
  */
 
-/** Standard burn sink. Tokens sent here are treated as removed from supply. */
+/**
+ * Burn sinks. Tokens held at any of these are treated as removed from supply.
+ *
+ * The dead address alone is not enough on PulseChain: the chain's own 0x…0369
+ * address holds far more than it does for several assets (163B of the 166B of
+ * burned PLS, and 32B of PLSX). Summing all four reproduces the burn totals
+ * published by plsfolio exactly for HEX, eHEX, INC, PLS and PRVX.
+ */
+export const BURN_ADDRESSES = [
+  '0x0000000000000000000000000000000000000369',
+  '0x000000000000000000000000000000000000dEaD',
+  '0x0000000000000000000000000000000000000000',
+  '0x0000000000000000000000000000000000005555',
+]
+
+/** Kept for callers that only need the conventional sink. */
 export const BURN_ADDRESS = '0x000000000000000000000000000000000000dEaD'
 
 /**

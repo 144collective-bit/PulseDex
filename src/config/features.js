@@ -33,7 +33,6 @@ export const VISIBLE_TABS = [
   'dex',
   ...(FEATURES.markets ? ['markets'] : []),
   'portfolio',
-  'watchlist',
   ...(FEATURES.profile ? ['profile'] : []),
 ]
 

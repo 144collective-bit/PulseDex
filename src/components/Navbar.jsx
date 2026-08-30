@@ -7,7 +7,6 @@ import {
   Wallet,
   TrendingUp,
   PieChart,
-  Star,
   ExternalLink,
   ChevronDown,
   LogOut,
@@ -201,14 +200,6 @@ export default function Navbar({
             >
               <PieChart size={16} />
               <span>Portfolio</span>
-            </button>
-            <button
-              className={`btn-tab ${activeTab === 'watchlist' ? 'active' : ''}`}
-              onClick={() => setActiveTab('watchlist')}
-            >
-              <Star size={16} />
-              <span>Watchlist</span>
-              {watchlistCount > 0 && <span className="tab-count-badge">{watchlistCount}</span>}
             </button>
             {FEATURES.profile && (
               <button

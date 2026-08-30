@@ -1,6 +1,6 @@
 import { createPublicClient, http, parseAbi, formatUnits } from 'viem'
 import { pulsechain } from '../config/pulsechain'
-import { CORE_ASSETS, BURN_ADDRESS, WPLS_ADDRESS } from '../config/coreAssets'
+import { CORE_ASSETS, BURN_ADDRESSES, WPLS_ADDRESS } from '../config/coreAssets'
 import { getPairsByTokens, getPulsePair } from './dexscreener'
 
 /**
@@ -31,14 +31,17 @@ const ERC20_ABI = parseAbi([
 async function fetchSupplyData() {
   const erc20s = CORE_ASSETS.filter((a) => !a.isNative)
 
+  // One totalSupply plus one balanceOf per burn sink, for every asset.
+  const perAsset = 1 + BURN_ADDRESSES.length
+
   const contracts = erc20s.flatMap((asset) => [
     { address: asset.address, abi: ERC20_ABI, functionName: 'totalSupply' },
-    {
+    ...BURN_ADDRESSES.map((sink) => ({
       address: asset.address,
       abi: ERC20_ABI,
       functionName: 'balanceOf',
-      args: [BURN_ADDRESS],
-    },
+      args: [sink],
+    })),
   ])
 
   const byId = {}
@@ -48,21 +51,26 @@ async function fetchSupplyData() {
     const results = await client.multicall({ contracts, allowFailure: true })
 
     erc20s.forEach((asset, i) => {
-      const supplyRes = results[i * 2]
-      const burnedRes = results[i * 2 + 1]
+      const base = i * perAsset
+      const supplyRes = results[base]
 
       const rawSupply =
         supplyRes?.status === 'success' ? supplyRes.result : null
-      const rawBurned =
-        burnedRes?.status === 'success' ? burnedRes.result : null
+      const total =
+        rawSupply === null ? null : parseFloat(formatUnits(rawSupply, asset.decimals))
+
+      // Sum every sink. A sink that fails contributes nothing rather than
+      // voiding the figure.
+      let burned = null
+      BURN_ADDRESSES.forEach((_, s) => {
+        const res = results[base + 1 + s]
+        if (res?.status !== 'success') return
+        const amt = parseFloat(formatUnits(res.result, asset.decimals))
+        burned = (burned || 0) + amt
+      })
 
       // Burned tokens still count in totalSupply, so subtract them out to get
       // what is actually live.
-      const total =
-        rawSupply === null ? null : parseFloat(formatUnits(rawSupply, asset.decimals))
-      const burned =
-        rawBurned === null ? null : parseFloat(formatUnits(rawBurned, asset.decimals))
-
       byId[asset.id] = {
         supply: total === null ? null : Math.max(0, total - (burned || 0)),
         burned,
@@ -73,6 +81,25 @@ async function fetchSupplyData() {
   }
 
   return byId
+}
+
+/**
+ * Native PLS held at the burn sinks. It has no ERC20 contract, so these are
+ * account balances rather than token balances.
+ */
+async function fetchNativeBurned() {
+  try {
+    const balances = await Promise.all(
+      BURN_ADDRESSES.map((address) => client.getBalance({ address }))
+    )
+    return balances.reduce(
+      (sum, wei) => sum + parseFloat(formatUnits(wei, 18)),
+      0
+    )
+  } catch (err) {
+    console.warn('native burn read failed:', err.message)
+    return null
+  }
 }
 
 /**
@@ -114,10 +141,11 @@ export async function getCoreAssets() {
   // Assets that name an explicit pool are fetched by pair address instead.
   const pinned = CORE_ASSETS.filter((a) => a.pairAddress)
 
-  const [pairGroups, pinnedPairs, supplyById] = await Promise.all([
+  const [pairGroups, pinnedPairs, supplyById, nativeBurned] = await Promise.all([
     Promise.all(addresses.map((address) => getPairsByTokens([address]))),
     Promise.all(pinned.map((a) => getPulsePair(a.pairAddress))),
     fetchSupplyData(),
+    fetchNativeBurned(),
   ])
 
   const pairs = pairGroups.flat()
@@ -158,8 +186,8 @@ export async function getCoreAssets() {
       liquidityUsd: parseFloat(pair?.liquidity?.usd || 0),
       marketCap,
       supply,
-      // Native PLS has no ERC20 burn balance to read.
-      burned: asset.isNative ? null : onChain.burned ?? null,
+      // Native PLS is read from account balances, not an ERC20 contract.
+      burned: asset.isNative ? nativeBurned : onChain.burned ?? null,
 
       // Order flow over the last day, used for the buy/sell pressure bar.
       buys24h: pair?.txns?.h24?.buys ?? 0,
