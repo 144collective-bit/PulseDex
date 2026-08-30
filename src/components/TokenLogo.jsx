@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getTokenLogoUrl, TOKEN_LOGO_MAP } from '../utils/tokenLogos'
+import { plsfolioLogoUrl } from '../utils/plsfolioLogos'
 
 export default function TokenLogo({
   symbol = 'PLS',
@@ -39,7 +40,16 @@ export default function TokenLogo({
       if (!candidates.includes(dsUrl)) candidates.push(dsUrl)
     }
 
-    // 5. TrustWallet Ethereum bridged asset
+    // 5. Curated PulseChain artwork, by address.
+    //
+    //    Sits after DexScreener so tokens that already show correctly are left
+    //    alone, and before TrustWallet, which only knows bridged Ethereum
+    //    assets and misses almost everything native to this chain. Address-keyed
+    //    only - symbols are not unique here.
+    const pfUrl = plsfolioLogoUrl(cleanAddr)
+    if (pfUrl && !candidates.includes(pfUrl)) candidates.push(pfUrl)
+
+    // 6. TrustWallet Ethereum bridged asset
     if (cleanAddr && cleanAddr.startsWith('0x') && cleanAddr.length === 42) {
       const twUrl = `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/${cleanAddr}/logo.png`
       if (!candidates.includes(twUrl)) candidates.push(twUrl)
