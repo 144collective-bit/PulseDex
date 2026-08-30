@@ -22,7 +22,7 @@ import '../styles/trenches.css'
  * The previous curated link directory lives on in EcosystemDirectory.jsx and is
  * restored by setting FEATURES.trenchesLive to false.
  */
-export default function TrenchesView() {
+export default function TrenchesView({ onOpenTokenPage }) {
   const [search, setSearch] = useState('')
   const [selectedToken, setSelectedToken] = useState(null)
   const [mobilePanel, setMobilePanel] = useState('new')
@@ -191,6 +191,10 @@ export default function TrenchesView() {
           token={selectedToken}
           plsPrice={plsPrice}
           onClose={() => setSelectedToken(null)}
+          onOpenFullPage={(t) => {
+            setSelectedToken(null)
+            onOpenTokenPage?.(t.address)
+          }}
         />
       )}
     </div>

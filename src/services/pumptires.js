@@ -50,6 +50,20 @@ export function ipfsImageUrl(cid) {
   return `${IPFS_CDN}${cid.trim()}`
 }
 
+/**
+ * Social fields arrive inconsistently: `web` is a full URL, while `twitter` and
+ * `telegram` are usually bare handles ("JabroniPulse") and occasionally full
+ * links. A bare handle fails URL validation and renders as a dead link, so
+ * handles are expanded onto their platform here.
+ */
+function socialUrl(value, base) {
+  const raw = (value || '').trim()
+  if (!raw) return null
+  if (/^https?:\/\//i.test(raw)) return raw
+  if (!base) return `https://${raw.replace(/^\/+/, '')}`
+  return `${base}${raw.replace(/^@/, '').replace(/^\/+/, '')}`
+}
+
 /** Convert a PLS-denominated value from the API into USD. */
 export function plsToUsd(plsValue, plsPrice) {
   const val = parseFloat(plsValue || 0)
@@ -80,9 +94,9 @@ export function normalizeToken(raw) {
     description: raw.description || '',
 
     // Socials and counts the detail endpoint carries but nothing consumed yet.
-    twitter: raw.twitter || null,
-    telegram: raw.telegram || null,
-    website: raw.web || null,
+    twitter: socialUrl(raw.twitter, 'https://x.com/'),
+    telegram: socialUrl(raw.telegram, 'https://t.me/'),
+    website: socialUrl(raw.web, null),
     tradesCount: Number(raw.total_trades_count || 0),
     burnsCount: Number(raw.total_burns_count || 0),
     // Raw CID travels with the token so the avatar can pick a live gateway;
@@ -108,8 +122,16 @@ export function normalizeToken(raw) {
     pairAddress: raw.pair_address || null,
     lockedLp: raw.locked_lp,
 
-    creatorAddress: raw.creator_address || '',
-    creatorUsername: raw.creator_username || '',
+    // The deployer arrives as a nested object, not flat creator_* fields - the
+    // previous flat reads always resolved to empty, so the deployer panel had
+    // nothing to show even where the API supplied a full profile.
+    creatorAddress: raw.creator?.address || '',
+    creatorUsername: raw.creator?.username || '',
+    creatorBio: raw.creator?.bio || '',
+    creatorTwitter: socialUrl(raw.creator?.twitter_username, 'https://x.com/'),
+    creatorAvatarCid: isValidCid(raw.creator?.avatar_cid)
+      ? raw.creator.avatar_cid.trim()
+      : null,
     createdAt: Number(raw.created_timestamp || 0),
     launchedAt: Number(raw.launch_timestamp || 0),
     lastActivityAt: Number(raw.latest_activity_timestamp || 0),

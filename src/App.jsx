@@ -7,6 +7,9 @@ import { getPulsePair, getTopPulsePairs } from './services/dexscreener'
 import { TrendingUp, Zap, Layers, Flame } from 'lucide-react'
 
 import HomeView from './components/HomeView'
+import TokenPage from './components/TokenPage'
+import { useTokenRoute } from './hooks/useTokenRoute'
+import { usePlsPrice } from './hooks/usePumpTires'
 import Navbar from './components/Navbar'
 import MobileBottomNav from './components/MobileBottomNav'
 import TickerMarquee from './components/TickerMarquee'
@@ -35,6 +38,12 @@ const queryClient = new QueryClient()
 
 function MainApp() {
   const [activeTab, setActiveTab] = useState('home')
+
+  // /token/<address> renders the full token page over the tab shell.
+  const { tokenAddress, openToken, closeToken } = useTokenRoute()
+
+  // Curve prices are PLS-denominated, so the token page needs the live rate.
+  const { data: plsPrice } = usePlsPrice()
   const [currentPair, setCurrentPair] = useState(null)
   const [topPairs, setTopPairs] = useState([])
   const [isLoadingTopPairs, setIsLoadingTopPairs] = useState(true)
@@ -133,6 +142,16 @@ function MainApp() {
 
       {/* Main Views */}
       <main className="app-main-content">
+        {/* A direct /token/<address> link takes over the content area; the tab
+            shell stays mounted underneath so Back returns to it instantly. */}
+        {tokenAddress ? (
+          <TokenPage
+            address={tokenAddress}
+            plsPrice={plsPrice}
+            onBack={closeToken}
+          />
+        ) : (
+        <>
         {activeTab === 'screener' && (
           <div className="screener-view-wrapper">
             {/* Mobile Screener Segment Control (Full-Width Responsive Menu) */}
@@ -223,7 +242,7 @@ function MainApp() {
         )}
 
         {activeTab === 'trenches' && (
-          <TrenchesView onSelectPairForChart={handleSelectPair} />
+          <TrenchesView onSelectPairForChart={handleSelectPair} onOpenTokenPage={openToken} />
         )}
 
         {activeTab === 'dex' &&
@@ -260,6 +279,8 @@ function MainApp() {
         {FEATURES.profile && activeTab === 'profile' && <ProfileView />}
 
         {activeTab === 'token' && <TokenLaunchView />}
+        </>
+        )}
       </main>
 
       {/* Mobile Native Bottom Navigation */}

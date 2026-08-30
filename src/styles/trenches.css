@@ -1661,3 +1661,497 @@
   .tm-symbol { font-size: 19px; }
   .tm-name { font-size: 12px; }
 }
+
+/* ==========================================================================
+   TOKEN DETAIL - chart controls and trade tape
+   ========================================================================== */
+
+.tm-chart-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tm-mode-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--tr-hairline);
+  border-radius: var(--radius-sm);
+}
+
+.tm-mode {
+  padding: 4px 11px;
+  font-family: var(--font-instrument);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tm-mode:hover { color: var(--text-primary); }
+
+.tm-mode.active {
+  color: #04070d;
+  background: var(--pulse-cyan);
+}
+
+/* --------------------------------------------------------------------------
+   Trade rows
+
+   Side is carried by a translucent wash across the row and by the colour of
+   every secondary figure, so direction registers before any number is read.
+   Column widths are rebalanced: value and maker lead, tokens and PLS follow.
+   -------------------------------------------------------------------------- */
+.tm-table-labels.is-trades,
+.tm-trade {
+  grid-template-columns: 52px 96px minmax(0, 0.9fr) minmax(0, 0.9fr) minmax(0, 1.1fr) 52px;
+}
+
+.tm-trade {
+  position: relative;
+  isolation: isolate;
+  align-items: center;
+  border-left: none;
+}
+
+/* The wash sits behind the figures and scales with trade size. */
+.tm-trade-wash {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: -1;
+  border-radius: 0 3px 3px 0;
+  pointer-events: none;
+}
+
+.tm-trade.is-buy .tm-trade-wash {
+  background: linear-gradient(90deg, rgba(0, 255, 157, 0.22), rgba(0, 255, 157, 0.04));
+}
+
+.tm-trade.is-sell .tm-trade-wash {
+  background: linear-gradient(90deg, rgba(244, 63, 94, 0.22), rgba(244, 63, 94, 0.04));
+}
+
+/* Whales get a brighter wash and a lit edge. */
+.tm-trade.size-whale .tm-trade-wash { filter: brightness(1.5); }
+.tm-trade.size-whale { box-shadow: inset 2px 0 0 currentColor; }
+.tm-trade.size-whale.is-buy { color: var(--pulse-green); }
+.tm-trade.size-whale.is-sell { color: var(--pulse-red); }
+
+.tm-trade-side {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.tm-trade-usd {
+  font-family: var(--font-numeric);
+  font-size: 16px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+/* Tokens, PLS and maker take the side's colour rather than sitting muted. */
+.tm-trade-fig,
+.tm-trade-maker {
+  font-family: var(--font-instrument);
+  font-size: 13.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.tm-trade.is-buy .tm-trade-fig,
+.tm-trade.is-buy .tm-trade-maker { color: var(--pulse-green); }
+
+.tm-trade.is-sell .tm-trade-fig,
+.tm-trade.is-sell .tm-trade-maker { color: var(--pulse-red); }
+
+.tm-trade-maker { opacity: 0.85; }
+
+.tm-trade-age {
+  font-family: var(--font-instrument);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.tm-trade:hover { background: rgba(255, 255, 255, 0.04); }
+
+@media (max-width: 900px) {
+  .tm-table-labels.is-trades,
+  .tm-trade { grid-template-columns: 46px 84px minmax(0, 1fr) 46px; }
+  .tm-trade-usd { font-size: 15px; }
+  .tm-trade-fig, .tm-trade-maker { font-size: 12.5px; }
+}
+
+/* ==========================================================================
+   TOKEN DETAIL - insights dashboard
+   ========================================================================== */
+
+.tm-insights {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0 20px 16px;
+}
+
+.tmi-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  background: rgba(0, 0, 0, 0.26);
+  border: 1px solid var(--tr-hairline);
+  border-radius: var(--radius-md);
+}
+
+.tmi-wide { grid-column: 1 / -1; }
+
+.tmi-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tmi-head h4 {
+  font-family: var(--font-instrument);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* Concentration bar */
+.tmi-dist-bar {
+  display: flex;
+  height: 12px;
+  gap: 2px;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tmi-seg { display: block; height: 100%; }
+
+.band-1 { background: var(--pulse-red); }
+.band-2 { background: var(--pulse-yellow); }
+.band-3 { background: var(--pulse-cyan); }
+.band-4 { background: var(--pulse-green); }
+
+.tmi-legend {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 14px;
+  list-style: none;
+}
+
+.tmi-legend li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+}
+
+.tmi-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.tmi-legend-label { color: var(--text-muted); }
+
+.tmi-legend-val {
+  margin-left: auto;
+  font-family: var(--font-numeric);
+  font-size: 13px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.tmi-verdict {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+
+.tone-ok { color: var(--pulse-green); background: var(--pulse-green-bg); border-color: rgba(0, 255, 157, 0.28); }
+.tone-warn { color: var(--pulse-yellow); background: rgba(251, 191, 36, 0.12); border-color: rgba(251, 191, 36, 0.3); }
+.tone-bad { color: var(--pulse-red); background: var(--pulse-red-bg); border-color: rgba(244, 63, 94, 0.3); }
+
+/* Deployer rows */
+.tmi-rows { display: flex; flex-direction: column; gap: 9px; }
+
+.tmi-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+}
+
+.tmi-row-label { color: var(--text-muted); }
+
+.tmi-row-val {
+  font-family: var(--font-instrument);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: right;
+}
+
+.tmi-row-val.is-ok { color: var(--pulse-green); }
+.tmi-row-val.is-warn { color: var(--pulse-yellow); }
+
+.tmi-note,
+.tmi-empty {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* Largest holders */
+.tmi-holders { display: flex; flex-direction: column; gap: 9px; list-style: none; }
+
+.tmi-holders li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 130px 62px 80px;
+  align-items: center;
+  gap: 12px;
+  font-size: 12.5px;
+}
+
+.tmi-h-rank {
+  font-family: var(--font-instrument);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.tmi-h-name { color: var(--text-secondary); }
+
+.tmi-h-bar {
+  display: block;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.tmi-h-bar > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--pulse-cyan), var(--pulse-green));
+  border-radius: var(--radius-full);
+}
+
+.tmi-h-pct,
+.tmi-h-bal {
+  font-family: var(--font-numeric);
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.tmi-h-pct { color: var(--pulse-cyan); font-size: 13px; }
+.tmi-h-bal { color: var(--text-muted); font-size: 12px; }
+
+/* Whale filter */
+.tm-whale {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 5px 11px;
+  font-family: var(--font-instrument);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--tr-hairline);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.tm-whale:hover { color: var(--text-primary); }
+
+.tm-whale.active {
+  color: var(--pulse-cyan);
+  background: var(--pulse-cyan-bg);
+  border-color: rgba(0, 229, 255, 0.4);
+}
+
+.tm-link-primary {
+  color: #04070d;
+  background: linear-gradient(135deg, var(--pulse-cyan), var(--pulse-green));
+  border-color: transparent;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* New trades slide in rather than the table silently re-rendering. */
+@keyframes tmTradeIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.tm-trade { animation: tmTradeIn 0.3s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tm-trade { animation: none; }
+}
+
+@media (max-width: 900px) {
+  .tm-insights {
+    grid-template-columns: minmax(0, 1fr);
+    margin-left: 12px;
+    margin-right: 12px;
+  }
+
+  .tmi-holders li { grid-template-columns: 20px minmax(0, 1fr) 56px 70px; }
+  .tmi-h-bar { display: none; }
+}
+
+/* ==========================================================================
+   TOKEN PAGE - /token/<address>
+
+   The same panel body as the modal, wrapped in page chrome instead of a
+   backdrop. Keeping one component means the two can never drift apart.
+   ========================================================================== */
+.token-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: var(--page-max);
+  margin-inline: auto;
+  padding: 16px 18px 34px;
+}
+
+.token-page-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  padding: 8px 14px;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--tr-hairline);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.token-page-back:hover {
+  color: var(--text-primary);
+  border-color: rgba(0, 229, 255, 0.3);
+}
+
+.token-page-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 60px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.token-page-state.is-error { color: var(--pulse-red); }
+
+/* Page variant: no dialog cap, no inner scroll - the page scrolls. */
+.trench-modal.is-page {
+  width: 100%;
+  max-height: none;
+  overflow: visible;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 16px 44px rgba(0, 0, 0, 0.3);
+}
+
+.trench-modal.is-page .tm-table-scroll { max-height: 420px; }
+
+/* Deployer identity */
+.tmi-deployer-id {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tmi-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid rgba(0, 229, 255, 0.28);
+  background: #0d131e;
+}
+
+.tmi-avatar.is-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-instrument);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--pulse-cyan);
+}
+
+.tmi-deployer-name {
+  font-family: var(--font-numeric);
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.tmi-deployer-link {
+  margin-left: auto;
+  padding: 3px 10px;
+  font-family: var(--font-instrument);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--pulse-cyan);
+  background: var(--pulse-cyan-bg);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  border-radius: var(--radius-full);
+  text-decoration: none;
+}
+
+.tmi-bio {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* Graduated tokens render DexScreener's chart in place of the native one. */
+.tm-chart-embed {
+  display: block;
+  width: 100%;
+  height: 420px;
+  border: none;
+  background: #0b0f18;
+}
+
+@media (max-width: 900px) {
+  .tm-chart-embed { height: 300px; }
+}

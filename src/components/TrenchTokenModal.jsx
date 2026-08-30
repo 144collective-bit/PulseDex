@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { createChart, CandlestickSeries, HistogramSeries } from 'lightweight-charts'
+import {
+  createChart,
+  CandlestickSeries,
+  HistogramSeries,
+  AreaSeries,
+} from 'lightweight-charts'
 import {
   X,
   ExternalLink,
@@ -10,8 +15,11 @@ import {
   Flame,
   Globe,
   Send,
+  Filter,
+  Maximize2,
 } from 'lucide-react'
 import TrenchTokenLogo from './TrenchTokenLogo'
+import TokenInsights from './TokenInsights'
 import {
   useTokenCandles,
   useTokenTransactions,
@@ -41,6 +49,26 @@ function formatPlsAxis(value) {
   if (num >= 0.001) return num.toFixed(5)
   if (num >= 0.000001) return num.toFixed(8)
   return num.toExponential(2)
+}
+
+/** USD floor for the whale filter and the top size band. */
+const WHALE_FLOOR = 250
+
+/** Size band for a trade, used for colour weight and the row wash. */
+function sizeBand(usd) {
+  if (usd >= 250) return 'whale'
+  if (usd >= 50) return 'lg'
+  if (usd >= 10) return 'md'
+  return 'sm'
+}
+
+/**
+ * How far the row wash extends. Capped so a single outlier doesn't flood every
+ * row; $500 is treated as full width.
+ */
+function washWidth(usd) {
+  const pct = (Math.max(0, usd) / 500) * 100
+  return Math.max(6, Math.min(100, pct))
 }
 
 /** One labelled figure in the stat grid. */
@@ -73,10 +101,23 @@ function ChangeChip({ label, value }) {
  * They are deliberately not converted to USD - that would mean applying today's
  * PLS rate to historical bars and misstating past prices.
  */
-export default function TrenchTokenModal({ token, plsPrice, onClose }) {
+export default function TrenchTokenModal({
+  token,
+  plsPrice,
+  onClose,
+  onOpenFullPage,
+  // 'modal' floats over the board; 'page' is the same body rendered inline at
+  // /token/<address>. Only the chrome differs.
+  variant = 'modal',
+}) {
   const [candleInterval, setCandleInterval] = useState(300)
   const [copied, setCopied] = useState(false)
   const [tab, setTab] = useState('trades')
+  // Candles read poorly on a curve with few trades - long flat runs broken by
+  // one huge bar - so the view can be switched to a filled line instead.
+  const [chartMode, setChartMode] = useState('candles')
+  // Whale filter: hides everything under a USD floor so the tape shows size.
+  const [whaleOnly, setWhaleOnly] = useState(false)
 
   const chartRef = useRef(null)
   const containerRef = useRef(null)
@@ -86,7 +127,10 @@ export default function TrenchTokenModal({ token, plsPrice, onClose }) {
   const { data: txnData } = useTokenTransactions(address, 60)
   const { data: detail } = useTokenDetail(address)
 
-  const trades = txnData?.transactions || []
+  const allTrades = txnData?.transactions || []
+  const trades = whaleOnly
+    ? allTrades.filter((t) => (t.usdValue || 0) >= WHALE_FLOOR)
+    : allTrades
   const holders = detail?.holders || []
 
   // Detail figures win once loaded; the board row keeps the panel populated
@@ -116,53 +160,95 @@ export default function TrenchTokenModal({ token, plsPrice, onClose }) {
       autoSize: true,
       layout: {
         background: { color: 'transparent' },
-        textColor: '#7c8798',
+        textColor: '#94a3b8',
         fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-        fontSize: 10,
+        fontSize: 11,
+        // Volume lives in its own pane, so the price scale is never asked to
+        // reserve room for it - that reservation was pushing the price axis
+        // below zero and printing values like -2.00e-1.
+        panes: { separatorColor: 'rgba(255,255,255,0.08)', separatorHoverColor: 'rgba(0,229,255,0.2)' },
       },
       grid: {
-        vertLines: { color: 'rgba(255,255,255,0.035)' },
-        horzLines: { color: 'rgba(255,255,255,0.035)' },
+        vertLines: { color: 'rgba(255,255,255,0.04)' },
+        horzLines: { color: 'rgba(255,255,255,0.04)' },
       },
       rightPriceScale: {
-        borderColor: 'rgba(255,255,255,0.07)',
-        scaleMargins: { top: 0.08, bottom: 0.26 },
+        borderColor: 'rgba(255,255,255,0.08)',
+        scaleMargins: { top: 0.12, bottom: 0.08 },
       },
       timeScale: {
-        borderColor: 'rgba(255,255,255,0.07)',
+        borderColor: 'rgba(255,255,255,0.08)',
         timeVisible: true,
         secondsVisible: false,
+        rightOffset: 6,
+        /*
+         * Bars are given a real width instead of being fitted to the container.
+         * Fitting 200 candles into ~1180px left 5.9px per bar - a hairline once
+         * the border and wick are drawn, which is what made the chart look
+         * cheap next to the screener's embed. The most recent stretch is shown
+         * at a readable width and the rest is reachable by scrolling.
+         */
+        barSpacing: 11,
+        minBarSpacing: 4,
       },
-      crosshair: { mode: 0 },
+      crosshair: {
+        mode: 1,
+        vertLine: { color: 'rgba(0,229,255,0.4)', width: 1, style: 3, labelBackgroundColor: '#00e5ff' },
+        horzLine: { color: 'rgba(0,229,255,0.4)', width: 1, style: 3, labelBackgroundColor: '#00e5ff' },
+      },
       localization: { priceFormatter: formatPlsAxis },
     })
 
+    const priceFormat = {
+      type: 'custom',
+      formatter: formatPlsAxis,
+      minMove: 0.0000000001,
+    }
+
     const candleSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#00e08a',
-      downColor: '#f6465d',
-      borderUpColor: '#00e08a',
-      borderDownColor: '#f6465d',
-      wickUpColor: '#00e08a',
-      wickDownColor: '#f6465d',
-      priceFormat: { type: 'custom', formatter: formatPlsAxis, minMove: 0.0000000001 },
+      upColor: '#00ff9d',
+      downColor: '#f43f5e',
+      // No border: at these widths a 1px border eats most of the body and the
+      // candle reads as an outline rather than a filled bar.
+      borderVisible: false,
+      wickUpColor: 'rgba(0,255,157,0.8)',
+      wickDownColor: 'rgba(244,63,94,0.8)',
+      priceFormat,
     })
 
-    const volumeSeries = chart.addSeries(HistogramSeries, {
-      priceFormat: { type: 'volume' },
-      priceScaleId: 'volume',
-    })
-    chart.priceScale('volume').applyOptions({
-      scaleMargins: { top: 0.8, bottom: 0 },
+    const areaSeries = chart.addSeries(AreaSeries, {
+      lineColor: '#00e5ff',
+      lineWidth: 2,
+      topColor: 'rgba(0,229,255,0.28)',
+      bottomColor: 'rgba(0,229,255,0.01)',
+      priceFormat,
       visible: false,
     })
 
-    chartRef.current = { chart, candleSeries, volumeSeries }
+    // Pane 1 keeps volume off the price axis entirely.
+    const volumeSeries = chart.addSeries(
+      HistogramSeries,
+      { priceFormat: { type: 'volume' }, priceScaleId: '' },
+      1
+    )
+
+    chart.panes()[1]?.setHeight(70)
+
+    chartRef.current = { chart, candleSeries, areaSeries, volumeSeries }
 
     return () => {
       chart.remove()
       chartRef.current = null
     }
   }, [])
+
+  // Swap between candles and the filled line without rebuilding the chart.
+  useEffect(() => {
+    const refs = chartRef.current
+    if (!refs) return
+    refs.candleSeries.applyOptions({ visible: chartMode === 'candles' })
+    refs.areaSeries.applyOptions({ visible: chartMode === 'line' })
+  }, [chartMode])
 
   // Push data whenever candles or the selected interval change.
   useEffect(() => {
@@ -179,15 +265,21 @@ export default function TrenchTokenModal({ token, plsPrice, onClose }) {
       }))
     )
 
+    refs.areaSeries.setData(
+      candles.map((c) => ({ time: c.time, value: c.close }))
+    )
+
     refs.volumeSeries.setData(
       candles.map((c) => ({
         time: c.time,
         value: c.buyVolume + c.sellVolume,
-        color: c.close >= c.open ? 'rgba(0,224,138,0.3)' : 'rgba(246,70,93,0.3)',
+        color: c.close >= c.open ? 'rgba(0,255,157,0.4)' : 'rgba(244,63,94,0.4)',
       }))
     )
 
-    refs.chart.timeScale().fitContent()
+    // Deliberately not fitContent(): that overrides barSpacing and squeezes
+    // every candle back to a hairline. Land on the most recent bars instead.
+    refs.chart.timeScale().scrollToRealTime()
   }, [candles])
 
   const copyAddress = async () => {
@@ -203,6 +295,17 @@ export default function TrenchTokenModal({ token, plsPrice, onClose }) {
 
   // Same asset as the mark, reused as the hero backdrop.
   const heroUrl = ipfsImageUrl(live?.imageCid)
+
+  /*
+   * A graduated token has a real PulseX pair, so it can use DexScreener's own
+   * chart - the same embed the screener tab uses. A token still on the curve
+   * has no pair to embed (pair_address is null until it launches), so it keeps
+   * the native chart, which is also the only one that can show curve context.
+   */
+  const embedPair = live?.isLaunched ? live?.pairAddress : null
+  const embedUrl = embedPair
+    ? `https://dexscreener.com/pulsechain/${embedPair}?embed=1&theme=dark&trades=0&info=0`
+    : null
 
   const marketCapUsd = plsToUsd(live?.marketValuePls, plsPrice)
   const priceUsd = plsToUsd(live?.pricePls, plsPrice)
@@ -249,15 +352,16 @@ export default function TrenchTokenModal({ token, plsPrice, onClose }) {
 
   if (!token) return null
 
-  return (
-    <div className="trench-modal-backdrop" onClick={onClose} role="presentation">
-      <div
-        className="trench-modal"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label={`${live.name} detail`}
-      >
+  const isPage = variant === 'page'
+
+  const body = (
+    <div
+      className={`trench-modal ${isPage ? 'is-page' : ''}`}
+      onClick={(e) => e.stopPropagation()}
+      role={isPage ? 'region' : 'dialog'}
+      aria-modal={isPage ? undefined : 'true'}
+      aria-label={`${live.name} detail`}
+    >
         {/*
           Hero. The launchpad publishes no banner artwork - there is no cover,
           header or background field anywhere in its payload - so the backdrop
@@ -344,14 +448,16 @@ export default function TrenchTokenModal({ token, plsPrice, onClose }) {
             <span className="tm-price-pls">{formatPlsAxis(price)} PLS</span>
           </div>
 
-          <button
-            type="button"
-            className="tm-close"
-            onClick={onClose}
-            aria-label="Close detail"
-          >
-            <X size={15} />
-          </button>
+          {!isPage && (
+            <button
+              type="button"
+              className="tm-close"
+              onClick={onClose}
+              aria-label="Close detail"
+            >
+              <X size={15} />
+            </button>
+          )}
         </header>
 
         {live.description && (
@@ -424,6 +530,7 @@ export default function TrenchTokenModal({ token, plsPrice, onClose }) {
 
         {/* ---------------- Chart ---------------- */}
         <div className="tm-chart-block">
+          {!embedUrl && (
           <div className="tm-chart-bar font-mono">
             <div
               className="tm-flow"
@@ -435,6 +542,26 @@ export default function TrenchTokenModal({ token, plsPrice, onClose }) {
               </span>
               <span className="tm-flow-pct">{buyShare.toFixed(0)}% buy</span>
             </div>
+
+            <div className="tm-chart-controls">
+              <div className="tm-mode-toggle">
+                <button
+                  type="button"
+                  className={`tm-mode ${chartMode === 'candles' ? 'active' : ''}`}
+                  onClick={() => setChartMode('candles')}
+                  title="Candlesticks"
+                >
+                  Candles
+                </button>
+                <button
+                  type="button"
+                  className={`tm-mode ${chartMode === 'line' ? 'active' : ''}`}
+                  onClick={() => setChartMode('line')}
+                  title="Filled line - reads better on thin trading"
+                >
+                  Line
+                </button>
+              </div>
 
             <div className="tm-intervals">
               {CANDLE_INTERVALS.map((opt) => (
@@ -448,15 +575,33 @@ export default function TrenchTokenModal({ token, plsPrice, onClose }) {
                 </button>
               ))}
             </div>
+            </div>
           </div>
-
-          <div className="tm-chart" ref={containerRef} />
-
-          {candlesLoading && !candles?.length && (
-            <div className="tm-chart-state font-mono">Loading candles…</div>
           )}
-          {!candlesLoading && candles?.length === 0 && (
-            <div className="tm-chart-state font-mono">No trades on this interval yet</div>
+
+          {embedUrl ? (
+            <iframe
+              /* Matches the screener's working embed: keyed so a token change
+                 remounts it, eager because a lazy iframe below the fold never
+                 initialises reliably, and the same allow-list. */
+              key={embedPair}
+              src={embedUrl}
+              title={`${live.symbol} chart on DexScreener`}
+              className="tm-chart-embed"
+              allow="clipboard-write"
+              loading="eager"
+            />
+          ) : (
+            <>
+              <div className="tm-chart" ref={containerRef} />
+
+              {candlesLoading && !candles?.length && (
+                <div className="tm-chart-state font-mono">Loading candles…</div>
+              )}
+              {!candlesLoading && candles?.length === 0 && (
+                <div className="tm-chart-state font-mono">No trades on this interval yet</div>
+              )}
+            </>
           )}
         </div>
 
@@ -477,6 +622,18 @@ export default function TrenchTokenModal({ token, plsPrice, onClose }) {
             >
               HOLDERS{holders.length ? ` (${holders.length})` : ''}
             </button>
+            {tab === 'trades' && (
+              <button
+                type="button"
+                className={`tm-whale ${whaleOnly ? 'active' : ''}`}
+                onClick={() => setWhaleOnly((v) => !v)}
+                title={`Show only trades of $${WHALE_FLOOR} or more`}
+              >
+                <Filter size={12} />
+                Whales
+              </button>
+            )}
+
             {tab === 'holders' && supplyBase > 0 && (
               <span className="tm-tab-note font-mono">
                 top 10 hold {top10Share.toFixed(1)}% of supply
@@ -508,22 +665,33 @@ export default function TrenchTokenModal({ token, plsPrice, onClose }) {
               trades.map((t) => (
                 <div
                   key={t.id || t.txHash}
-                  className={`tm-trade font-mono ${t.type === 'buy' ? 'is-buy' : 'is-sell'}`}
+                  className={`tm-trade font-mono ${t.type === 'buy' ? 'is-buy' : 'is-sell'} size-${sizeBand(t.usdValue)}`}
                 >
+                  {/* Translucent wash across the whole row, so side reads before
+                      any number does. Width tracks trade size. */}
+                  <span
+                    className="tm-trade-wash"
+                    style={{ width: `${washWidth(t.usdValue)}%` }}
+                    aria-hidden="true"
+                  />
                   <span className="tm-trade-side">{t.type.toUpperCase()}</span>
                   <span className="tcl-right tm-trade-usd">{formatUsd(t.usdValue)}</span>
-                  <span className="tcl-right tm-dim">{formatCompactCount(t.tokenAmount)}</span>
-                  <span className="tcl-right tm-dim">{formatCompactCount(t.plsAmount)}</span>
-                  <span className="tm-dim truncate">
+                  <span className="tcl-right tm-trade-fig">{formatCompactCount(t.tokenAmount)}</span>
+                  <span className="tcl-right tm-trade-fig">{formatCompactCount(t.plsAmount)}</span>
+                  <span className="tm-trade-maker truncate">
                     {t.username || formatAddress(t.userAddress)}
                   </span>
-                  <span className="tcl-right tm-dim">{formatTimeAgo(t.timestamp)}</span>
+                  <span className="tcl-right tm-trade-age">{formatTimeAgo(t.timestamp)}</span>
                 </div>
               ))}
 
             {tab === 'trades' && !trades.length && (
               <div className="trench-panel-state font-mono">
-                <span>No trades yet</span>
+                <span>
+                  {whaleOnly
+                    ? `No trades of $${WHALE_FLOOR} or more in this window`
+                    : 'No trades yet'}
+                </span>
               </div>
             )}
 
@@ -556,6 +724,9 @@ export default function TrenchTokenModal({ token, plsPrice, onClose }) {
           </div>
         </div>
 
+        {/* ---------------- Dashboard ---------------- */}
+        <TokenInsights token={live} holders={holders} trades={allTrades} />
+
         {/* ---------------- Footer ---------------- */}
         <footer className="tm-foot font-mono">
           {live.creatorAddress && (
@@ -567,6 +738,15 @@ export default function TrenchTokenModal({ token, plsPrice, onClose }) {
             </span>
           )}
           <div className="tm-links">
+            {onOpenFullPage && !isPage && (
+              <button
+                type="button"
+                className="tm-link tm-link-primary"
+                onClick={() => onOpenFullPage(live)}
+              >
+                <Maximize2 size={11} /> Token page
+              </button>
+            )}
             <a
               href={`https://pump.tires/token/${encodeURIComponent(live.address)}`}
               target="_blank"
@@ -585,7 +765,14 @@ export default function TrenchTokenModal({ token, plsPrice, onClose }) {
             </a>
           </div>
         </footer>
-      </div>
+    </div>
+  )
+
+  if (isPage) return body
+
+  return (
+    <div className="trench-modal-backdrop" onClick={onClose} role="presentation">
+      {body}
     </div>
   )
 }
