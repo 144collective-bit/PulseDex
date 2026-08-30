@@ -1383,3 +1383,135 @@
 }
 
 .dex-route.is-warning .dex-route-note { color: #ffb340; }
+
+/* ==========================================================================
+   PAIR CHART
+
+   Our own candlestick chart, drawn from pool data rather than borrowed from an
+   iframe. Same visual language as the embed it replaces.
+   ========================================================================== */
+.pair-chart {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.pair-chart-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.pair-chart-pair {
+  font-family: var(--font-instrument);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.pair-chart-intervals {
+  display: flex;
+  gap: 3px;
+  margin-left: auto;
+}
+
+.pair-chart-interval {
+  padding: 4px 9px;
+  font-family: var(--font-instrument);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pair-chart-interval:hover { color: var(--text-primary); }
+
+.pair-chart-interval.active {
+  color: var(--pulse-cyan);
+  background: var(--pulse-cyan-bg);
+  border-color: rgba(0, 229, 255, 0.3);
+}
+
+.pair-chart-refresh {
+  display: flex;
+  padding: 5px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.pair-chart-refresh:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.05); }
+.pair-chart-refresh:disabled { cursor: progress; }
+
+/* The canvas fills whatever the container gives it; lightweight-charts sizes
+   itself from this box, so it must never collapse to zero. */
+.pair-chart-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 220px;
+}
+
+.pair-chart-canvas { width: 100%; height: 100%; }
+
+.pair-chart-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 20px;
+  font-family: var(--font-instrument);
+  font-size: 12px;
+  text-align: center;
+  color: var(--text-muted);
+  background: rgba(11, 18, 32, 0.82);
+}
+
+.pair-chart-state.is-error { color: var(--pulse-red); }
+
+/* Source toggle in the chart toolbar */
+.chart-source-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+}
+
+.chart-source-btn {
+  padding: 4px 9px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.chart-source-btn:hover { color: var(--text-primary); }
+
+.chart-source-btn.active {
+  color: var(--pulse-cyan);
+  background: var(--pulse-cyan-bg);
+}

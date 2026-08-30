@@ -10,6 +10,8 @@ import {
   Check,
 } from 'lucide-react'
 import { buildPulseXSwapUrl } from '../utils/formatters'
+import PairChart from './PairChart'
+import '../styles/dex.css'
 
 const CHART_HEIGHT_KEY = 'pulsedex_chart_height'
 const MIN_CHART_HEIGHT = 260
@@ -25,6 +27,16 @@ export default function TradingChart({ pair, pairAddress }) {
   const [isReloading, setIsReloading] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
   const [isResizing, setIsResizing] = useState(false)
+
+  /*
+   * Which chart to show. Ours by default: the DexScreener embed renders fine
+   * as a top-level page but hangs on "Loading pair…" inside a cross-origin
+   * frame, whatever permissions the frame is given, because its chart needs
+   * storage the browser partitions away from third-party frames. The embed
+   * stays available for anyone who prefers it, but it cannot be the thing the
+   * page depends on.
+   */
+  const [source, setSource] = useState('native')
 
   // null = follow the responsive default height from CSS
   const [chartHeight, setChartHeight] = useState(() => {
@@ -143,10 +155,33 @@ export default function TradingChart({ pair, pairAddress }) {
           {/* Real-Time DexScreener Engine Indicator */}
           <div className="dex-chart-engine-badge font-mono">
             <Zap size={13} className="text-pulse-green" />
-            <span className="font-bold text-pulse-green">DEXSCREENER CHART</span>
+            {/* Names whichever chart is actually on screen. Left as
+                "DEXSCREENER CHART" it labelled our own chart as someone
+                else's. */}
+            <span className="font-bold text-pulse-green">
+              {source === 'native' ? 'LIVE CHART' : 'DEXSCREENER CHART'}
+            </span>
           </div>
 
           <div className="chart-v-sep"></div>
+
+          <div className="chart-source-toggle font-mono" role="group" aria-label="Chart source">
+            <button
+              type="button"
+              className={`chart-source-btn ${source === 'native' ? 'active' : ''}`}
+              onClick={() => setSource('native')}
+            >
+              PulseDex
+            </button>
+            <button
+              type="button"
+              className={`chart-source-btn ${source === 'embed' ? 'active' : ''}`}
+              onClick={() => setSource('embed')}
+              title="DexScreener's own embed. It does not render in every browser."
+            >
+              DexScreener
+            </button>
+          </div>
 
           {/* Clean Live Status Indicator */}
           <div className="chart-live-status font-mono">
@@ -216,16 +251,25 @@ export default function TradingChart({ pair, pairAddress }) {
         </div>
       </div>
 
-      {/* Embedded Real-Time DexScreener Chart Frame */}
       <div className="chart-iframe-container" ref={frameRef}>
-        <iframe
-          key={`${activePairAddress}-${keyCounter}`}
-          src={embedUrl}
-          title="DexScreener Real-Time Live Chart"
-          className="dexscreener-iframe"
-          allow="clipboard-write"
-          loading="eager"
-        ></iframe>
+        {source === 'native' ? (
+          <PairChart
+            key={activePairAddress}
+            pairAddress={activePairAddress}
+            baseSymbol={baseSymbol}
+            quoteSymbol={quoteSymbol}
+            height="100%"
+          />
+        ) : (
+          <iframe
+            key={`${activePairAddress}-${keyCounter}`}
+            src={embedUrl}
+            title="DexScreener Real-Time Live Chart"
+            className="dexscreener-iframe"
+            allow="clipboard-write"
+            loading="eager"
+          ></iframe>
+        )}
       </div>
 
       {/* Drag to resize the chart; the panels below take up the slack. */}

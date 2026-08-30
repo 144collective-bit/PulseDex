@@ -1,160 +1,108 @@
 /**
- * GeckoTerminal OHLCV API service with smart price calibration and caching
+ * OHLCV for PulseChain pools.
+ *
+ * Exists because the DexScreener embed cannot be relied on. Its URL renders a
+ * full chart in a top-level tab but hangs on "Loading pair…" inside a
+ * cross-origin iframe, whatever permissions the frame is given - the chart
+ * needs storage the browser partitions away from third-party frames. Nothing
+ * on our side fixes that, so the chart is drawn from data instead of borrowed
+ * from an iframe.
+ *
+ * GeckoTerminal's public API needs no key and covers PulseChain pools by pool
+ * address, which is exactly the identifier the screener already carries.
  */
 
-const GECKO_BASE = 'https://api.geckoterminal.com/api/v2/networks/pulsechain'
+const BASE = 'https://api.geckoterminal.com/api/v2/networks/pulsechain'
 
-const candleCache = new Map()
-const CACHE_TTL = 20000 // 20 seconds
+/**
+ * Short-lived cache, shared across component remounts.
+ *
+ * The chart remounts on every pair change, and the free tier rate-limits a
+ * burst - clicking through pools quickly returned a network failure rather
+ * than a 429. Serving a recent response for a pool already viewed keeps that
+ * within the limit.
+ */
+const cache = new Map()
+const CACHE_TTL = 30_000
 
-export async function fetchOHLCV(poolAddress, timeframe = '15m', currentPrice = 0.00001455, priceChange24h = 0) {
-  if (!poolAddress) {
-    return generateSyntheticCandles(currentPrice, priceChange24h, timeframe)
-  }
+/** Chart intervals, mapped to the timeframe and aggregate the API expects. */
+export const CHART_INTERVALS = [
+  { id: '5m', label: '5M', timeframe: 'minute', aggregate: 5, limit: 288 },
+  { id: '15m', label: '15M', timeframe: 'minute', aggregate: 15, limit: 288 },
+  { id: '1h', label: '1H', timeframe: 'hour', aggregate: 1, limit: 240 },
+  { id: '4h', label: '4H', timeframe: 'hour', aggregate: 4, limit: 240 },
+  { id: '1d', label: '1D', timeframe: 'day', aggregate: 1, limit: 180 },
+]
 
-  const cacheKey = `${poolAddress.toLowerCase()}_${timeframe}`
-  const now = Date.now()
-  if (candleCache.has(cacheKey)) {
-    const { timestamp, data } = candleCache.get(cacheKey)
-    if (now - timestamp < CACHE_TTL && data && data.length > 0) {
-      return data
-    }
-  }
+export const DEFAULT_INTERVAL = '1h'
 
-  let endpointTimeframe = 'minute'
-  let aggregate = 15
-  let limit = 100
+/**
+ * Candles for one pool, oldest first.
+ *
+ * The API returns newest first as `[timestamp, open, high, low, close, volume]`
+ * tuples; the chart library rejects unsorted or duplicated timestamps, so the
+ * order is reversed and duplicates dropped here rather than at the call site.
+ */
+export async function getPoolCandles(poolAddress, intervalId = DEFAULT_INTERVAL) {
+  if (!poolAddress) return []
 
-  switch (timeframe) {
-    case '5m':
-      endpointTimeframe = 'minute'
-      aggregate = 5
-      limit = 100
-      break
-    case '15m':
-      endpointTimeframe = 'minute'
-      aggregate = 15
-      limit = 100
-      break
-    case '1h':
-      endpointTimeframe = 'hour'
-      aggregate = 1
-      limit = 100
-      break
-    case '4h':
-      endpointTimeframe = 'hour'
-      aggregate = 4
-      limit = 100
-      break
-    case '1D':
-      endpointTimeframe = 'day'
-      aggregate = 1
-      limit = 100
-      break
-    default:
-      endpointTimeframe = 'minute'
-      aggregate = 15
-  }
+  const interval =
+    CHART_INTERVALS.find((i) => i.id === intervalId) ||
+    CHART_INTERVALS.find((i) => i.id === DEFAULT_INTERVAL)
 
+  const url =
+    `${BASE}/pools/${poolAddress}/ohlcv/${interval.timeframe}` +
+    `?aggregate=${interval.aggregate}&limit=${interval.limit}`
+
+  const cached = cache.get(url)
+  if (cached && Date.now() - cached.at < CACHE_TTL) return cached.candles
+
+  let res
   try {
-    const url = `${GECKO_BASE}/pools/${poolAddress.toLowerCase()}/ohlcv/${endpointTimeframe}?aggregate=${aggregate}&limit=${limit}`
-    const response = await fetch(url, {
-      headers: {
-        Accept: 'application/json',
-      },
-    })
-
-    if (response.ok) {
-      const json = await response.json()
-      const ohlcvList = json.data?.attributes?.ohlcv_list
-      if (ohlcvList && Array.isArray(ohlcvList) && ohlcvList.length > 0) {
-        // Reverse so oldest is first
-        const sorted = [...ohlcvList].reverse()
-
-        // Calibrate multiplier if GeckoTerminal is returning relative token units instead of USD
-        const latestRawClose = parseFloat(sorted[sorted.length - 1][4])
-        let priceMultiplier = 1
-
-        if (latestRawClose > 0 && currentPrice > 0) {
-          const ratio = currentPrice / latestRawClose
-          // If ratio is drastically different (e.g. quoted in PLS or DAI), scale to match USD live price
-          if (ratio > 10 || ratio < 0.1) {
-            priceMultiplier = ratio
-          }
-        }
-
-        const candles = sorted.map((candle, idx) => {
-          const isLast = idx === sorted.length - 1
-          const rawClose = parseFloat(candle[4]) * priceMultiplier
-          const close = isLast ? currentPrice : rawClose
-          const open = parseFloat(candle[1]) * priceMultiplier
-          const high = Math.max(parseFloat(candle[2]) * priceMultiplier, open, close)
-          const low = Math.min(parseFloat(candle[3]) * priceMultiplier, open, close)
-          const volume = parseFloat(candle[5] || 0)
-
-          return {
-            time: Number(candle[0]),
-            open,
-            high,
-            low,
-            close,
-            volume,
-          }
-        })
-
-        candleCache.set(cacheKey, { timestamp: now, data: candles })
-        return candles
-      }
-    }
-  } catch (err) {
-    console.warn('GeckoTerminal API fetch error, fallback active:', err)
+    res = await fetch(url)
+  } catch {
+    // A rejected connection rather than a status: the rate limiter refuses the
+    // request outright, so there is no code to report.
+    throw new Error('Chart data is rate limited right now. Try again in a moment.')
   }
 
-  // Fallback to high-accuracy trend-anchored candles
-  const fallback = generateSyntheticCandles(currentPrice, priceChange24h, timeframe)
-  candleCache.set(cacheKey, { timestamp: now, data: fallback })
-  return fallback
-}
+  if (res.status === 429) {
+    throw new Error('Chart data is rate limited right now. Try again in a moment.')
+  }
+  if (!res.ok) throw new Error(`Chart data unavailable (${res.status})`)
 
-function generateSyntheticCandles(targetPrice, priceChange24h = 0, timeframe = '15m') {
-  const count = 90
-  let intervalSec = 900 // 15m
-  if (timeframe === '5m') intervalSec = 300
-  if (timeframe === '1h') intervalSec = 3600
-  if (timeframe === '4h') intervalSec = 14400
-  if (timeframe === '1D') intervalSec = 86400
+  const json = await res.json()
+  const rows = json?.data?.attributes?.ohlcv_list
+  if (!Array.isArray(rows)) return []
 
-  const now = Math.floor(Date.now() / 1000)
-  const startTime = now - count * intervalSec
-  const trendRatio = 1 + (priceChange24h / 100)
-  const startPrice = targetPrice / (trendRatio > 0.05 ? trendRatio : 1)
-
+  const seen = new Set()
   const candles = []
-  let prevClose = startPrice
 
-  for (let i = 0; i < count; i++) {
-    const t = startTime + i * intervalSec
-    const progress = i / count
-    const trendPrice = startPrice + (targetPrice - startPrice) * progress
-    const volatility = trendPrice * 0.015
+  // Reverse rather than sort: the API is already ordered, and a sort would
+  // hide a malformed response instead of letting the filters below drop it.
+  for (let i = rows.length - 1; i >= 0; i -= 1) {
+    const [time, open, high, low, close, volume] = rows[i] || []
+    const t = Number(time)
+    if (!t || seen.has(t)) continue
 
-    const open = prevClose
-    const delta = (Math.random() - 0.48) * volatility
-    const close = i === count - 1 ? targetPrice : Math.max(0.00000001, open + delta)
-    const high = Math.max(open, close) + Math.random() * volatility * 0.5
-    const low = Math.min(open, close) - Math.random() * volatility * 0.5
-    const volume = Math.floor(Math.random() * 50000 + 10000) * targetPrice
-
-    candles.push({
+    const c = {
       time: t,
-      open,
-      high,
-      low,
-      close,
-      volume,
-    })
-    prevClose = close
+      open: Number(open),
+      high: Number(high),
+      low: Number(low),
+      close: Number(close),
+      volume: Number(volume) || 0,
+    }
+    // A zero or non-finite price draws as a spike to the axis floor.
+    if (![c.open, c.high, c.low, c.close].every((v) => isFinite(v) && v > 0)) continue
+
+    seen.add(t)
+    candles.push(c)
   }
+
+  cache.set(url, { at: Date.now(), candles })
+  // Bounded so a long session cannot grow it without limit.
+  if (cache.size > 60) cache.delete(cache.keys().next().value)
 
   return candles
 }
