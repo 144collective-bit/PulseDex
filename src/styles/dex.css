@@ -780,22 +780,196 @@
   .pool-fig { font-size: 14px; }
 }
 
+
+/* --------------------------------------------------------------------------
+   Panel polish
+
+   An accent rail down the leading edge, deeper glass, and a flip control that
+   reads as a token straddling the two fields rather than a button between them.
+   -------------------------------------------------------------------------- */
+.swap-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Rail. Sits on the panel's leading edge and fades out down its length, so it
+   reads as a light source rather than a border. */
+.swap-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: linear-gradient(
+    180deg,
+    var(--pulse-cyan) 0%,
+    rgba(0, 229, 255, 0.35) 28%,
+    transparent 72%
+  );
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* Dollar value beneath each amount. Deliberately quiet - it is a sanity check
+   on the figure above it, not a second headline. */
+.swap-usd {
+  font-family: var(--font-instrument);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The received figure replays this whenever the quote refreshes. */
+@keyframes swap-figure-flash {
+  0% { color: var(--pulse-cyan); }
+  100% { color: var(--text-primary); }
+}
+
+.swap-amount.is-output { animation: swap-figure-flash 0.85s ease-out; }
+
+/* An empty field should read as waiting for input, not as disabled. */
+.swap-amount.is-empty { color: rgba(148, 163, 184, 0.62); }
+.swap-amount.is-output.is-empty { animation: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .swap-amount.is-output { animation: none; }
+}
+
+/* --------------------------------------------------------------------------
+   Venue hand-off cards
+
+   One per venue that actually holds a pool for this token. The mark carries
+   the identification - it is what tells you where the click goes - so it gets
+   real size and the card gets the height to seat it.
+   -------------------------------------------------------------------------- */
+.venue-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.venue-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  text-decoration: none;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--dx-hairline, rgba(255, 255, 255, 0.07));
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.venue-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(0, 255, 157, 0.4);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 6px 18px rgba(0, 255, 157, 0.12);
+}
+
+/* The mark sits on its own plate so venue logos with transparent or light
+   artwork stay legible against the dark card. */
+.venue-mark {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.venue-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.venue-mark-letter {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-secondary);
+}
+
+.venue-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.venue-title {
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.venue-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-instrument);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.venue-liq { color: var(--text-secondary); }
+.venue-dot { opacity: 0.5; }
+
+.venue-ext {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: color 0.18s ease;
+}
+
+.venue-card:hover .venue-ext { color: var(--pulse-green); }
+
 /* --------------------------------------------------------------------------
    Compact panel
 
    The same swap panel dropped into the screener's sidebar, where it replaced a
-   third-party aggregator embed. Tighter spacing and smaller figures so it sits
-   in a narrow column without dominating it.
+   third-party embed. The heading is the one thing that grows rather than
+   shrinks: in a column of stacked panels it has to say what this one is.
    -------------------------------------------------------------------------- */
 .swap-panel.is-compact {
   gap: 7px;
-  padding: 14px;
+  padding: 14px 14px 14px 16px;
   border-radius: var(--radius-md);
 }
 
-.swap-panel.is-compact .swap-head-title { font-size: 11px; }
+.swap-panel.is-compact .swap-head {
+  margin-bottom: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--dx-hairline);
+}
+
+.swap-panel.is-compact .swap-head-title {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  background: linear-gradient(180deg, #ffffff 30%, #b9c6d8 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
 .swap-panel.is-compact .swap-field { padding: 12px 13px; }
 .swap-panel.is-compact .swap-amount { font-size: 22px; }
+.swap-panel.is-compact .swap-usd { font-size: 11px; }
 .swap-panel.is-compact .swap-token-btn { font-size: 12.5px; padding: 6px 10px 6px 7px; }
 .swap-panel.is-compact .swap-detail { padding: 11px 12px; gap: 6px; }
 .swap-panel.is-compact .swap-detail-row { font-size: 11px; }
@@ -810,4 +984,18 @@
   background: none;
   border: none;
   box-shadow: none;
+}
+
+/* Shown while an uncurated token is read from the chain, or if that read
+   fails. Occupies roughly the panel's height so the column doesn't jump. */
+.swap-resolving {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 148px;
+  padding: 0 12px;
+  font-family: var(--font-instrument);
+  font-size: 12px;
+  text-align: center;
+  color: var(--text-muted);
 }

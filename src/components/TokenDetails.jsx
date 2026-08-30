@@ -10,7 +10,6 @@ import {
   MoreVertical,
   X,
   Flame,
-  ArrowLeftRight,
   ChevronDown,
   ChevronUp,
   Layers,
@@ -18,11 +17,12 @@ import {
 } from 'lucide-react'
 import TokenLogo from './TokenLogo'
 import SwapPanel from './dex/SwapPanel'
+import VenueLinks from './dex/VenueLinks'
+import { NATIVE_PLS_PLACEHOLDER as NATIVE_PLS_ADDRESS } from '../config/dex'
 import { useUserProfile } from '../context/UserProfileContext'
-import { formatCryptoPrice, safeExternalUrl, buildPulseXSwapUrl } from '../utils/formatters'
+import { formatCryptoPrice, safeExternalUrl } from '../utils/formatters'
 import '../styles/dex.css'
 
-const NATIVE_PLS_ADDRESS = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
 
 export default function TokenDetails({
   pair,
@@ -161,7 +161,6 @@ export default function TokenDetails({
   const telegramObj = socials.find((s) => s.type?.toLowerCase() === 'telegram' || s.platform?.toLowerCase() === 'telegram')
   const telegramUrl = safeExternalUrl(telegramObj?.url, 'https://t.me/PulseChainCom')
 
-  const swapUrl = buildPulseXSwapUrl(quote.address, base.address)
 
   return (
     <div className="dex-sidebar-card">
@@ -518,21 +517,9 @@ export default function TokenDetails({
         />
       </div>
 
-      {/* Big Trade Button */}
-      <a
-        href={swapUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="dex-main-trade-cta-btn"
-      >
-        <div className="dex-trade-cta-inner">
-          <ArrowLeftRight size={15} className="dex-trade-cta-icon" />
-          <span className="dex-trade-cta-text">
-            Trade {base.symbol}/{quote.symbol} on {pair.dexId || 'PulseX'}
-          </span>
-        </div>
-        <ExternalLink size={14} className="dex-trade-cta-ext" />
-      </a>
+      {/* One card per venue that actually has a pool for this token, so every
+          link lands on real liquidity rather than an empty pair. */}
+      <VenueLinks pairs={[pair, ...otherPools]} />
 
       {/* Other Pools Modal for the Right-Side Token Info Panel */}
       {showOtherPoolsModal && (

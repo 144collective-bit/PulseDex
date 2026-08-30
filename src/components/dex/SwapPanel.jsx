@@ -3,6 +3,8 @@ import { ArrowDown, Settings2, ChevronDown, Info, AlertTriangle, Loader2 } from 
 import TokenLogo from '../TokenLogo'
 import TokenSelectModal from './TokenSelectModal'
 import { useSwapQuote } from '../../hooks/useSwapQuote'
+import { useTokenUsdPrice } from '../../hooks/useTokenUsdPrice'
+import { useResolvedToken } from '../../hooks/useResolvedToken'
 import { minimumReceived } from '../../services/dex'
 import {
   CURATED_TOKENS,
@@ -10,6 +12,7 @@ import {
   DEFAULT_TO,
   WPLS,
   NATIVE_PLS,
+  NATIVE_PLS_PLACEHOLDER,
   SLIPPAGE_PRESETS,
   DEFAULT_SLIPPAGE,
   DEFAULT_DEADLINE,
@@ -22,16 +25,18 @@ const findToken = (addr) => CURATED_TOKENS.find((t) => t.address === addr)
 /**
  * Resolve a token from an address the host passed in.
  *
- * Falls back to the curated default rather than rendering an empty panel, and
- * treats the WPLS address as native PLS - the screener talks in pairs, which
- * are always wrapped, while a trader thinks in PLS.
+ * Treats the WPLS address as native PLS - the screener talks in pairs, which
+ * are always wrapped, while a trader thinks in PLS. An address that isn't
+ * curated resolves to null and is read from the chain instead of quietly
+ * becoming some other token.
  */
 function resolveToken(addr, fallbackAddr) {
   if (!addr) return findToken(fallbackAddr)
   const lower = String(addr).toLowerCase()
-  if (lower === WPLS.toLowerCase()) return findToken(NATIVE_PLS)
-  const match = CURATED_TOKENS.find((t) => t.address.toLowerCase() === lower)
-  return match || findToken(fallbackAddr)
+  if (lower === WPLS.toLowerCase() || lower === NATIVE_PLS_PLACEHOLDER) {
+    return findToken(NATIVE_PLS)
+  }
+  return CURATED_TOKENS.find((t) => t.address.toLowerCase() === lower) || null
 }
 
 /** Trim a figure to something readable without losing small balances. */
@@ -40,6 +45,18 @@ function fmtAmount(value) {
   if (value >= 1000) return value.toLocaleString('en-US', { maximumFractionDigits: 2 })
   if (value >= 1) return value.toFixed(4)
   return value.toPrecision(6)
+}
+
+/** Dollar value of an amount, or null when either half is unknown. */
+function usdValue(amount, price) {
+  const qty = Number(amount)
+  if (!price || !isFinite(qty) || qty <= 0) return null
+  const value = qty * price
+  if (value < 0.01) return '< $0.01'
+  return `≈ $${value.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`
 }
 
 /**
@@ -56,13 +73,34 @@ export default function SwapPanel({
   // Compact drops the heading and tightens spacing for a sidebar slot.
   compact = false,
 }) {
-  const [fromToken, setFromToken] = useState(() => resolveToken(initialFrom, DEFAULT_FROM))
-  const [toToken, setToToken] = useState(() => resolveToken(initialTo, DEFAULT_TO))
+  // State holds only what has been explicitly chosen - the host's address if it
+  // was curated, or the user's own pick. An uncurated address leaves the slot
+  // null and is filled in from the chain below.
+  const [fromPick, setFromPick] = useState(() => resolveToken(initialFrom, DEFAULT_FROM))
+  const [toPick, setToPick] = useState(() => resolveToken(initialTo, DEFAULT_TO))
+
+  const { token: resolvedFrom, isLoading: loadingFrom } = useResolvedToken(
+    fromPick ? null : initialFrom
+  )
+  const { token: resolvedTo, isLoading: loadingTo } = useResolvedToken(
+    toPick ? null : initialTo
+  )
+
+  // Derived rather than synced into state, so there is no render where the
+  // panel holds a token the props have already moved past.
+  const fromToken = fromPick || resolvedFrom
+  const toToken = toPick || resolvedTo
+
+  const resolving = loadingFrom || loadingTo
+  const unresolved = !fromToken || !toToken
   const [amount, setAmount] = useState('')
   const [picking, setPicking] = useState(null)
   const [showSettings, setShowSettings] = useState(false)
   const [slippage, setSlippage] = useState(DEFAULT_SLIPPAGE)
   const [deadline, setDeadline] = useState(DEFAULT_DEADLINE)
+
+  const { data: fromPrice } = useTokenUsdPrice(fromToken)
+  const { data: toPrice } = useTokenUsdPrice(toToken)
 
   const { data: quote, isFetching, isError } = useSwapQuote({
     from: fromToken,
@@ -71,18 +109,18 @@ export default function SwapPanel({
   })
 
   const flip = () => {
-    setFromToken(toToken)
-    setToToken(fromToken)
+    setFromPick(toToken)
+    setToPick(fromToken)
     setAmount('')
     onPairChange?.(toToken, fromToken)
   }
 
   const pick = (token) => {
     if (picking === 'from') {
-      setFromToken(token)
+      setFromPick(token)
       onPairChange?.(token, toToken)
     } else {
-      setToToken(token)
+      setToPick(token)
       onPairChange?.(fromToken, token)
     }
   }
@@ -98,6 +136,24 @@ export default function SwapPanel({
           : 'is-ok'
 
   const hasAmount = Number(amount) > 0
+  const payUsd = usdValue(amount, fromPrice)
+  const receiveUsd = usdValue(quote?.amountOut, toPrice)
+
+  // Either side can be null while an uncurated address is read from the chain,
+  // or permanently if that read fails. Showing a placeholder beats rendering a
+  // quote for a token the user did not choose.
+  if (unresolved) {
+    return (
+      <section className={`swap-panel ${compact ? 'is-compact' : ''}`}>
+        <header className="swap-head">
+          <span className="swap-head-title">Swap</span>
+        </header>
+        <p className="swap-resolving">
+          {resolving ? 'Reading token details…' : 'This token could not be read from the chain.'}
+        </p>
+      </section>
+    )
+  }
 
   return (
     <section className={`swap-panel ${compact ? 'is-compact' : ''}`}>
@@ -198,6 +254,7 @@ export default function SwapPanel({
             <ChevronDown size={14} />
           </button>
         </div>
+        {payUsd && <span className="swap-usd">{payUsd}</span>}
       </div>
 
       <button type="button" className="swap-flip" onClick={flip} aria-label="Swap direction">
@@ -210,7 +267,13 @@ export default function SwapPanel({
           {isFetching && <Loader2 size={12} className="dex-spin" />}
         </div>
         <div className="swap-field-row">
-          <span className={`swap-amount is-output ${quote ? '' : 'is-empty'}`}>
+          {/* Keyed on the figure so a refreshed quote remounts the node and
+              replays the flash - a price that moved underneath you should be
+              visible without having to watch for it. */}
+          <span
+            key={quote?.amountOut ?? 'empty'}
+            className={`swap-amount is-output ${quote ? '' : 'is-empty'}`}
+          >
             {quote ? fmtAmount(quote.amountOut) : '0.0'}
           </span>
           <button type="button" className="swap-token-btn" onClick={() => setPicking('to')}>
@@ -224,6 +287,7 @@ export default function SwapPanel({
             <ChevronDown size={14} />
           </button>
         </div>
+        {receiveUsd && <span className="swap-usd">{receiveUsd}</span>}
       </div>
 
       {hasAmount && quote && (

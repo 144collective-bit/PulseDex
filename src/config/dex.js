@@ -19,6 +19,14 @@ export const WPLS = '0xA1077a294dDE1B09bB078844df40758a5D0f9a27'
 /** The sentinel the UI uses for native PLS, which has no contract. */
 export const NATIVE_PLS = 'PLS'
 
+/**
+ * The other native sentinel. The screener labels native PLS with the 0xEee...
+ * placeholder that most of the ecosystem uses, so both forms reach the swap
+ * panel and both have to resolve to the same asset - reading this one as an
+ * ERC20 fails, because nothing is deployed there.
+ */
+export const NATIVE_PLS_PLACEHOLDER = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+
 export const ROUTER_ABI = [
   {
     name: 'getAmountsOut',

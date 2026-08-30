@@ -20,6 +20,55 @@ const client = createPublicClient({
   transport: http('https://rpc.pulsechain.com'),
 })
 
+/** Minimal ERC20 surface: just what's needed to price a token safely. */
+const ERC20_ABI = [
+  {
+    name: 'decimals',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint8' }],
+  },
+  {
+    name: 'symbol',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'string' }],
+  },
+]
+
+/**
+ * Read a token the curated list doesn't carry.
+ *
+ * Decimals have to come from the chain rather than be assumed. parseUnits
+ * scales the input amount by them, so treating a 6-decimal token like USDC as
+ * 18 would misprice a quote by a factor of a trillion - and it would render as
+ * a perfectly ordinary-looking number.
+ */
+export async function fetchTokenMeta(address) {
+  if (!address) return null
+
+  const [decimals, symbol] = await Promise.all([
+    client.readContract({ address, abi: ERC20_ABI, functionName: 'decimals' }),
+    client
+      .readContract({ address, abi: ERC20_ABI, functionName: 'symbol' })
+      .catch(() => null),
+  ])
+
+  if (decimals === undefined || decimals === null) return null
+
+  return {
+    address,
+    symbol: symbol || '???',
+    name: symbol || 'Unknown token',
+    decimals: Number(decimals),
+    // Not on the curated list, so the picker flags it: three separate tokens
+    // on this chain answer to "PRVX".
+    verified: false,
+  }
+}
+
 /** Native PLS has no contract, so it is routed through WPLS. */
 function toPathAddress(token) {
   return token.address === NATIVE_PLS ? WPLS : token.address
