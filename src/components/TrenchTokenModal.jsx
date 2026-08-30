@@ -1,13 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
 import { createChart, CandlestickSeries, HistogramSeries } from 'lightweight-charts'
-import { X, ExternalLink, Copy, Check, Rocket, Lock, Flame } from 'lucide-react'
+import {
+  X,
+  ExternalLink,
+  Copy,
+  Check,
+  Rocket,
+  Lock,
+  Flame,
+  Globe,
+  Send,
+} from 'lucide-react'
 import TrenchTokenLogo from './TrenchTokenLogo'
 import {
   useTokenCandles,
   useTokenTransactions,
   useTokenDetail,
 } from '../hooks/usePumpTires'
-import { plsToUsd } from '../services/pumptires'
+import { plsToUsd, ipfsImageUrl } from '../services/pumptires'
 import { CANDLE_INTERVALS, TOKENS_FOR_SALE } from '../config/pumptires'
 import {
   formatUsd,
@@ -16,6 +26,7 @@ import {
   formatTimeAgo,
   formatAddress,
   formatPercent,
+  safeExternalUrl,
 } from '../utils/formatters'
 
 /**
@@ -190,6 +201,9 @@ export default function TrenchTokenModal({ token, plsPrice, onClose }) {
     }
   }
 
+  // Same asset as the mark, reused as the hero backdrop.
+  const heroUrl = ipfsImageUrl(live?.imageCid)
+
   const marketCapUsd = plsToUsd(live?.marketValuePls, plsPrice)
   const priceUsd = plsToUsd(live?.pricePls, plsPrice)
   const progress = live?.bondingProgress || 0
@@ -244,15 +258,36 @@ export default function TrenchTokenModal({ token, plsPrice, onClose }) {
         aria-modal="true"
         aria-label={`${live.name} detail`}
       >
+        {/*
+          Hero. The launchpad publishes no banner artwork - there is no cover,
+          header or background field anywhere in its payload - so the backdrop
+          is derived from the token's own mark: the same image, blown up,
+          blurred and dimmed behind a gradient. It is per-token and real rather
+          than a stock texture, and swaps for a true banner the day the API
+          carries one.
+        */}
+        <div className="tm-hero">
+          {live.imageCid && (
+            <div
+              className="tm-hero-art"
+              style={{ backgroundImage: `url(${heroUrl})` }}
+              aria-hidden="true"
+            />
+          )}
+          <div className="tm-hero-veil" aria-hidden="true" />
+        </div>
+
         {/* ---------------- Header ---------------- */}
         <header className="tm-head">
-          <TrenchTokenLogo
-            cid={live.imageCid}
-            address={live.address}
-            symbol={live.symbol}
-            size={40}
-            eager
-          />
+          <span className="tm-head-logo">
+            <TrenchTokenLogo
+              cid={live.imageCid}
+              address={live.address}
+              symbol={live.symbol}
+              size={72}
+              eager
+            />
+          </span>
 
           <div className="tm-ident">
             <div className="tm-ident-top">
@@ -274,15 +309,34 @@ export default function TrenchTokenModal({ token, plsPrice, onClose }) {
               )}
             </div>
 
-            <button
-              type="button"
-              className="tm-address font-mono"
-              onClick={copyAddress}
-              title="Copy contract address"
-            >
-              {formatAddress(live.address, 6, 6)}
-              {copied ? <Check size={10} /> : <Copy size={10} />}
-            </button>
+            <div className="tm-ident-foot">
+              <button
+                type="button"
+                className="tm-address font-mono"
+                onClick={copyAddress}
+                title="Copy contract address"
+              >
+                {formatAddress(live.address, 6, 6)}
+                {copied ? <Check size={12} /> : <Copy size={12} />}
+              </button>
+
+              {/* Only rendered when the deployer actually supplied a link. */}
+              {live.website && (
+                <a className="tm-social" href={safeExternalUrl(live.website) || '#'} target="_blank" rel="noopener noreferrer" title="Website">
+                  <Globe size={13} />
+                </a>
+              )}
+              {live.twitter && (
+                <a className="tm-social" href={safeExternalUrl(live.twitter) || '#'} target="_blank" rel="noopener noreferrer" title="X / Twitter">
+                  <ExternalLink size={13} />
+                </a>
+              )}
+              {live.telegram && (
+                <a className="tm-social" href={safeExternalUrl(live.telegram) || '#'} target="_blank" rel="noopener noreferrer" title="Telegram">
+                  <Send size={13} />
+                </a>
+              )}
+            </div>
           </div>
 
           <div className="tm-price-block font-mono">
@@ -299,6 +353,10 @@ export default function TrenchTokenModal({ token, plsPrice, onClose }) {
             <X size={15} />
           </button>
         </header>
+
+        {live.description && (
+          <p className="tm-description">{live.description}</p>
+        )}
 
         {/* ---------------- Change windows + lifetime range ---------------- */}
         {changeWindows.length > 0 && (

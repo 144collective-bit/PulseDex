@@ -59,10 +59,17 @@
   grid-template-columns: minmax(200px, 1fr) auto minmax(200px, 300px);
   align-items: center;
   gap: 18px;
-  padding: 11px 16px;
-  background: var(--tr-panel);
+  padding: 13px 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 30%),
+    var(--tr-panel);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+  backdrop-filter: blur(16px) saturate(130%);
   border: 1px solid var(--tr-hairline);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 12px 30px rgba(0, 0, 0, 0.22);
 }
 
 .tlh-brand {
@@ -200,10 +207,19 @@
   flex-direction: column;
   width: 100%;
   min-height: 0;
-  background: var(--tr-panel);
+  background:
+    radial-gradient(120% 70% at 0% 0%, rgba(0, 229, 255, 0.04), transparent 62%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 26%),
+    var(--tr-panel);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+  backdrop-filter: blur(16px) saturate(130%);
   border: 1px solid var(--tr-hairline);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 2px 8px rgba(0, 0, 0, 0.24),
+    0 16px 40px rgba(0, 0, 0, 0.2);
 }
 
 .trench-panel-head {
@@ -225,7 +241,7 @@
 }
 
 .tph-title {
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -266,14 +282,14 @@
 }
 
 .tph-agg {
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--pulse-cyan);
 }
 
 .tph-count {
-  padding: 1px 6px;
-  font-size: 9.5px;
+  padding: 2px 8px;
+  font-size: 10.5px;
   font-weight: 700;
   color: var(--text-secondary);
   background: rgba(255, 255, 255, 0.06);
@@ -305,8 +321,8 @@
   grid-template-columns: 26px 46px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  padding: 7px 14px;
-  font-size: 8.5px;
+  padding: 8px 14px;
+  font-size: 9.5px;
   font-weight: 600;
   letter-spacing: 0.08em;
   color: var(--text-muted);
@@ -577,14 +593,15 @@
 .tr-grad-tag {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 2px 6px;
-  font-size: 8.5px;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 9.5px;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  color: var(--tr-up);
-  background: rgba(0, 224, 138, 0.12);
-  border-radius: var(--radius-sm);
+  letter-spacing: 0.06em;
+  color: var(--pulse-green);
+  background: var(--pulse-green-bg);
+  border: 1px solid rgba(0, 255, 157, 0.3);
+  border-radius: var(--radius-full);
   white-space: nowrap;
 }
 
@@ -1317,4 +1334,330 @@
 
   /* Keep the column label honest about what the rows below actually show. */
   .tcl-vol { display: none; }
+}
+
+/* --------------------------------------------------------------------------
+   Marks
+
+   Better than half of freshly created tokens ship with no artwork at all - the
+   launchpad returns a null image for them - so the initials placeholder is a
+   permanent, common state on the New Launches column rather than an edge case.
+   It gets the same ring and weight as a real logo so a row without art reads as
+   deliberate rather than broken.
+   -------------------------------------------------------------------------- */
+.tr-logo img,
+.tr-logo .token-logo-fallback,
+.tape-token img,
+.tape-token .token-logo-fallback {
+  border: 1px solid rgba(0, 229, 255, 0.26) !important;
+  box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.05);
+}
+
+.tr-logo .token-logo-fallback {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+/* Rows lift on hover the way the cards elsewhere do. */
+.trench-row {
+  transition: background 0.16s ease, border-left-color 0.16s ease;
+}
+
+.trench-row:hover .tr-symbol { color: var(--pulse-cyan); }
+
+/* Bonding bar reads as instrumentation, with a glow on the hot band. */
+.tr-bond-track {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.heat-hot .tr-bond-fill {
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.55);
+}
+
+.heat-cool .tr-bond-fill {
+  box-shadow: 0 0 6px rgba(0, 229, 255, 0.4);
+}
+
+/* ==========================================================================
+   TOKEN DETAIL - upgraded
+
+   Treated as a product surface rather than a popup: a hero derived from the
+   token's own mark, framed panels around the price and the chart, and trade
+   rows at a size you can actually read while a feed is moving.
+   ========================================================================== */
+
+.trench-modal {
+  width: min(1080px, 100%);
+  border-radius: var(--radius-lg);
+}
+
+/* --- Hero ---------------------------------------------------------------- */
+.tm-hero {
+  position: relative;
+  height: 132px;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(0, 229, 255, 0.1), rgba(217, 70, 239, 0.08));
+}
+
+.tm-hero-art {
+  position: absolute;
+  inset: -30%;
+  background-size: cover;
+  background-position: center;
+  /* Heavy blur because this is a small square logo stretched to a wide banner;
+     it reads as colour and movement, never as a legible image. */
+  filter: blur(38px) saturate(150%);
+  transform: scale(1.15);
+  opacity: 0.75;
+}
+
+.tm-hero-veil {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(11, 15, 24, 0.25) 0%, rgba(11, 15, 24, 0.92) 88%);
+}
+
+/* --- Header -------------------------------------------------------------- */
+.tm-head {
+  position: relative;
+  z-index: 1;
+  align-items: flex-end;
+  gap: 16px;
+  padding: 0 20px 16px;
+  /* Pulls the identity block up so the mark straddles the hero edge. */
+  margin-top: -40px;
+  border-bottom: 1px solid var(--tr-hairline);
+}
+
+.tm-head-logo {
+  display: flex;
+  flex-shrink: 0;
+  border-radius: 50%;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
+}
+
+.tm-symbol { font-size: 24px; letter-spacing: -0.03em; }
+.tm-name { font-size: 13px; }
+
+.tm-ident-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tm-address {
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--tr-hairline);
+  border-radius: var(--radius-full);
+}
+
+.tm-social {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--tr-hairline);
+  border-radius: var(--radius-full);
+  transition: all 0.15s ease;
+}
+
+.tm-social:hover {
+  color: var(--pulse-cyan);
+  border-color: rgba(0, 229, 255, 0.35);
+}
+
+/* The headline price gets a frame of its own. */
+.tm-price-block {
+  align-items: flex-end;
+  gap: 3px;
+  padding: 10px 16px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--tr-hairline);
+  border-radius: var(--radius-md);
+}
+
+.tm-price {
+  font-family: var(--font-numeric);
+  font-size: 26px;
+  font-weight: 780;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+}
+
+.tm-price-pls { font-size: 11px; }
+
+.tm-description {
+  padding: 12px 20px 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+/* --- Figures ------------------------------------------------------------- */
+.tm-chip-label { font-size: 10px; letter-spacing: 0.12em; }
+.tm-chip-val { font-size: 16px; font-weight: 700; }
+.tm-chip { padding: 10px 4px; }
+
+.tm-stats { gap: 14px 18px; padding: 16px 20px; }
+.tm-stat-label { font-size: 10px; letter-spacing: 0.11em; }
+
+.tm-stat-val {
+  font-family: var(--font-numeric);
+  font-size: 19px;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+}
+
+.tm-bond { padding: 12px 20px; }
+.tm-bond-title { font-size: 10px; letter-spacing: 0.11em; }
+.tm-bond-pct { font-size: 14px; }
+.tm-bond-foot { font-size: 11px; }
+
+/* --- Chart, framed ------------------------------------------------------- */
+.tm-chart-block {
+  margin: 16px 20px;
+  background: rgba(0, 0, 0, 0.26);
+  border: 1px solid var(--tr-hairline);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.tm-chart-bar { padding: 11px 14px 4px; }
+.tm-chart { height: 300px; }
+.tm-flow-label, .tm-flow-pct { font-size: 10.5px; }
+.tm-flow-track { width: 140px; height: 6px; }
+.tm-interval { padding: 5px 12px; font-size: 11px; }
+
+/* --- Trades and holders -------------------------------------------------- */
+.tm-lower {
+  margin: 0 20px 16px;
+  background: rgba(0, 0, 0, 0.26);
+  border: 1px solid var(--tr-hairline);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.tm-tabs { padding: 8px 14px 0; }
+.tm-tab { font-size: 11px; padding: 7px 13px; }
+.tm-tab-note { font-size: 10.5px; }
+
+.tm-table-labels {
+  padding: 7px 14px;
+  font-size: 9.5px;
+  letter-spacing: 0.11em;
+}
+
+/* The tape is the part people read while it moves, so it gets real size. */
+.tm-trade,
+.tm-holder {
+  padding: 9px 14px;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tm-trade-side {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.tm-trade-usd {
+  font-family: var(--font-numeric);
+  font-size: 16px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.tm-dim { font-size: 12.5px; }
+.tm-holder-rank { font-size: 12px; }
+.tm-holder-share { font-size: 13px; }
+.tm-table-scroll { min-height: 200px; max-height: 300px; }
+
+.tm-foot { padding: 11px 20px; }
+.tm-link { padding: 6px 12px; font-size: 11px; }
+
+@media (max-width: 900px) {
+  .tm-hero { height: 104px; }
+  .tm-head { margin-top: -32px; padding: 0 14px 13px; }
+  .tm-symbol { font-size: 20px; }
+  .tm-price { font-size: 22px; }
+  .tm-chart-block, .tm-lower { margin-left: 12px; margin-right: 12px; }
+  .tm-chart { height: 220px; }
+  .tm-stats { padding: 13px 14px; }
+  .tm-stat-val { font-size: 17px; }
+  .tm-trade, .tm-holder { font-size: 13px; padding: 8px 12px; }
+  .tm-trade-usd { font-size: 14px; }
+  .tm-description { padding: 10px 14px 0; font-size: 12px; }
+}
+
+/*
+ * The detail panel now carries a hero, a framed chart and a trade table. Those
+ * fixed sections together exceed the dialog's max height, and .tm-lower was the
+ * only flexible one - so it collapsed to nothing and the trades disappeared.
+ * The dialog scrolls as a whole instead, and every section keeps its own size.
+ */
+.trench-modal {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.tm-lower {
+  flex: none;
+}
+
+.tm-table-scroll {
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+/* Tabs stay put while their table scrolls under them. */
+.tm-tabs,
+.tm-table-labels {
+  position: sticky;
+  z-index: 1;
+  background: #0b0f18;
+}
+
+.tm-tabs { top: 0; }
+.tm-table-labels { top: 38px; }
+
+/*
+ * Phone header: a 72px mark, the identity block, the price panel and the close
+ * button do not fit one row at 375px - the name truncated to "Actua..." behind
+ * the price. The price drops to its own full-width row beneath instead.
+ */
+@media (max-width: 560px) {
+  .tm-head {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      'logo ident close'
+      'price price price';
+    gap: 10px 12px;
+    align-items: center;
+  }
+
+  .tm-head-logo { grid-area: logo; }
+  .tm-ident { grid-area: ident; }
+  .tm-close { grid-area: close; align-self: start; }
+
+  .tm-price-block {
+    grid-area: price;
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .tm-symbol { font-size: 19px; }
+  .tm-name { font-size: 12px; }
 }

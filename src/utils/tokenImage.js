@@ -85,19 +85,25 @@ export function rememberResolvedImage(cid, url) {
 }
 
 /**
- * Deterministic gradient for the initials placeholder, derived from the token
+ * Deterministic accent for the initials placeholder, derived from the token
  * address so the same token always gets the same colour.
+ *
+ * Returns a hue rather than a finished gradient: the placeholder is rendered as
+ * a dark tinted surface with coloured initials, not a solid bright disc. On a
+ * board where better than half of new tokens ship without artwork, a wall of
+ * saturated circles reads as broken images; a tinted glass chip reads as a
+ * token that simply has no logo yet.
  */
-export function avatarGradient(seed) {
+export function avatarAccent(seed) {
   const key = String(seed || '')
   const hash = key.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
-  const gradients = [
-    'linear-gradient(135deg, #00ff9d 0%, #00c97b 100%)',
-    'linear-gradient(135deg, #d946ef 0%, #a855f7 100%)',
-    'linear-gradient(135deg, #00e5ff 0%, #3b82f6 100%)',
-    'linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)',
-    'linear-gradient(135deg, #f43f5e 0%, #e11d48 100%)',
-    'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)',
+  const accents = [
+    '#00e5ff', // cyan
+    '#00ff9d', // mint
+    '#d946ef', // magenta
+    '#fbbf24', // amber
+    '#3b9dff', // blue
+    '#a78bfa', // violet
   ]
-  return gradients[hash % gradients.length]
+  return accents[hash % accents.length]
 }

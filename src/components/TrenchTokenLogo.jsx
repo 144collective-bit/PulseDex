@@ -3,7 +3,7 @@ import {
   ipfsCandidates,
   getResolvedImage,
   rememberResolvedImage,
-  avatarGradient,
+  avatarAccent,
 } from '../utils/tokenImage'
 import { safeExternalUrl } from '../utils/formatters'
 
@@ -92,6 +92,7 @@ export default function TrenchTokenLogo({
   // Every source failed (or the token has no art) — fall back to initials on a
   // gradient seeded by the address, so the placeholder is stable per token.
   const initials = (symbol || '?').toUpperCase().trim().slice(0, 3)
+  const accent = avatarAccent(address || symbol)
 
   return (
     <div
@@ -99,15 +100,17 @@ export default function TrenchTokenLogo({
       className={`token-logo-fallback ${className}`}
       style={{
         ...dimensions,
-        background: avatarGradient(address || symbol),
+        // Tinted glass rather than a solid disc, so a token without artwork
+        // sits alongside real logos instead of shouting over them.
+        background: `radial-gradient(circle at 30% 25%, ${accent}26, ${accent}0d 70%), #0d131e`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#000000',
+        color: accent,
         fontWeight: 800,
-        fontSize: `${Math.max(8, Math.floor(size * 0.38))}px`,
-        letterSpacing: '-0.5px',
-        border: '1px solid rgba(255, 255, 255, 0.2)',
+        fontSize: `${Math.max(9, Math.floor(size * 0.34))}px`,
+        letterSpacing: '-0.02em',
+        border: `1px solid ${accent}47`,
         userSelect: 'none',
       }}
     >

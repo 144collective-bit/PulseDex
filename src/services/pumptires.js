@@ -78,6 +78,13 @@ export function normalizeToken(raw) {
     name: raw.name || 'Unknown',
     symbol: raw.symbol || '???',
     description: raw.description || '',
+
+    // Socials and counts the detail endpoint carries but nothing consumed yet.
+    twitter: raw.twitter || null,
+    telegram: raw.telegram || null,
+    website: raw.web || null,
+    tradesCount: Number(raw.total_trades_count || 0),
+    burnsCount: Number(raw.total_burns_count || 0),
     // Raw CID travels with the token so the avatar can pick a live gateway;
     // imageUrl stays as the single-gateway convenience form.
     imageCid: isValidCid(raw.image_cid) ? raw.image_cid.trim() : null,
