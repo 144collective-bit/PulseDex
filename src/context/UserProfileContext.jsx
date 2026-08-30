@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import { useAuth } from './AuthContext'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
+import { useSiweAuth } from './SiweAuthContext'
+import { readScoped, writeScoped, storageKey, purgeLegacyKeys } from '../utils/profileStorage'
 
 const UserProfileContext = createContext(null)
 
@@ -224,32 +225,43 @@ export function playChimeSound(type = 'success') {
 }
 
 export function UserProfileProvider({ children }) {
-  const { currentUser, updateCurrentUser } = useAuth()
+  const { account } = useSiweAuth()
 
-  // 1. Profile Data
-  const [profile, setProfile] = useState(() => {
-    try {
-      const saved = localStorage.getItem('pulsedex_user_profile')
-      return saved ? { ...DEFAULT_PROFILE, ...JSON.parse(saved) } : DEFAULT_PROFILE
-    } catch {
-      return DEFAULT_PROFILE
-    }
-  })
+  /**
+   * The signed-in identity, as far as this context is concerned.
+   *
+   * The browser-side user vault it used to write through has been retired
+   * along with password auth. Profile data still persists to localStorage
+   * below, which is device-local and honest for now; the server-backed store
+   * lands with the profile page, and `updateCurrentUser` becomes its write
+   * path then. Kept as a no-op rather than deleted so the ~10 call sites
+   * downstream do not have to be rewritten twice.
+   */
+  // Memoised on the address. Built inline it was a fresh object every render,
+  // which re-ran the sync effect below and rebuilt eight useCallbacks on every
+  // pass - defeating the memoisation they exist for.
+  const currentUser = useMemo(
+    () => (account ? { id: account, username: account } : null),
+    [account]
+  )
+  const updateCurrentUser = useCallback(() => {}, [])
+
+  // 1. Profile Data - scoped to the signed-in account.
+  const [profile, setProfile] = useState(() => ({
+    ...DEFAULT_PROFILE,
+    ...readScoped('user_profile', account, {}),
+  }))
 
   // 2. Preferences
-  const [preferences, setPreferences] = useState(() => {
-    try {
-      const saved = localStorage.getItem('pulsedex_user_preferences')
-      return saved ? { ...DEFAULT_PREFERENCES, ...JSON.parse(saved) } : DEFAULT_PREFERENCES
-    } catch {
-      return DEFAULT_PREFERENCES
-    }
-  })
+  const [preferences, setPreferences] = useState(() => ({
+    ...DEFAULT_PREFERENCES,
+    ...readScoped('user_preferences', account, {}),
+  }))
 
   // 3. Trade Notes Journal
   const [tradeNotes, setTradeNotes] = useState(() => {
     try {
-      const saved = localStorage.getItem('pulsedex_trade_notes')
+      const saved = localStorage.getItem(storageKey('trade_notes', account))
       return saved ? JSON.parse(saved) : INITIAL_NOTES
     } catch {
       return INITIAL_NOTES
@@ -259,43 +271,36 @@ export function UserProfileProvider({ children }) {
   // 4. Modal Open State
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
 
-  // Synchronize state when authenticated currentUser changes
+  /**
+   * Load this account's own profile whenever the signed-in address changes.
+   *
+   * Without this, signing out of one wallet and into another left the previous
+   * account's display name, bio and trade notes on screen: the state had been
+   * read once at mount and never reloaded. Scoping the storage keys fixes what
+   * is written; this is what fixes what is shown.
+   */
   useEffect(() => {
-    if (currentUser) {
-      if (currentUser.profile) {
-        setProfile((prev) => {
-          const merged = { ...DEFAULT_PROFILE, ...prev, ...currentUser.profile }
-          localStorage.setItem('pulsedex_user_profile', JSON.stringify(merged))
-          return merged
-        })
-      }
-      if (currentUser.preferences) {
-        setPreferences((prev) => {
-          const merged = { ...DEFAULT_PREFERENCES, ...prev, ...currentUser.preferences }
-          localStorage.setItem('pulsedex_user_preferences', JSON.stringify(merged))
-          return merged
-        })
-      }
-      if (currentUser.tradeNotes && Array.isArray(currentUser.tradeNotes) && currentUser.tradeNotes.length > 0) {
-        setTradeNotes(currentUser.tradeNotes)
-        localStorage.setItem('pulsedex_trade_notes', JSON.stringify(currentUser.tradeNotes))
-      }
-    }
-  }, [currentUser])
+    purgeLegacyKeys()
+    setProfile({ ...DEFAULT_PROFILE, ...readScoped('user_profile', account, {}) })
+    setPreferences({ ...DEFAULT_PREFERENCES, ...readScoped('user_preferences', account, {}) })
+
+    const notes = readScoped('trade_notes', account, null)
+    setTradeNotes(Array.isArray(notes) ? notes : INITIAL_NOTES)
+  }, [account])
 
   // Save profile changes
   const updateProfile = useCallback(
     (updates) => {
       setProfile((prev) => {
         const next = { ...prev, ...updates }
-        localStorage.setItem('pulsedex_user_profile', JSON.stringify(next))
+        writeScoped('user_profile', account, next)
         if (currentUser) {
           updateCurrentUser({ profile: next })
         }
         return next
       })
     },
-    [currentUser, updateCurrentUser]
+    [account, currentUser, updateCurrentUser]
   )
 
   // Save preferences changes
@@ -303,14 +308,14 @@ export function UserProfileProvider({ children }) {
     (updates) => {
       setPreferences((prev) => {
         const next = { ...prev, ...updates }
-        localStorage.setItem('pulsedex_user_preferences', JSON.stringify(next))
+        writeScoped('user_preferences', account, next)
         if (currentUser) {
           updateCurrentUser({ preferences: next })
         }
         return next
       })
     },
-    [currentUser, updateCurrentUser]
+    [account, currentUser, updateCurrentUser]
   )
 
   // Manage Trade Notes
@@ -324,28 +329,28 @@ export function UserProfileProvider({ children }) {
           ...noteObj,
         }
         const next = [newNote, ...prev]
-        localStorage.setItem('pulsedex_trade_notes', JSON.stringify(next))
+        writeScoped('trade_notes', account, next)
         if (currentUser) {
           updateCurrentUser({ tradeNotes: next })
         }
         return next
       })
     },
-    [currentUser, updateCurrentUser]
+    [account, currentUser, updateCurrentUser]
   )
 
   const deleteTradeNote = useCallback(
     (id) => {
       setTradeNotes((prev) => {
         const next = prev.filter((n) => n.id !== id)
-        localStorage.setItem('pulsedex_trade_notes', JSON.stringify(next))
+        writeScoped('trade_notes', account, next)
         if (currentUser) {
           updateCurrentUser({ tradeNotes: next })
         }
         return next
       })
     },
-    [currentUser, updateCurrentUser]
+    [account, currentUser, updateCurrentUser]
   )
 
   // Apply Theme & Privacy classes to root
@@ -390,15 +395,15 @@ export function UserProfileProvider({ children }) {
         const parsed = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData
         if (parsed.profile) {
           setProfile(parsed.profile)
-          localStorage.setItem('pulsedex_user_profile', JSON.stringify(parsed.profile))
+          writeScoped('user_profile', account, parsed.profile)
         }
         if (parsed.preferences) {
           setPreferences(parsed.preferences)
-          localStorage.setItem('pulsedex_user_preferences', JSON.stringify(parsed.preferences))
+          writeScoped('user_preferences', account, parsed.preferences)
         }
         if (parsed.tradeNotes && Array.isArray(parsed.tradeNotes)) {
           setTradeNotes(parsed.tradeNotes)
-          localStorage.setItem('pulsedex_trade_notes', JSON.stringify(parsed.tradeNotes))
+          writeScoped('trade_notes', account, parsed.tradeNotes)
         }
         if (currentUser) {
           updateCurrentUser({
@@ -413,7 +418,7 @@ export function UserProfileProvider({ children }) {
         return { success: false, error: err.message }
       }
     },
-    [currentUser, updateCurrentUser, profile, preferences, tradeNotes]
+    [account, currentUser, updateCurrentUser, profile, preferences, tradeNotes]
   )
 
   // Reset profile to default
@@ -431,7 +436,7 @@ export function UserProfileProvider({ children }) {
         tradeNotes: INITIAL_NOTES,
       })
     }
-  }, [currentUser, updateCurrentUser])
+  }, [account, currentUser, updateCurrentUser])
 
   // Trigger sound effect if enabled
   const triggerSound = useCallback(

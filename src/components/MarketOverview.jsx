@@ -24,6 +24,7 @@ import {
 import TokenLogo from './TokenLogo'
 import { formatCryptoPrice, formatUsd, formatCompactCount, calculateTokenMarketScore } from '../utils/formatters'
 import { getCorePulseRank } from '../services/dexscreener'
+import { useEscapeKey } from '../hooks/useEscapeKey'
 
 export default function MarketOverview({
   pairs = [],
@@ -41,6 +42,7 @@ export default function MarketOverview({
   const [sortDirection, setSortDirection] = useState('desc') // 'asc' | 'desc'
   const [copiedAddr, setCopiedAddr] = useState('')
   const [activePoolsModalToken, setActivePoolsModalToken] = useState(null)
+  useEscapeKey(Boolean(activePoolsModalToken), () => setActivePoolsModalToken(null))
 
   const handleCopy = (e, text) => {
     e.stopPropagation()

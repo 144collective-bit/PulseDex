@@ -12,6 +12,7 @@ import {
   Lock,
 } from 'lucide-react'
 import { pulsechain } from '../config/pulsechain'
+import { useEscapeKey } from '../hooks/useEscapeKey'
 
 // Curated supported wallet definitions with detection checks, official download links & SVGs
 const SUPPORTED_WALLETS = [
@@ -131,6 +132,8 @@ function matchesWallet(connector, walletId) {
 }
 
 export default function WalletConnectModal({ isOpen, onClose }) {
+  useEscapeKey(isOpen, onClose)
+
   const { address, isConnected } = useAccount()
   const { connectors, connect, isPending, error } = useConnect()
   const { disconnect } = useDisconnect()
@@ -330,10 +333,19 @@ export default function WalletConnectModal({ isOpen, onClose }) {
                 const isThisConnecting = isPending && connectingWalletId === w.id
 
                 return (
-                  <div
+                  /* A real button, not a clickable div. Connecting a wallet is
+                     the primary action of the app; as a div it could not be
+                     reached by Tab, took no focus ring, and was not announced
+                     as actionable by a screen reader. */
+                  <button
                     key={w.id}
+                    type="button"
                     className={`wallet-option-item ${isThisConnecting ? 'is-connecting' : ''}`}
                     onClick={() => handleConnect(w)}
+                    disabled={isThisConnecting}
+                    aria-label={
+                      isDetected ? `Connect ${w.name}` : `Install ${w.name}`
+                    }
                   >
                     <div className="wallet-option-left">
                       <div className="wallet-option-icon">{w.icon}</div>
@@ -357,7 +369,7 @@ export default function WalletConnectModal({ isOpen, onClose }) {
                       {isThisConnecting ? (
                         <div className="wallet-spin-loader"></div>
                       ) : isDetected ? (
-                        <button className="wallet-connect-cta-btn">Connect</button>
+                        <span className="wallet-connect-cta-btn">Connect</span>
                       ) : (
                         <div className="wallet-install-link" title="Open official download site">
                           <span>Get</span>
@@ -365,7 +377,7 @@ export default function WalletConnectModal({ isOpen, onClose }) {
                         </div>
                       )}
                     </div>
-                  </div>
+                  </button>
                 )
               })}
             </div>

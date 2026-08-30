@@ -17,6 +17,7 @@ import {
 import TokenLogo from './TokenLogo'
 import { getCorePulseRank, deduplicatePairs, CORE_PULSE_CONTRACTS } from '../services/dexscreener'
 import { formatCryptoPrice, formatUsd } from '../utils/formatters'
+import { useWatchlistPairs } from '../hooks/useWatchlistPairs'
 
 export default function SidebarPairs({
   pairs = [],
@@ -30,6 +31,8 @@ export default function SidebarPairs({
   const [tab, setTab] = useState('hot') // 'hot' | 'gainers' | 'losers' | 'volume' | 'watchlist'
   const [search, setSearch] = useState('')
   const [dexFilter, setDexFilter] = useState('all') // 'all' | 'pulsex' | '9mm' | '9inch'
+
+  const { watchlistPairs, isLoading: loadingWatchlist } = useWatchlistPairs(watchlist, pairs)
 
   const displayedPairs = useMemo(() => {
     let list = [...pairs]
@@ -52,7 +55,10 @@ export default function SidebarPairs({
     }
 
     if (tab === 'watchlist') {
-      list = list.filter((p) => watchlist.includes(p.pairAddress?.toLowerCase()))
+      // Starred pairs come from the hook, which fills in anything the board's
+      // feed is not currently carrying. Filtering the feed alone silently drops
+      // a starred pair as soon as it stops trending.
+      list = watchlistPairs
     } else if (tab === 'gainers') {
       list.sort((a, b) => (b.priceChange?.h24 || 0) - (a.priceChange?.h24 || 0))
     } else if (tab === 'losers') {
@@ -82,7 +88,7 @@ export default function SidebarPairs({
     }
 
     return list.slice(0, 40)
-  }, [pairs, tab, search, dexFilter, watchlist])
+  }, [pairs, tab, search, dexFilter, watchlistPairs])
 
   const isCoreAsset = (pair) => {
     return getCorePulseRank(pair) <= 4

@@ -27,7 +27,7 @@
    -------------------------------------------------------------------------- */
 .dex-head {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 20px;
   flex-wrap: wrap;
@@ -35,38 +35,11 @@
   border-bottom: 1px solid var(--dx-hairline);
 }
 
-.dex-title-block { display: flex; flex-direction: column; gap: 6px; }
-
-.dex-eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-instrument);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  color: var(--pulse-cyan);
+.dex-head-analytics {
+  flex: 1 1 420px;
+  min-width: 0;
 }
 
-.dex-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--pulse-cyan);
-  box-shadow: 0 0 8px var(--pulse-cyan);
-}
-
-.dex-title {
-  font-size: 30px;
-  font-weight: 800;
-  letter-spacing: -0.025em;
-  line-height: 1.05;
-  color: var(--text-primary);
-  background: linear-gradient(180deg, #ffffff 25%, #b9c6d8 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
 
 .dex-modes {
   display: inline-flex;
@@ -999,3 +972,414 @@
   text-align: center;
   color: var(--text-muted);
 }
+
+/* --------------------------------------------------------------------------
+   Token analytics strip
+
+   Occupies the band the page title used to. Cells are separated by hairlines
+   rather than boxed, so the row reads as one instrument panel instead of six
+   competing cards.
+   -------------------------------------------------------------------------- */
+.dex-analytics {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.dex-analytics::-webkit-scrollbar { display: none; }
+
+.dex-analytics.is-empty {
+  align-items: center;
+  min-height: 46px;
+  font-family: var(--font-instrument);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.dex-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 0 0 auto;
+  padding: 0 18px;
+  border-left: 1px solid var(--dx-hairline);
+}
+
+.dex-stat:first-child { padding-left: 0; border-left: none; }
+
+.dex-stat-label {
+  font-family: var(--font-instrument);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dx-label);
+  white-space: nowrap;
+}
+
+.dex-stat-value {
+  font-family: var(--font-numeric);
+  font-size: 19px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Price leads the row, so it is the one figure allowed to be bigger. */
+.dex-stat-value.is-accent { font-size: 23px; }
+.dex-stat-value.is-up { color: var(--dx-up); }
+.dex-stat-value.is-down { color: var(--dx-down); }
+
+/* --------------------------------------------------------------------------
+   Chart subject
+
+   Says what is plotted and is itself the control that changes it - a separate
+   "change token" button beside a label naming the token would be two things
+   doing one job.
+   -------------------------------------------------------------------------- */
+.dex-subject {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 12px 16px;
+  text-align: left;
+  background:
+    radial-gradient(120% 140% at 0% 0%, rgba(0, 229, 255, 0.07), transparent 62%),
+    var(--dx-surface);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  backdrop-filter: blur(14px) saturate(130%);
+  border: 1px solid var(--dx-hairline);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.dex-subject:hover {
+  border-color: rgba(0, 229, 255, 0.32);
+}
+
+.dex-subject-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.dex-subject-sym {
+  font-family: var(--font-sans);
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.dex-subject-quote {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.dex-subject-venue {
+  margin-left: 9px;
+  padding: 3px 7px;
+  font-family: var(--font-instrument);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--pulse-cyan);
+  vertical-align: middle;
+  background: var(--pulse-cyan-bg);
+  border: 1px solid rgba(0, 229, 255, 0.26);
+  border-radius: var(--radius-full);
+}
+
+.dex-subject-name {
+  font-family: var(--font-instrument);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dex-subject-caret {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: color 0.18s ease;
+}
+
+.dex-subject:hover .dex-subject-caret { color: var(--pulse-cyan); }
+
+@media (max-width: 720px) {
+  .dex-stat { padding: 0 13px; }
+  .dex-stat-value { font-size: 16px; }
+  .dex-stat-value.is-accent { font-size: 19px; }
+  .dex-subject-sym { font-size: 17px; }
+
+  /* The strip always overflows at this width, so its trailing edge fades to
+     read as more content rather than as a clipped figure. */
+  .dex-analytics {
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+  }
+}
+
+/* Pool figures belong to the pair on the chart rather than to the token, so
+   the group is separated by a heavier rule than the cell hairlines. */
+.dex-stat.is-group-start {
+  margin-left: 6px;
+  border-left-width: 2px;
+  border-left-color: rgba(0, 229, 255, 0.28);
+}
+
+/* --------------------------------------------------------------------------
+   Route bar
+
+   Only rendered when the pool being charted isn't the one the pair implies -
+   no direct pool, or one too thin to plot.
+   -------------------------------------------------------------------------- */
+.dex-route {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 12px;
+  padding: 11px 14px;
+  background: rgba(255, 193, 7, 0.05);
+  border: 1px solid rgba(255, 193, 7, 0.2);
+  border-radius: var(--radius-md);
+}
+
+.dex-route.is-empty {
+  color: var(--pulse-red);
+  background: rgba(255, 61, 87, 0.06);
+  border-color: rgba(255, 61, 87, 0.24);
+}
+
+.dex-route-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 260px;
+  min-width: 0;
+  font-family: var(--font-instrument);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--pulse-yellow);
+}
+
+.dex-route.is-empty,
+.dex-route.is-empty span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-instrument);
+  font-size: 11.5px;
+}
+
+.dex-route-legs {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.dex-route-leg {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 12px;
+  text-align: left;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--dx-hairline);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.dex-route-leg:hover { border-color: rgba(0, 229, 255, 0.3); }
+
+.dex-route-leg.active {
+  background: var(--pulse-cyan-bg);
+  border-color: rgba(0, 229, 255, 0.45);
+}
+
+.dex-route-leg-pair {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.dex-route-leg-liq {
+  font-family: var(--font-instrument);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------------------
+   Pool menu
+
+   Every pool the two selected tokens can trade through. Anchored to the
+   subject bar rather than opened as a modal: it is a refinement of what is
+   already on screen, not a separate task.
+   -------------------------------------------------------------------------- */
+.dex-subject-wrap {
+  position: relative;
+}
+
+.dex-subject.is-open {
+  border-color: rgba(0, 229, 255, 0.4);
+}
+
+.dex-subject.is-open .dex-subject-caret {
+  color: var(--pulse-cyan);
+  transform: rotate(180deg);
+}
+
+.dex-subject-caret { transition: color 0.18s ease, transform 0.18s ease; }
+
+.dex-pool-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% - 6px);
+  left: 0;
+  right: 0;
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 6px;
+  background: rgba(12, 17, 27, 0.97);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid rgba(0, 229, 255, 0.22);
+  border-radius: var(--radius-md);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+}
+
+.dex-pool-group {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 10px 7px;
+  font-family: var(--font-instrument);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dx-label);
+}
+
+.dex-pool-count {
+  margin-left: auto;
+  padding: 1px 6px;
+  font-size: 9.5px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: var(--radius-full);
+}
+
+.dex-pool-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+
+.dex-pool-row:hover { background: rgba(255, 255, 255, 0.05); }
+
+.dex-pool-row.active {
+  background: var(--pulse-cyan-bg);
+  border-color: rgba(0, 229, 255, 0.3);
+}
+
+.dex-pool-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.dex-pool-pair {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.dex-pool-venue {
+  font-family: var(--font-instrument);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dex-pool-thin {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  font-family: var(--font-instrument);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pulse-yellow);
+  background: rgba(255, 193, 7, 0.12);
+  border: 1px solid rgba(255, 193, 7, 0.28);
+  border-radius: var(--radius-full);
+}
+
+.dex-pool-figures {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex-shrink: 0;
+  text-align: right;
+  font-family: var(--font-instrument);
+  font-variant-numeric: tabular-nums;
+}
+
+.dex-pool-liq { font-size: 12px; font-weight: 700; color: var(--text-secondary); }
+.dex-pool-vol { font-size: 10px; font-weight: 600; color: var(--text-muted); }
+
+.dex-pool-check { flex-shrink: 0; color: var(--pulse-cyan); }
+
+.dex-pool-empty {
+  padding: 16px 10px;
+  font-family: var(--font-instrument);
+  font-size: 11.5px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* A thin-liquidity caution is a stronger statement than a route note, so it
+   carries the warning colour rather than the neutral amber. */
+.dex-route.is-warning {
+  background: rgba(255, 149, 0, 0.07);
+  border-color: rgba(255, 149, 0, 0.3);
+}
+
+.dex-route.is-warning .dex-route-note { color: #ffb340; }

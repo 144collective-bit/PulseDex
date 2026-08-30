@@ -23,12 +23,10 @@ import PortfolioSection from './components/PortfolioSection'
 import TrenchesView from './components/TrenchesView'
 import DexTerminal from './components/DexTerminal'
 import DexComingSoon from './components/DexComingSoon'
-import TokenLaunchView from './components/TokenLaunchView'
 import WalletConnectModal from './components/WalletConnectModal'
 import UserProfileModal from './components/UserProfileModal'
 import ProfileView from './components/ProfileView'
-import AuthModal from './components/AuthModal'
-import { AuthProvider } from './context/AuthContext'
+import { SiweAuthProvider } from './context/SiweAuthContext'
 import { UserProfileProvider } from './context/UserProfileContext'
 import { FEATURES } from './config/features'
 
@@ -261,7 +259,6 @@ function MainApp() {
             <DexTerminal
               pairs={topPairs}
               isLoadingPairs={isLoadingTopPairs}
-              currentPair={currentPair}
               onSelectPair={handleSelectPair}
             />
           ) : (
@@ -291,7 +288,6 @@ function MainApp() {
 
         {FEATURES.profile && activeTab === 'profile' && <ProfileView />}
 
-        {activeTab === 'token' && <TokenLaunchView />}
         </>
         )}
       </main>
@@ -313,7 +309,6 @@ function MainApp() {
       {FEATURES.profile && <UserProfileModal />}
 
       {/* Global Auth Sign Up / Sign In Modal */}
-      {FEATURES.auth && <AuthModal />}
     </div>
   )
 }
@@ -322,11 +317,11 @@ export default function App() {
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <AuthProvider>
+        <SiweAuthProvider>
           <UserProfileProvider>
             <MainApp />
           </UserProfileProvider>
-        </AuthProvider>
+        </SiweAuthProvider>
       </QueryClientProvider>
     </WagmiProvider>
   )

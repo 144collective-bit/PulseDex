@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAccount, useDisconnect } from 'wagmi'
+import AccountButton from './AccountButton'
 import {
   Home,
   Search,
@@ -13,15 +14,12 @@ import {
   Zap,
   Radio,
   User,
-  EyeOff,
   UserPlus,
-  LogIn,
   Sparkles,
 } from 'lucide-react'
 import { searchPulsePairs, getNativePlsPrice, getPulseGasPrice } from '../services/dexscreener'
 import TokenLogo from './TokenLogo'
 import { useUserProfile } from '../context/UserProfileContext'
-import { useAuth } from '../context/AuthContext'
 import { FEATURES } from '../config/features'
 export default function Navbar({
   activeTab,
@@ -33,7 +31,6 @@ export default function Navbar({
   const { address, isConnected } = useAccount()
   const { disconnect } = useDisconnect()
   const { profile, activeAvatarDef, openProfileModal, preferences } = useUserProfile()
-  const { currentUser, isAuthenticated, openAuthModal, signOut } = useAuth()
 
   const [plsPrice, setPlsPrice] = useState(0.00001455)
   const [gasPrice, setGasPrice] = useState('150')
@@ -201,15 +198,6 @@ export default function Navbar({
               <PieChart size={16} />
               <span>Portfolio</span>
             </button>
-            {FEATURES.profile && (
-              <button
-                className={`btn-tab ${activeTab === 'profile' ? 'active' : ''}`}
-                onClick={() => setActiveTab('profile')}
-              >
-                <User size={16} className="text-pulse-cyan" />
-                <span>Profile</span>
-              </button>
-            )}
           </nav>
         </div>
 
@@ -288,121 +276,13 @@ export default function Navbar({
             <Search size={16} />
           </button>
 
-          {/* 🚀 Harmonious Glowing "Buy $DEX" Platform Token Button */}
-          <button
-            type="button"
-            className="btn-buy-dex-glow font-mono"
-            onClick={() => setActiveTab('token')}
-            title="$DEX Platform Token"
-          >
-            <Zap size={16} className="buy-dex-zap" />
-            {/* "DEX" is split out so it can carry the wordmark's gradient,
-                matching the DEX half of the PULSEDEX logo. */}
-            <span className="buy-dex-text">
-              BUY $<span className="buy-dex-word">DEX</span>
-            </span>
-          </button>
+          {/* One account control. Signed out it reads "Sign in"; signed in it
+              becomes the identity and the way into the profile. The $DEX buy
+              button that used to sit here is gone until there is a token to
+              buy - it was advertising a purchase nobody can make. */}
+          <AccountButton onOpenProfile={() => setActiveTab('profile')} />
 
-          {FEATURES.auth && (isAuthenticated ? (
-            <div className="user-profile-menu-wrapper" ref={userMenuRef}>
-              <button
-                className="btn-secondary nav-profile-trigger-btn is-authenticated"
-                onClick={() => setShowUserMenu(!showUserMenu)}
-                title={`User Profile: ${profile.displayName} (@${currentUser?.username || profile.username})`}
-              >
-                <div
-                  className="nav-avatar-mini"
-                  style={{
-                    background: activeAvatarDef?.bg || 'linear-gradient(135deg, #00ff9d, #0066ff)',
-                    boxShadow: `0 0 8px ${activeAvatarDef?.glowColor || '#00ff9d'}88`,
-                  }}
-                >
-                  {profile.customAvatarUrl ? (
-                    <img
-                      src={profile.customAvatarUrl}
-                      alt={profile.displayName}
-                      className="nav-avatar-mini-img"
-                      onError={(e) => {
-                        e.target.style.display = 'none'
-                      }}
-                    />
-                  ) : (
-                    <span className="nav-avatar-mini-icon">{activeAvatarDef?.icon || '⚡'}</span>
-                  )}
-                </div>
-                <div className="nav-profile-name-col desktop-only font-mono">
-                  <span className="nav-profile-name">{currentUser?.displayName || profile.displayName}</span>
-                  <span className="nav-profile-sub-handle text-muted">@{currentUser?.username || profile.username}</span>
-                </div>
-                <span className="verified-user-badge" title="Authenticated User">✓</span>
-                <ChevronDown size={12} className="text-muted ml-1" />
-                {preferences.privacyMode && (
-                  <span className="nav-privacy-dot" title="Privacy Mode Active">
-                    <EyeOff size={11} className="text-pulse-yellow" />
-                  </span>
-                )}
-              </button>
 
-              {/* Authenticated User Dropdown Menu */}
-              {showUserMenu && (
-                <div className="user-profile-dropdown glass-panel font-mono">
-                  <div className="user-dropdown-header">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-white text-xs">{currentUser?.displayName || profile.displayName}</span>
-                    </div>
-                    <span className="text-muted text-xs">@{currentUser?.username || profile.username}</span>
-                  </div>
-
-                  <div className="user-dropdown-divider"></div>
-
-                  <button
-                    className="user-dropdown-item"
-                    onClick={() => {
-                      setShowUserMenu(false)
-                      openProfileModal()
-                    }}
-                  >
-                    <User size={14} className="text-pulse-cyan" />
-                    <span>Profile & DEX Preferences</span>
-                  </button>
-
-                  <button
-                    className="user-dropdown-item"
-                    onClick={() => {
-                      setShowUserMenu(false)
-                      openAuthModal('signin')
-                    }}
-                  >
-                    <LogIn size={14} className="text-pulse-green" />
-                    <span>Switch Account</span>
-                  </button>
-
-                  <div className="user-dropdown-divider"></div>
-
-                  <button
-                    className="user-dropdown-item text-pulse-red"
-                    onClick={() => {
-                      setShowUserMenu(false)
-                      signOut()
-                    }}
-                  >
-                    <LogOut size={14} />
-                    <span>Log Out</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            <button
-              type="button"
-              className="btn-guest-signin font-mono"
-              onClick={() => openAuthModal('signin')}
-              title="Sign In to PulseDex (or Create Account)"
-            >
-              <LogIn size={13} className="text-pulse-cyan" />
-              <span>Sign In</span>
-            </button>
-          ))}
 
           {/* Connect Web3 Wallet - Temporarily hidden from UI; underlying functionality preserved */}
           {/*

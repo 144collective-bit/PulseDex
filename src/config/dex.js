@@ -13,6 +13,36 @@ export const PULSEX_ROUTER_V1 = '0x98bf93ebf5c380C0e6Ae8e192A7e2AE08edAcc02'
 
 export const PULSEX_FACTORY_V2 = '0x29eA7545DEf87022BAdc76323F373EA1e707C523'
 
+/**
+ * V1's factory, verified against a pool we already pin: getPair(WPLS, DAI)
+ * here returns 0xE560...E0aE, the canonical WPLS/DAI pool.
+ *
+ * Both factories have to be asked. The same two tokens can hold a pool on
+ * each, and which one is deeper is not predictable - INC/PLSX is $980K on V1
+ * against $336K on V2, while INC/HEX is $17K on V2 against $97 on V1.
+ */
+export const PULSEX_FACTORY_V1 = '0x1715a3E4A142d8b698131108995174F37aEBA10D'
+
+export const FACTORY_ABI = [
+  {
+    name: 'getPair',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'tokenA', type: 'address' },
+      { name: 'tokenB', type: 'address' },
+    ],
+    outputs: [{ name: 'pair', type: 'address' }],
+  },
+]
+
+/**
+ * A direct pool below this is charted as noise rather than as a market - a
+ * couple of trades in a $115 pool draw what looks like a 90% move. Under it,
+ * the terminal falls back and says why.
+ */
+export const DIRECT_POOL_MIN_LIQUIDITY = 10_000
+
 /** Wrapped native. PLS is quoted through WPLS; the UI still says PLS. */
 export const WPLS = '0xA1077a294dDE1B09bB078844df40758a5D0f9a27'
 

@@ -5,11 +5,18 @@
  * Flip a flag back to `true` to restore that section exactly as it was.
  */
 export const FEATURES = {
-  /** Profile tab, profile dropdown, and the profile settings modal. */
-  profile: false,
+  /** Profile page, reachable from the account menu.
+   *
+   *  On while wallet sign-in is live: the account menu offers a Profile item,
+   *  and a menu item that leads to a blank page is worse than no menu item.
+   *  The page itself still reads from the device-local profile store - the
+   *  server-backed version lands with the database. */
+  profile: true,
 
-  /** Sign In / Sign Up entry points. Off while `profile` is off — signing in
-   *  would otherwise land the user on a page that isn't reachable. */
+  /** Retired. Password sign-in was replaced by wallet sign-in, which is always
+   *  available and needs no flag - the account button is the entry point. This
+   *  stays only because the mobile wallet menu still reads it inside a
+   *  commented-out block. */
   auth: false,
 
   /** Markets tab. */
@@ -36,7 +43,9 @@ export const VISIBLE_TABS = [
   'dex',
   ...(FEATURES.markets ? ['markets'] : []),
   'portfolio',
-  ...(FEATURES.profile ? ['profile'] : []),
+  // Profile is deliberately absent. It is reachable from the account button
+  // and nowhere else - a nav tab beside it would be a second door to the same
+  // room, which is the thing the single account control exists to avoid.
 ]
 
 export const isTabVisible = (tab) => VISIBLE_TABS.includes(tab)

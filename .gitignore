@@ -35,3 +35,8 @@ scratch/
 *.bak
 __pycache__/
 *.pyc
+
+# Local environment secrets - never committed
+.env
+.env.local
+.env.*.local

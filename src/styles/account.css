@@ -1,0 +1,180 @@
+/* ==========================================================================
+   ACCOUNT CONTROL
+
+   One button in the header. Signed out it invites sign-in; signed in it is the
+   identity and the way into the profile.
+   ========================================================================== */
+
+.account-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.account-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 16px;
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+
+/* Signed out: the brand gradient, because signing in is the invitation. */
+.account-btn.is-signin {
+  color: #04070d;
+  background: linear-gradient(135deg, var(--pulse-cyan), var(--pulse-green));
+  border: 1px solid transparent;
+  box-shadow: 0 2px 14px rgba(0, 229, 255, 0.28);
+}
+
+.account-btn.is-signin:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 22px rgba(0, 229, 255, 0.38);
+}
+
+.account-btn.is-signin:disabled {
+  cursor: progress;
+  opacity: 0.75;
+}
+
+/* Signed in: quieter. Identity is not a call to action. */
+.account-btn.is-account {
+  padding: 7px 13px 7px 7px;
+  color: var(--text-primary);
+  font-family: var(--font-instrument);
+  font-size: 12.5px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.account-btn.is-account:hover,
+.account-btn.is-account.is-open {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(0, 229, 255, 0.35);
+}
+
+/* Holds the header's shape while the session is being restored, so the bar
+   does not jump once we know who this is. */
+.account-btn.is-placeholder {
+  width: 108px;
+  height: 38px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  pointer-events: none;
+}
+
+/* Derived from the address, so an account is recognisable before anyone has
+   chosen a picture. */
+.account-avatar {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  /* One of six brand accents, picked from the address, over a dark base so
+     every account reads as the same family of mark. */
+  background:
+    radial-gradient(circle at 32% 28%, var(--avatar-accent, #00e5ff), transparent 62%),
+    linear-gradient(140deg, var(--avatar-accent, #00e5ff) 0%, #0b1220 82%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 0 10px color-mix(in srgb, var(--avatar-accent, #00e5ff) 45%, transparent);
+}
+
+.account-avatar.is-lg { width: 38px; height: 38px; }
+
+.account-error {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  max-width: 260px;
+  padding: 7px 10px;
+  font-family: var(--font-instrument);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--pulse-red);
+  background: rgba(255, 61, 87, 0.1);
+  border: 1px solid rgba(255, 61, 87, 0.3);
+  border-radius: var(--radius-sm);
+  z-index: 60;
+}
+
+/* Menu */
+.account-menu {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 236px;
+  padding: 6px;
+  background: rgba(12, 17, 27, 0.97);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+}
+
+.account-menu-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 10px 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.account-menu-ident { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+.account-menu-name {
+  font-family: var(--font-instrument);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.account-menu-sub {
+  font-family: var(--font-instrument);
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.account-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  text-decoration: none;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+
+.account-menu-item:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.account-menu-item.is-danger { color: var(--pulse-red); }
+.account-menu-item.is-danger:hover { background: rgba(255, 61, 87, 0.1); }
+
+@media (max-width: 640px) {
+  .account-btn.is-signin { padding: 8px 13px; font-size: 12.5px; }
+  .account-btn.is-account .account-label { display: none; }
+  .account-btn.is-account { padding: 7px; }
+}

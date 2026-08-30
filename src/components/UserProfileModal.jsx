@@ -1,9 +1,12 @@
 import { X } from 'lucide-react'
 import { useUserProfile } from '../context/UserProfileContext'
 import ProfileView from './ProfileView'
+import { useEscapeKey } from '../hooks/useEscapeKey'
 
 export default function UserProfileModal() {
   const { isProfileModalOpen, closeProfileModal } = useUserProfile()
+
+  useEscapeKey(isProfileModalOpen, closeProfileModal)
 
   if (!isProfileModalOpen) return null
 

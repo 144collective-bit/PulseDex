@@ -3,7 +3,10 @@ import { pulsechain } from '../config/pulsechain'
 import {
   PULSEX_ROUTER_V2,
   PULSEX_ROUTER_V1,
+  PULSEX_FACTORY_V2,
+  PULSEX_FACTORY_V1,
   ROUTER_ABI,
+  FACTORY_ABI,
   WPLS,
   NATIVE_PLS,
 } from '../config/dex'
@@ -72,6 +75,42 @@ export async function fetchTokenMeta(address) {
 /** Native PLS has no contract, so it is routed through WPLS. */
 function toPathAddress(token) {
   return token.address === NATIVE_PLS ? WPLS : token.address
+}
+
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+
+/**
+ * Every PulseX pool holding both tokens, as pair addresses.
+ *
+ * Asked of the factories rather than derived from DexScreener's token
+ * endpoint, which caps its response at 30 pairs and therefore reports pools
+ * that plainly exist as missing: a $972K WPLS/DAI pool returns zero results
+ * when queried from the DAI side and seven from the WPLS side. A factory is
+ * deterministic and cannot truncate.
+ *
+ * Argument order does not matter - the factory sorts the two tokens itself, so
+ * getPair(INC, PRVX) and getPair(PRVX, INC) are the same pool.
+ */
+export async function findDirectPools(tokenA, tokenB) {
+  if (!tokenA || !tokenB) return []
+  const a = toPathAddress(tokenA)
+  const b = toPathAddress(tokenB)
+  if (!a || !b || a.toLowerCase() === b.toLowerCase()) return []
+
+  const results = await Promise.all(
+    [PULSEX_FACTORY_V2, PULSEX_FACTORY_V1].map((factory) =>
+      client
+        .readContract({
+          address: factory,
+          abi: FACTORY_ABI,
+          functionName: 'getPair',
+          args: [a, b],
+        })
+        .catch(() => null)
+    )
+  )
+
+  return [...new Set(results.filter((addr) => addr && addr !== ZERO_ADDRESS))]
 }
 
 /**

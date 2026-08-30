@@ -7196,6 +7196,12 @@
 }
 
 .wallet-option-item {
+  /* Now a <button>, so the browser's default button styling has to be reset
+     and a visible focus ring restored for keyboard users. */
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -7206,6 +7212,13 @@
   cursor: pointer;
   transition: all 0.2s ease;
 }
+
+.wallet-option-item:focus-visible {
+  outline: 2px solid var(--pulse-cyan);
+  outline-offset: 2px;
+}
+
+.wallet-option-item:disabled { cursor: progress; }
 
 .wallet-option-item:hover {
   background: rgba(255, 255, 255, 0.06);
@@ -13118,7 +13131,10 @@
 /* ── Main Cards Grid ── */
 .profile-cards-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* Auto-fit rather than a fixed pair of columns: the security card that used
+     to fill the right half went with password sign-in, and a hard 1fr 1fr left
+     a card-sized hole beside Identity. Cards now claim the row they need. */
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 12px;
   align-items: start;
 }
@@ -14278,4 +14294,13 @@
     position: static;
     max-height: none;
   }
+}
+
+/* Signed-out variant of the identity badge: states the fact rather than
+   borrowing the verified badge's green, which implied a signature that does
+   not exist. */
+.profile-status-badge.is-muted {
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
 }

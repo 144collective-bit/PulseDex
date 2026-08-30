@@ -1,13 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   User, Save, LogIn, LogOut,
   ShieldCheck, Volume2, VolumeX, Eye, EyeOff,
-  Zap, Lock, CheckCircle2, AlertCircle, Radio,
-  FileText, Mail, KeyRound, Shield,
+  Zap, CheckCircle2, Radio,
+  FileText, Mail,
 } from 'lucide-react'
 import { useUserProfile } from '../context/UserProfileContext'
-import { useAuth } from '../context/AuthContext'
-import { evaluatePasswordStrength } from '../services/authSecurity'
+import { useSiweAuth } from '../context/SiweAuthContext'
 
 function ToggleSwitch({ checked, onChange }) {
   return (
@@ -22,6 +21,24 @@ function ToggleSwitch({ checked, onChange }) {
     </button>
   )
 }
+
+/**
+ * Field limits.
+ *
+ * Unbounded fields accepted 20,000 characters, which fills the browser's
+ * storage quota, breaks any layout that renders them, and becomes an abuse
+ * vector the moment profiles are public and server-backed. Enforced in the
+ * change handler as well as via maxLength, because the attribute does not
+ * cover every paste path and does nothing for a value read back from storage.
+ */
+const LIMITS = {
+  displayName: 40,
+  username: 20,
+  email: 254, // RFC 5321 maximum
+  bio: 160,
+}
+
+const clamp = (value, max) => String(value ?? '').slice(0, max)
 
 function FormField({ label, hint, children }) {
   return (
@@ -72,9 +89,9 @@ function StyledInput({ icon: Icon, rightSlot, ...props }) {
   )
 }
 
-function SectionCard({ icon: Icon, iconColor = 'var(--pulse-cyan)', title, subtitle, children, noPadding }) {
+function SectionCard({ icon: Icon, iconColor = 'var(--pulse-cyan)', title, subtitle, children, noPadding, className = '' }) {
   return (
-    <div className="profile-section-card">
+    <div className={`profile-section-card ${className}`}>
       <div className="profile-card-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div className="profile-card-icon-badge">
@@ -92,7 +109,18 @@ function SectionCard({ icon: Icon, iconColor = 'var(--pulse-cyan)', title, subti
 }
 
 export default function ProfileView() {
-  const { currentUser, isAuthenticated, openAuthModal, signOut } = useAuth()
+  // Wallet sign-in replaced the password vault. The rest of this view still
+  // reads from the local profile store; wiring it to the backend is the next
+  // step, so `currentUser` is shaped from the session for now.
+  const { account, isSignedIn, signIn, signOut } = useSiweAuth()
+  // Memoised on the address: built inline it was a new object every render,
+  // which re-ran the sync effect below on every pass.
+  const currentUser = useMemo(
+    () => (account ? { username: account.slice(2, 8), displayName: null, email: null } : null),
+    [account]
+  )
+  const isAuthenticated = isSignedIn
+  const openAuthModal = signIn
   const { profile, preferences, updateProfile, updatePreferences, triggerSound } = useUserProfile()
 
   const [displayName, setDisplayName] = useState('')
@@ -102,26 +130,19 @@ export default function ProfileView() {
   const [saveMsg, setSaveMsg] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
 
-  const [curPw, setCurPw] = useState('')
-  const [newPw, setNewPw] = useState('')
-  const [confPw, setConfPw] = useState('')
-  const [showPw, setShowPw] = useState(false)
-  const [pwStatus, setPwStatus] = useState(null)
-
   useEffect(() => {
-    setDisplayName(currentUser?.displayName || profile.displayName || '')
-    setUsername(currentUser?.username || profile.username || '')
-    setEmail(currentUser?.email || profile.email || '')
-    setBio(profile.bio || '')
+    // The saved profile wins over anything derived from the address. Reading
+    // the session stub first silently replaced a saved username with the hex
+    // fragment on every load, so an edited handle never survived a reload.
+    setDisplayName(clamp(profile.displayName || currentUser?.displayName || '', LIMITS.displayName))
+    setUsername(clamp(profile.username || currentUser?.username || '', LIMITS.username))
+    setEmail(clamp(profile.email || currentUser?.email || '', LIMITS.email))
+    setBio(clamp(profile.bio || '', LIMITS.bio))
   }, [profile, currentUser])
 
   const initials = (displayName || username || 'PT').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-  const displayedName = currentUser?.displayName || displayName || 'Pulse Trader'
-  const displayedHandle = currentUser?.username || username || 'pulse_degen'
-
-  const pwStrength = evaluatePasswordStrength(newPw)
-  const pwSegments = pwStrength.level === 'Strong' ? 3 : pwStrength.level === 'Medium' ? 2 : 1
-  const pwColor = pwStrength.level === 'Strong' ? 'var(--pulse-green)' : pwStrength.level === 'Medium' ? 'var(--pulse-yellow)' : 'var(--pulse-red)'
+  const displayedName = displayName || currentUser?.displayName || 'Pulse Trader'
+  const displayedHandle = username || currentUser?.username || 'pulse_degen'
 
   const saveProfile = e => {
     e?.preventDefault()
@@ -137,15 +158,6 @@ export default function ProfileView() {
     setTimeout(() => { setSaveMsg(null); setIsSaving(false) }, 2500)
   }
 
-  const changePassword = e => {
-    e.preventDefault()
-    if (!newPw || newPw.length < 6) { setPwStatus({ type: 'error', text: 'Minimum 6 characters required.' }); return }
-    if (newPw !== confPw) { setPwStatus({ type: 'error', text: 'Passwords do not match.' }); return }
-    triggerSound('success')
-    setPwStatus({ type: 'success', text: 'Password encrypted and saved to vault.' })
-    setCurPw(''); setNewPw(''); setConfPw('')
-    setTimeout(() => setPwStatus(null), 3500)
-  }
 
   return (
     <div className="profile-page-frame">
@@ -160,7 +172,14 @@ export default function ProfileView() {
             <div className="profile-identity-col">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <h1 className="profile-display-name">{displayedName}</h1>
-                <span className="profile-status-badge"><ShieldCheck size={9} /> Vault Active</span>
+                {/* Only claimed while a wallet signature actually backs it.
+                    Shown unconditionally, it told signed-out visitors their
+                    wallet was verified when no wallet was connected at all. */}
+                {isAuthenticated ? (
+                  <span className="profile-status-badge"><ShieldCheck size={9} /> Wallet Verified</span>
+                ) : (
+                  <span className="profile-status-badge is-muted">Not signed in</span>
+                )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span className="profile-handle-sub">@{displayedHandle}</span>
@@ -185,19 +204,21 @@ export default function ProfileView() {
 
         <div className="profile-cards-grid">
 
-          <SectionCard icon={User} iconColor="var(--pulse-cyan)" title="Identity & Profile" subtitle="Your public trader persona on PulseChain">
+          {/* Full width now that the security card it used to sit beside has
+              gone with password sign-in. */}
+          <SectionCard className="profile-cards-grid-full" icon={User} iconColor="var(--pulse-cyan)" title="Identity & Profile" subtitle="Your public trader persona on PulseChain">
             <form onSubmit={saveProfile} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <FormField label="Display Name">
-                <StyledInput icon={User} type="text" value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="e.g. Satoshi Whale" required />
+                <StyledInput icon={User} type="text" maxLength={LIMITS.displayName} value={displayName} onChange={e => setDisplayName(clamp(e.target.value, LIMITS.displayName))} placeholder="e.g. Satoshi Whale" required />
               </FormField>
               <FormField label="Username" hint="a–z 0–9 _">
-                <StyledInput type="text" value={username} onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))} placeholder="pulse_whale" required />
+                <StyledInput type="text" maxLength={LIMITS.username} value={username} onChange={e => setUsername(clamp(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''), LIMITS.username))} placeholder="pulse_whale" required />
               </FormField>
               <FormField label="Email Address" hint="Optional">
-                <StyledInput icon={Mail} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="name@domain.com" />
+                <StyledInput icon={Mail} type="email" maxLength={LIMITS.email} value={email} onChange={e => setEmail(clamp(e.target.value, LIMITS.email))} placeholder="name@domain.com" />
               </FormField>
               <FormField label="Trader Bio" hint="Optional">
-                <StyledInput icon={FileText} type="text" value={bio} onChange={e => setBio(e.target.value)} placeholder="e.g. PulseChain LP provider & swing trader" />
+                <StyledInput icon={FileText} type="text" maxLength={LIMITS.bio} value={bio} onChange={e => setBio(clamp(e.target.value, LIMITS.bio))} placeholder="e.g. PulseChain LP provider & swing trader" />
               </FormField>
               <div className="profile-form-action-row">
                 <button type="submit" className="profile-save-btn" disabled={isSaving}><Save size={14} />{isSaving ? 'Saving…' : 'Save Changes'}</button>
@@ -206,44 +227,6 @@ export default function ProfileView() {
             </form>
           </SectionCard>
 
-          <SectionCard icon={Shield} iconColor="var(--pulse-yellow)" title="Security & Encryption" subtitle="PBKDF2 client-side vault — keys never leave this device">
-            <form onSubmit={changePassword} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <FormField label="Current Password">
-                <StyledInput icon={Lock} type={showPw ? 'text' : 'password'} value={curPw} onChange={e => setCurPw(e.target.value)} placeholder="Enter current password" />
-              </FormField>
-              <FormField label="New Password">
-                <StyledInput icon={Lock} type={showPw ? 'text' : 'password'} value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="Min. 6 characters"
-                  rightSlot={
-                    <button type="button" onClick={() => setShowPw(v => !v)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                      {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
-                  }
-                />
-              </FormField>
-              {newPw && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ display: 'flex', gap: 4, flex: 1 }}>
-                    {[0,1,2].map(i => <div key={i} style={{ flex: 1, height: 3, borderRadius: 2, background: i < pwSegments ? pwColor : 'rgba(255,255,255,0.07)', transition: 'background 0.3s ease' }} />)}
-                  </div>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 800, color: pwColor, minWidth: 42, textAlign: 'right' }}>{pwStrength.level}</span>
-                </div>
-              )}
-              <FormField label="Confirm New Password">
-                <StyledInput icon={Lock} type={showPw ? 'text' : 'password'} value={confPw} onChange={e => setConfPw(e.target.value)} placeholder="Repeat new password" />
-              </FormField>
-              {pwStatus && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px', borderRadius: 10, fontFamily: 'var(--font-mono)', fontSize: 11.5, fontWeight: 600, background: pwStatus.type === 'success' ? 'rgba(0,255,157,0.08)' : 'rgba(244,63,94,0.08)', border: `1px solid ${pwStatus.type === 'success' ? 'rgba(0,255,157,0.22)' : 'rgba(244,63,94,0.22)'}`, color: pwStatus.type === 'success' ? 'var(--pulse-green)' : 'var(--pulse-red)' }}>
-                  {pwStatus.type === 'success' ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
-                  {pwStatus.text}
-                </div>
-              )}
-              <div className="profile-form-action-row">
-                <button type="submit" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 38, padding: '0 20px', borderRadius: 10, border: '1px solid rgba(251,191,36,0.3)', background: 'rgba(251,191,36,0.08)', color: 'var(--pulse-yellow)', fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, cursor: 'pointer', transition: 'all 0.18s ease' }}>
-                  <KeyRound size={14} />Update Password
-                </button>
-              </div>
-            </form>
-          </SectionCard>
 
           <div className="profile-cards-grid-full">
             <SectionCard icon={Zap} iconColor="var(--pulse-green)" title="Trading Preferences" subtitle="Global swap and DEX engine settings" noPadding>
@@ -297,7 +280,12 @@ export default function ProfileView() {
 
         <div className="profile-security-footer">
           <ShieldCheck size={15} style={{ color:'var(--pulse-green)', flexShrink:0 }} />
-          <span><strong>PulseDex Client-Side Vault</strong> — passwords are PBKDF2-hashed and never leave this device. Your account exists only in this browser and isn't recoverable if local storage is cleared.</span>
+          <span>
+            <strong>Signed in with your wallet.</strong> PulseDex never sees a private
+            key and cannot move your funds — signing in only proves you control this
+            address. Profile details below are still saved on this device only;
+            syncing them across devices is coming.
+          </span>
         </div>
 
       </div>

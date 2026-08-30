@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import { useUserProfile } from '../context/UserProfileContext'
 import { safeExternalUrl } from '../utils/formatters'
+import { useEscapeKey } from '../hooks/useEscapeKey'
 
 // Default Curated Ecosystem Links with Verified Logos
 const DEFAULT_ECOSYSTEM_APPS = [
@@ -220,6 +221,7 @@ export default function EcosystemDirectory() {
 
   // Custom App Modal state
   const [showAddModal, setShowAddModal] = useState(false)
+  useEscapeKey(showAddModal, () => setShowAddModal(false))
   const [newAppName, setNewAppName] = useState('')
   const [newAppUrl, setNewAppUrl] = useState('')
   const [newAppCategory, setNewAppCategory] = useState('launchpads')

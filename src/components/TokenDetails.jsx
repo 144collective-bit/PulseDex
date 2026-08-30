@@ -18,6 +18,7 @@ import {
 import TokenLogo from './TokenLogo'
 import SwapPanel from './dex/SwapPanel'
 import VenueLinks from './dex/VenueLinks'
+import { useEscapeKey } from '../hooks/useEscapeKey'
 import { NATIVE_PLS_PLACEHOLDER as NATIVE_PLS_ADDRESS } from '../config/dex'
 import { useUserProfile } from '../context/UserProfileContext'
 import { formatCryptoPrice, safeExternalUrl } from '../utils/formatters'
@@ -38,6 +39,7 @@ export default function TokenDetails({
   const [showMoreSocials, setShowMoreSocials] = useState(false)
   const [alertActive, setAlertActive] = useState(false)
   const [showOtherPoolsModal, setShowOtherPoolsModal] = useState(false)
+  useEscapeKey(showOtherPoolsModal, () => setShowOtherPoolsModal(false))
 
   // Find all other liquidity pools matching the current base token
   const otherPools = useMemo(() => {

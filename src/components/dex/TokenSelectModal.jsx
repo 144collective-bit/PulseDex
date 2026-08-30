@@ -4,6 +4,7 @@ import TokenLogo from '../TokenLogo'
 import { CURATED_TOKENS } from '../../config/dex'
 import { fetchTokenMetadata } from '../../services/portfolio'
 import { formatAddress } from '../../utils/formatters'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
 
@@ -16,6 +17,8 @@ const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
  * ProveX - so a name alone is never proof of identity.
  */
 export default function TokenSelectModal({ open, onClose, onSelect, excludeAddress }) {
+  useEscapeKey(open, onClose)
+
   const [query, setQuery] = useState('')
   const [custom, setCustom] = useState(null)
   const [loading, setLoading] = useState(false)
