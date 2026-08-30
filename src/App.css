@@ -14276,8 +14276,8 @@
 .sidebar-pair-sub-row { font-size: 10.5px; gap: 6px; }
 
 /* Marks grow to anchor each row, matching the home and portfolio treatment. */
-.sidebar-pair-row .token-logo-img,
-.sidebar-pair-row .token-logo-fallback {
+.sidebar-pair-item .token-logo-img,
+.sidebar-pair-item .token-logo-fallback {
   width: 34px !important;
   height: 34px !important;
   min-width: 34px !important;
@@ -14465,4 +14465,256 @@
     right: -4px;
     bottom: -4px;
   }
+}
+
+/* ==========================================================================
+   SCREENER LIST — readability pass
+
+   The rows were sized for a 310px sidebar and kept that density everywhere, so
+   in the stacked layout a full-width row carried 9px metadata. Type and
+   spacing now scale with the room actually available; the palette is
+   unchanged.
+   ========================================================================== */
+
+.sidebar-pair-item {
+  gap: 10px;
+  padding: 10px;
+  margin-bottom: 5px;
+  border-radius: var(--radius-md);
+}
+
+.sidebar-pair-left { gap: 9px; }
+
+.sidebar-pair-names { gap: 4px; min-width: 0; }
+
+.sidebar-base-sym { font-size: 14px; letter-spacing: 0.1px; }
+.sidebar-quote-sym { font-size: 12px; }
+
+.sidebar-pair-sub-row { font-size: 10.5px; gap: 6px; }
+.sidebar-dex-badge { font-size: 9px; padding: 2px 5px; }
+.sidebar-liq-meta { font-size: 10.5px; }
+
+.sidebar-pair-right { gap: 4px; }
+
+.sidebar-pair-price {
+  font-family: var(--font-instrument);
+  font-size: 14px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.sidebar-change-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.sidebar-vol { font-size: 10.5px; }
+
+.sidebar-rank-num { font-size: 11px; min-width: 17px; }
+
+/* Rows read as one list rather than as detached tiles: a hairline carries the
+   separation that padding alone was doing, so the rows can breathe without the
+   list turning into a stack of cards. */
+.sidebar-pairs-list .sidebar-pair-item + .sidebar-pair-item {
+  border-top: 1px solid rgba(255, 255, 255, 0.045);
+}
+
+.sidebar-pair-item:hover { border-color: rgba(255, 255, 255, 0.1); }
+
+/*
+ * Stacked layout: the list has the full page width, so the row can be a real
+ * card. Scoped to this breakpoint because the desktop sidebar is ~310px, where
+ * this type would wrap and truncate.
+ */
+@media (max-width: 1024px) {
+  .sidebar-pair-item {
+    padding: 14px 14px;
+    gap: 14px;
+    margin-bottom: 7px;
+  }
+
+  .sidebar-pair-left { gap: 12px; }
+
+  .sidebar-pair-item .token-logo-img,
+  .sidebar-pair-item .token-logo-fallback {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+  }
+
+  .sidebar-base-sym { font-size: 17px; }
+  .sidebar-quote-sym { font-size: 14px; }
+  .sidebar-pair-sub-row { font-size: 12px; gap: 8px; }
+  .sidebar-dex-badge { font-size: 10px; padding: 3px 7px; }
+  .sidebar-liq-meta { font-size: 12px; }
+
+  .sidebar-pair-price { font-size: 19px; }
+  .sidebar-change-badge { font-size: 12.5px; padding: 3px 8px; }
+  .sidebar-vol { font-size: 12px; }
+  .sidebar-rank-num { font-size: 13px; min-width: 22px; }
+  .sidebar-core-pill { font-size: 9.5px; padding: 2px 6px; }
+}
+
+/* Phones: between the two, so the row stays readable without pushing the
+   price off the edge. */
+@media (max-width: 560px) {
+  .sidebar-pair-item { padding: 12px 11px; gap: 10px; }
+  .sidebar-pair-left { gap: 10px; }
+
+  .sidebar-pair-item .token-logo-img,
+  .sidebar-pair-item .token-logo-fallback {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+  }
+
+  .sidebar-base-sym { font-size: 15px; }
+  .sidebar-pair-price { font-size: 16px; }
+  .sidebar-change-badge { font-size: 11.5px; }
+  .sidebar-rank-num { font-size: 11px; min-width: 16px; }
+}
+
+/* --------------------------------------------------------------------------
+   Screener controls — same pass, applied to the chrome around the list
+
+   Segments, filter pills, search and the count header were all sized for the
+   narrow sidebar. They now grow with the list they belong to, so the whole
+   panel reads as one piece rather than a large list under small controls.
+   -------------------------------------------------------------------------- */
+
+.sidebar-tab-btn { font-size: 12px; padding: 6px 10px; gap: 5px; }
+.sidebar-search-input { font-size: 12.5px; }
+.sidebar-dex-pill { font-size: 11px; padding: 5px 0; border-radius: var(--radius-sm); }
+.sidebar-dex-pills { gap: 5px; }
+
+.sidebar-sub-header {
+  padding: 8px 10px 6px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+@media (max-width: 1024px) {
+  .sidebar-tab-btn { font-size: 13.5px; padding: 9px 15px; gap: 7px; }
+  .sidebar-search-input { font-size: 14px; }
+  .sidebar-search { padding: 4px 10px; }
+  .sidebar-dex-pill { font-size: 12.5px; padding: 9px 0; }
+  .sidebar-dex-pills { gap: 7px; }
+
+  .sidebar-sub-header {
+    padding: 12px 12px 9px;
+    font-size: 12.5px;
+  }
+
+  /* The panel gains a little more room around its contents now that the rows
+     inside it are larger. */
+  .sidebar-pairs-container { padding: 14px; }
+}
+
+@media (max-width: 560px) {
+  .sidebar-tab-btn { font-size: 12px; padding: 7px 10px; }
+  .sidebar-dex-pill { font-size: 11px; padding: 7px 0; }
+  .sidebar-pairs-container { padding: 10px; }
+}
+
+/* Filter pills size to their labels once there is room. Stretched to fill a
+   900px row they read as five large empty buttons rather than a filter set;
+   `flex: 1` is right only in the narrow sidebar they were designed for. */
+@media (max-width: 1024px) {
+  .sidebar-dex-pills {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .sidebar-dex-pill {
+    flex: 0 0 auto;
+    padding: 8px 18px;
+  }
+}
+
+/*
+ * Desktop sidebar is ~336px and has to fit rank, star, mark, pair, venue,
+ * liquidity and the price column on one row. The larger type from the pass
+ * above pushed the venue/liquidity line past its box on every row, so this
+ * tier trades a little of it back — the symbol and price, which carry the
+ * scanning, stay large.
+ */
+@media (min-width: 1025px) {
+  .sidebar-pair-item { gap: 8px; padding: 9px 9px; }
+  .sidebar-pair-left { gap: 7px; }
+
+  .sidebar-pair-item .token-logo-img,
+  .sidebar-pair-item .token-logo-fallback {
+    width: 30px !important;
+    height: 30px !important;
+    min-width: 30px !important;
+  }
+
+  .sidebar-pair-sub-row { font-size: 9.5px; gap: 4px; }
+  .sidebar-dex-badge { font-size: 8.5px; padding: 1px 4px; }
+  .sidebar-liq-meta { font-size: 9.5px; }
+  .sidebar-rank-num { font-size: 10px; min-width: 14px; }
+  .sidebar-star-btn { padding: 0; }
+}
+
+/*
+ * Let the pairs column shrink to its grid track.
+ *
+ * A grid item defaults to `min-width: auto`, so it refuses to go below its
+ * content's minimum. The larger rows raised that minimum to ~451px inside a
+ * 363px track, and the container's `overflow-x: hidden` turned the overflow
+ * into silently clipped content rather than a visible break. Same failure the
+ * token-info column had; the fix is the same.
+ */
+.screener-sidebar-wrapper,
+.sidebar-pairs-container,
+.sidebar-list,
+.sidebar-pair-item {
+  min-width: 0;
+}
+
+/* With the ancestors able to shrink, the row's own text has to be what gives:
+   the pair name truncates rather than forcing the row wider than its column. */
+.sidebar-pair-title-row,
+.sidebar-pair-sub-row {
+  min-width: 0;
+  overflow: hidden;
+}
+
+/*
+ * Phones: 375px has to carry rank, star, mark, pair, venue, liquidity, price,
+ * change and volume. At the tablet sizes above, the pair name was truncating to
+ * "PLSX /" and the liquidity value was cut off entirely — so this tier trims
+ * the furniture rather than the information.
+ */
+@media (max-width: 560px) {
+  .sidebar-pair-item { padding: 11px 10px; gap: 8px; }
+  .sidebar-pair-left { gap: 8px; }
+
+  /* The rank is positional, not informational — the list order already says
+     it, and it was costing the pair name its last characters. */
+  .sidebar-rank-num { display: none; }
+
+  .sidebar-star-btn { padding: 0; flex-shrink: 0; }
+
+  .sidebar-pair-item .token-logo-img,
+  .sidebar-pair-item .token-logo-fallback {
+    width: 30px !important;
+    height: 30px !important;
+    min-width: 30px !important;
+  }
+
+  .sidebar-base-sym { font-size: 14.5px; }
+  .sidebar-quote-sym { font-size: 12px; }
+  .sidebar-pair-price { font-size: 15px; }
+  .sidebar-change-badge { font-size: 11px; padding: 2px 6px; }
+  .sidebar-pair-sub-row { font-size: 11px; gap: 5px; }
+  .sidebar-liq-meta { font-size: 11px; }
+  .sidebar-vol { font-size: 10.5px; }
+  .sidebar-core-pill { font-size: 8.5px; padding: 1px 4px; margin-left: 2px; }
+
+  /* The name gets whatever is left; the price column is fixed-content. */
+  .sidebar-pair-names { flex: 1 1 auto; min-width: 0; }
+  .sidebar-pair-right { padding-left: 4px; }
 }

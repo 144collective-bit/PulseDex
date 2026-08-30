@@ -351,7 +351,7 @@ export default function SidebarPairs({
                       symbol={base}
                       address={baseAddr}
                       customUrl={p.info?.imageUrl}
-                      size={26}
+                      size={32}
                     />
                     {core && <span className="sidebar-core-sparkle" title="Official PulseChain Core Token">✦</span>}
                   </div>
