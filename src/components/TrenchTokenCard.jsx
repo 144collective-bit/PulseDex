@@ -99,21 +99,30 @@ export default function TrenchTokenCard({
           <span className="tr-change font-mono is-flat">—</span>
         )}
 
-        {isGraduated ? (
+        {isGraduated && (
           <span className="tr-grad-tag font-mono">
             <Rocket size={9} />
             GRAD
             {token.lockedLp && <Lock size={8} className="tr-lock" />}
           </span>
-        ) : (
-          <span className="tr-bond">
-            <span className={`tr-bond-track heat-${heat}`}>
-              <span className="tr-bond-fill" style={{ width: `${Math.max(2, progress)}%` }} />
-            </span>
-            <span className="tr-bond-pct font-mono">{progress.toFixed(0)}%</span>
-          </span>
         )}
       </span>
+
+      {/*
+        Bonding progress sits on its own line rather than beside the change.
+        Sharing that cell it claimed ~81px of a 145px track, which squeezed the
+        metadata line into 133px when it needed 190 - so age, market cap and
+        volume clipped on every row even at full width. On its own line it also
+        gets a bar long enough to read as progress.
+      */}
+      {!isGraduated && (
+        <span className="tr-bond">
+          <span className={`tr-bond-track heat-${heat}`}>
+            <span className="tr-bond-fill" style={{ width: `${Math.max(2, progress)}%` }} />
+          </span>
+          <span className="tr-bond-pct font-mono">{progress.toFixed(0)}%</span>
+        </span>
+      )}
     </button>
   )
 }

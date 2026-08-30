@@ -2359,3 +2359,250 @@
   gap: 6px;
   text-decoration: none;
 }
+
+/* ==========================================================================
+   BOARD READABILITY
+
+   Rows carried nine figures in 61px, with age, market cap and volume sharing a
+   10.5px line. Cards grow to ~85px and the type is re-weighted for scanning:
+   price and momentum lead, the rest supports. Palette unchanged.
+   ========================================================================== */
+
+.trench-row {
+  grid-template-columns: 30px 52px minmax(0, 1fr) auto;
+  gap: 7px 14px;
+  padding: 16px;
+}
+
+.tr-rank { font-size: 12.5px; }
+
+/* Identity: the symbol is what you scan for, the name is context. */
+.tr-symbol { font-size: 17px; font-weight: 750; max-width: 150px; }
+.tr-name { font-size: 12px; }
+
+/* The two figures a launchpad is read for. */
+.tr-price { font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+.tr-change { font-size: 15px; }
+
+/* Supporting line — larger than 10.5px, but deliberately quieter than above. */
+.tr-meta { font-size: 12px; gap: 6px; }
+
+.tr-side { gap: 10px; }
+
+/*
+ * Volume no longer has to be dropped. That rule hid the last two children
+ * whenever the line ran out of room, which at 371px columns meant always —
+ * the widened board gives it the space it was missing.
+ */
+@media (min-width: 1500px) {
+  .trench-column .tr-meta > :nth-last-child(-n + 2) { display: flex; }
+}
+
+/* Marks anchor the taller row. Movers are excluded: that rail keeps a 34px
+   logo track, and a 46px mark there spills out of its own grid cell. */
+.trench-row:not(.is-mover) .token-logo-img,
+.trench-row:not(.is-mover) .token-logo-fallback,
+.trench-row:not(.is-mover) .tch-avatar {
+  width: 46px !important;
+  height: 46px !important;
+  min-width: 46px !important;
+}
+
+/* The movers rail is a narrow secondary list, so it keeps its own density
+   rather than inheriting the board's. */
+.trench-row.is-mover {
+  padding: 9px 12px;
+  gap: 4px 10px;
+}
+
+/* --------------------------------------------------------------------------
+   Column headers
+
+   At 9.5px the '# TOKEN / AGE · MC · VOL / PRICE / 5M' strip read as texture
+   rather than as labels. It also has to keep the row's column tracks, which
+   changed above, or the labels stop sitting over what they name.
+   -------------------------------------------------------------------------- */
+.trench-col-labels {
+  grid-template-columns: 30px 52px minmax(0, 1fr) auto;
+  gap: 14px;
+  padding: 10px 16px;
+  font-size: 11px;
+  letter-spacing: 0.09em;
+}
+
+/* --------------------------------------------------------------------------
+   Live trades rail
+
+   The smallest text on the page at 9.5px, with 8.5px cells inside it - a tape
+   is meant to be read at a glance while it moves.
+   -------------------------------------------------------------------------- */
+.tape-row {
+  padding: 8px 12px;
+  gap: 10px;
+  font-size: 11.5px;
+}
+
+.tape-side { font-size: 10px !important; }
+.tape-age { font-size: 10.5px; }
+
+.trench-col-labels.is-tape {
+  padding: 10px 12px;
+  font-size: 10px;
+}
+
+/* --------------------------------------------------------------------------
+   King of the Hill ticker
+   -------------------------------------------------------------------------- */
+.trench-ticker { font-size: 12.5px; }
+
+/*
+ * Narrower columns.
+ *
+ * Below ~1400px the four lanes drop under 400px each, and at 1024px they are
+ * 311px - where the enlarged metadata line clips on every row. The board keeps
+ * its taller card and its larger price, and gives back the supporting type
+ * rather than the hierarchy.
+ */
+@media (max-width: 1400px) {
+  .trench-row { padding: 13px 13px; gap: 6px 11px; grid-template-columns: 26px 46px minmax(0, 1fr) auto; }
+  .trench-col-labels { grid-template-columns: 26px 46px minmax(0, 1fr) auto; gap: 11px; padding: 9px 13px; font-size: 10px; }
+
+  .trench-row:not(.is-mover) .token-logo-img,
+  .trench-row:not(.is-mover) .token-logo-fallback,
+  .trench-row:not(.is-mover) .tch-avatar {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+  }
+
+  .tr-symbol { font-size: 15.5px; max-width: 120px; }
+  .tr-name { font-size: 11px; }
+  .tr-price { font-size: 16px; }
+  .tr-change { font-size: 13.5px; }
+  .tr-meta { font-size: 11px; gap: 5px; }
+  .tape-row { font-size: 10.5px; padding: 7px 10px; }
+}
+
+/* Tighter still where the columns are narrowest before the board stacks. */
+@media (max-width: 1150px) {
+  .trench-row { padding: 11px; }
+  .tr-symbol { font-size: 14.5px; max-width: 96px; }
+  .tr-price { font-size: 14.5px; }
+  .tr-change { font-size: 12.5px; }
+  .tr-meta { font-size: 10.5px; }
+}
+
+/*
+ * Give the name and metadata a real share of the row.
+ *
+ * The last track is `auto`, so it sizes to the change figure plus the bonding
+ * bar and its percentage - about 136px. In a 311px column that left the
+ * identity track 38px, which is why the metadata clipped on every row no
+ * matter how small the type got. Capping that track is the fix; shrinking the
+ * font never was.
+ */
+.trench-row { grid-template-columns: 30px 52px minmax(0, 1fr) minmax(0, auto); }
+
+.tr-side { max-width: 148px; min-width: 0; }
+.tr-meta { flex-shrink: 1; }
+
+@media (max-width: 1400px) {
+  .trench-row { grid-template-columns: 26px 46px minmax(0, 1fr) minmax(0, auto); }
+  .tr-side { max-width: 124px; gap: 7px; }
+  /* The bar is decoration next to the figure it labels, so it yields first. */
+  .tr-bond-track { width: 40px; }
+}
+
+@media (max-width: 1150px) {
+  .tr-side { max-width: 104px; gap: 6px; }
+  .tr-bond-track { width: 30px; }
+}
+
+/*
+ * When the metadata line still cannot fit - four lanes in a 1024px window
+ * leaves each column about 311px - it fades out rather than being sliced
+ * mid-character. The fade is the honest signal that there is more, and it
+ * costs no width, which an ellipsis character would.
+ */
+.tr-meta {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 14px), transparent);
+}
+
+/* No fade where the line already fits, so the common case stays crisp. */
+@media (min-width: 1500px) {
+  .tr-meta {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
+
+/*
+ * Three-line card: identity over metadata over bonding progress.
+ *
+ * The bar used to share the second line with the change figure, taking ~81px
+ * of a 145px track and leaving the metadata 133px where it needed 190. Given
+ * its own row it stops competing, the metadata fits, and the bar is long
+ * enough to read as progress rather than as a dash.
+ */
+.trench-row {
+  grid-template-areas:
+    'rank logo ident price'
+    'rank logo meta  side'
+    'rank logo bond  bond';
+}
+
+.tr-bond {
+  grid-area: bond;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* The bar takes the room it has now, rather than a fixed 54px. */
+.tr-bond-track { width: auto; flex: 1 1 auto; height: 6px; }
+.tr-bond-pct { font-size: 12px; flex-shrink: 0; }
+
+/* Graduated rows have no bar, so they keep the two-line shape. */
+.trench-row.is-grad { grid-template-areas: 'rank logo ident price' 'rank logo meta side'; }
+
+/* Movers keep their own two-line layout entirely. */
+.trench-row.is-mover {
+  grid-template-areas:
+    'rank logo ident price'
+    'rank logo meta  side';
+}
+
+/* With the bar gone from it, the side cell only holds the change figure. */
+.tr-side { max-width: none; }
+
+@media (max-width: 1400px) {
+  .tr-side { max-width: none; }
+  .tr-bond-track { width: auto; }
+}
+
+@media (max-width: 1150px) {
+  .tr-side { max-width: none; }
+  .tr-bond-track { width: auto; }
+}
+
+/*
+ * Final trim.
+ *
+ * The three-line card landed at 106px against the ~85px it was aimed at, and
+ * the metadata was still 10px short of fitting. Padding and the row gap give
+ * that back - the bonding line is a bar, not text, so it needs less leading
+ * than the two lines above it.
+ */
+.trench-row {
+  padding: 11px 13px;
+  gap: 5px 12px;
+}
+
+.tr-meta { font-size: 11.5px; }
+.tr-bond-track { height: 5px; }
+.tr-bond { gap: 9px; }
+
+/* The labels strip has to track the row's padding to stay aligned over it. */
+.trench-col-labels { padding: 9px 13px; gap: 12px; }

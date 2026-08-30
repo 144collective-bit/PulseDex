@@ -14224,10 +14224,24 @@
    marooned in their own cells on the portfolio table and the home board.
    ========================================================================== */
 .home-page,
-.pf-section,
-.trenches-live-page {
+.pf-section {
   width: 100%;
   max-width: var(--page-max);
+  margin-inline: auto;
+}
+
+/*
+ * The trenches board is exempt. That cap exists to stop a table's cells being
+ * stretched apart on a wide monitor, which is the right call for the home and
+ * portfolio grids - but the board is four scrolling columns, and width there
+ * buys column room rather than dead space. Capped at 1520px on a 1841px screen
+ * it discarded ~320px while its own metadata line was clipping.
+ *
+ * Still bounded, because past this the columns stop gaining anything.
+ */
+.trenches-live-page {
+  width: 100%;
+  max-width: 2200px;
   margin-inline: auto;
 }
 
