@@ -44,6 +44,17 @@ function MainApp() {
 
   // Curve prices are PLS-denominated, so the token page needs the live rate.
   const { data: plsPrice } = usePlsPrice()
+
+  /*
+   * Changing tab has to leave the token route as well as set the tab. The token
+   * page gates the whole content area, so without this the nav rendered as
+   * normal but did nothing at all once a token was open - the tab state changed
+   * underneath while the token page stayed mounted on top.
+   */
+  const selectTab = (tab) => {
+    closeToken()
+    setActiveTab(tab)
+  }
   const [currentPair, setCurrentPair] = useState(null)
   const [topPairs, setTopPairs] = useState([])
   const [isLoadingTopPairs, setIsLoadingTopPairs] = useState(true)
@@ -128,7 +139,7 @@ function MainApp() {
       {/* Top Navbar */}
       <Navbar
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={selectTab}
         onSelectPair={handleSelectPair}
         watchlistCount={watchlist.length}
         onOpenWalletModal={() => setShowWalletModal(true)}
@@ -286,7 +297,7 @@ function MainApp() {
       {/* Mobile Native Bottom Navigation */}
       <MobileBottomNav
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={selectTab}
         watchlistCount={watchlist.length}
       />
 

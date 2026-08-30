@@ -295,8 +295,12 @@ export default function Navbar({
             onClick={() => setActiveTab('token')}
             title="$DEX Platform Token"
           >
-            <Zap size={13} className="buy-dex-zap" />
-            <span className="buy-dex-text">BUY $DEX</span>
+            <Zap size={16} className="buy-dex-zap" />
+            {/* "DEX" is split out so it can carry the wordmark's gradient,
+                matching the DEX half of the PULSEDEX logo. */}
+            <span className="buy-dex-text">
+              BUY $<span className="buy-dex-word">DEX</span>
+            </span>
           </button>
 
           {FEATURES.auth && (isAuthenticated ? (

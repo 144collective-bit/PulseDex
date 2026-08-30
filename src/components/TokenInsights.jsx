@@ -1,5 +1,14 @@
 import { useMemo } from 'react'
-import { PieChart, ShieldCheck, ShieldAlert, TrendingUp } from 'lucide-react'
+import {
+  PieChart,
+  ShieldCheck,
+  ShieldAlert,
+  TrendingUp,
+  Activity,
+  Flame,
+  Users,
+  Gauge,
+} from 'lucide-react'
 import { formatCompactCount, formatAddress, formatUsd } from '../utils/formatters'
 import { ipfsImageUrl } from '../services/pumptires'
 
@@ -73,8 +82,81 @@ export default function TokenInsights({ token, holders = [], trades = [] }) {
     { key: 'rest', label: 'Everyone else', value: dist.rest, cls: 'band-4' },
   ]
 
+  // Order-flow summary over the trades we hold, which is the closest thing to
+  // live sentiment the API supports.
+  const flow = trades.reduce(
+    (acc, t) => {
+      const buy = t.type === 'buy'
+      return {
+        buys: acc.buys + (buy ? 1 : 0),
+        sells: acc.sells + (buy ? 0 : 1),
+        buyUsd: acc.buyUsd + (buy ? t.usdValue || 0 : 0),
+        sellUsd: acc.sellUsd + (buy ? 0 : t.usdValue || 0),
+        makers: acc.makers.add((t.userAddress || '').toLowerCase()),
+      }
+    },
+    { buys: 0, sells: 0, buyUsd: 0, sellUsd: 0, makers: new Set() }
+  )
+
+  const flowTotal = flow.buyUsd + flow.sellUsd
+  const buyPressure = flowTotal > 0 ? (flow.buyUsd / flowTotal) * 100 : null
+
+  const metrics = [
+    {
+      key: 'pressure',
+      label: 'Buy pressure',
+      icon: Gauge,
+      value: buyPressure === null ? '—' : `${buyPressure.toFixed(0)}%`,
+      sub: `${flow.buys} buys · ${flow.sells} sells`,
+      tone: buyPressure === null ? '' : buyPressure >= 50 ? 'is-up' : 'is-down',
+    },
+    {
+      key: 'makers',
+      label: 'Unique makers',
+      icon: Users,
+      value: flow.makers.size ? flow.makers.size.toLocaleString() : '—',
+      sub: `across ${trades.length} recent trades`,
+    },
+    {
+      key: 'concentration',
+      label: 'Top 10 hold',
+      icon: PieChart,
+      value: `${dist.top10.toFixed(1)}%`,
+      sub: `of ${formatCompactCount(supplyBase)} supply`,
+      tone: dist.top10 >= 80 ? 'is-down' : dist.top10 >= 50 ? 'is-warn' : 'is-up',
+    },
+    {
+      key: 'holders',
+      label: 'Holders',
+      icon: Activity,
+      value: holders.length ? holders.length.toLocaleString() : '—',
+      sub: token.tradesCount ? `${formatCompactCount(token.tradesCount)} trades all time` : 'listed by the launchpad',
+    },
+    {
+      key: 'burns',
+      label: 'Burn events',
+      icon: Flame,
+      value: token.burnsCount ? token.burnsCount.toLocaleString() : '0',
+      sub: 'recorded on the curve',
+    },
+  ]
+
   return (
     <div className="tm-insights">
+      {/* ---- Headline metrics ---- */}
+      <section className="tmi-metrics tmi-wide">
+        {metrics.map(({ key, label, icon: Icon, value, sub, tone }) => (
+          <div key={key} className="tmi-metric">
+            <span className="tmi-metric-label">
+              <Icon size={12} />
+              {label}
+            </span>
+            <span className={`tmi-metric-val ${tone || ''}`}>{value}</span>
+            <span className="tmi-metric-sub">{sub}</span>
+          </div>
+        ))}
+      </section>
+
       {/* ---- Holder distribution ---- */}
       <section className="tmi-panel">
         <header className="tmi-head">

@@ -11,6 +11,18 @@ import {
   Copy,
   Check,
 } from 'lucide-react'
+import '../styles/trades.css'
+
+
+/**
+ * How far the row wash extends, capped so one outlier does not flood the tape.
+ * $500 is treated as full width - the same ceiling the token detail panel uses,
+ * so the two tapes stay comparable.
+ */
+function washWidth(usd) {
+  const pct = (Math.max(0, usd) / 500) * 100
+  return Math.max(6, Math.min(100, pct))
+}
 
 export default function TradeHistory({ pair }) {
   const [activeTab, setActiveTab] = useState('trades') // 'trades' | 'traders' | 'liquidity' | 'security'
@@ -227,7 +239,14 @@ export default function TradeHistory({ pair }) {
                 const isDolphin = trade.usdValue > 200 && !isWhale
 
                 return (
-                  <tr key={trade.id} className={`trade-row ${isBuy ? 'row-buy' : 'row-sell'}`}>
+                  <tr
+                    key={trade.id}
+                    className={`trade-row ${isBuy ? 'row-buy' : 'row-sell'} ${isWhale ? 'is-whale' : ''}`}
+                    /* Wash width tracks trade size against the same $500 ceiling
+                       the token panel uses, so a given trade looks the same on
+                       both surfaces. */
+                    style={{ '--wash': `${washWidth(trade.usdValue)}%` }}
+                  >
                     <td className="trade-time text-muted">
                       {trade.timestamp.toLocaleTimeString([], {
                         hour: '2-digit',
@@ -243,7 +262,7 @@ export default function TradeHistory({ pair }) {
                         {isDolphin && <span title="Dolphin Order"> 🐬</span>}
                       </span>
                     </td>
-                    <td className={`trade-usd font-semibold ${isBuy ? 'text-pulse-green' : 'text-pulse-red'}`}>
+                    <td className={`trade-usd ${isBuy ? 'text-pulse-green' : 'text-pulse-red'}`}>
                       {formatUsd(trade.usdValue)}
                     </td>
                     <td className="trade-amount text-primary">

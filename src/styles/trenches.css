@@ -741,6 +741,19 @@
 }
 
 .trench-modal {
+  /*
+   * The panel is rendered both inside the board and standalone at
+   * /token/<address>. These tokens are declared on .trenches-live-page, so on
+   * the standalone page every var(--tr-*) resolved to nothing and the rules
+   * using them silently dropped - the buy/sell chip lost its colour that way.
+   * Redeclared here so the panel is self-sufficient wherever it is mounted.
+   */
+  --tr-up: var(--pulse-green);
+  --tr-down: var(--pulse-red);
+  --tr-panel: rgba(13, 18, 28, 0.82);
+  --tr-hairline: rgba(255, 255, 255, 0.07);
+  --tr-row-hover: rgba(255, 255, 255, 0.045);
+
   display: flex;
   flex-direction: column;
   width: min(1000px, 100%);
@@ -1721,29 +1734,6 @@
   border-left: none;
 }
 
-/* The wash sits behind the figures and scales with trade size. */
-.tm-trade-wash {
-  position: absolute;
-  inset: 0 auto 0 0;
-  z-index: -1;
-  border-radius: 0 3px 3px 0;
-  pointer-events: none;
-}
-
-.tm-trade.is-buy .tm-trade-wash {
-  background: linear-gradient(90deg, rgba(0, 255, 157, 0.22), rgba(0, 255, 157, 0.04));
-}
-
-.tm-trade.is-sell .tm-trade-wash {
-  background: linear-gradient(90deg, rgba(244, 63, 94, 0.22), rgba(244, 63, 94, 0.04));
-}
-
-/* Whales get a brighter wash and a lit edge. */
-.tm-trade.size-whale .tm-trade-wash { filter: brightness(1.5); }
-.tm-trade.size-whale { box-shadow: inset 2px 0 0 currentColor; }
-.tm-trade.size-whale.is-buy { color: var(--pulse-green); }
-.tm-trade.size-whale.is-sell { color: var(--pulse-red); }
-
 .tm-trade-side {
   font-size: 11px;
   font-weight: 800;
@@ -2154,4 +2144,79 @@
 
 @media (max-width: 900px) {
   .tm-chart-embed { height: 300px; }
+}
+
+/* --------------------------------------------------------------------------
+   Insights - headline metric strip
+
+   Opens the dashboard with a read before the detail panels. Each tile is the
+   same glass surface as the home board so the two feel like one product.
+   -------------------------------------------------------------------------- */
+.tmi-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  padding: 0;
+  background: none;
+  border: none;
+}
+
+.tmi-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 15px 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 42%),
+    rgba(0, 0, 0, 0.26);
+  border: 1px solid var(--tr-hairline);
+  border-radius: var(--radius-md);
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+.tmi-metric:hover {
+  border-color: rgba(0, 229, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.tmi-metric-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-instrument);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.tmi-metric-val {
+  font-family: var(--font-numeric);
+  font-size: 26px;
+  font-weight: 780;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.tmi-metric-val.is-up { color: var(--pulse-green); }
+.tmi-metric-val.is-down { color: var(--pulse-red); }
+.tmi-metric-val.is-warn { color: var(--pulse-yellow); }
+
+.tmi-metric-sub {
+  font-family: var(--font-instrument);
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 1100px) {
+  .tmi-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .tmi-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .tmi-metric { padding: 12px 13px; }
+  .tmi-metric-val { font-size: 22px; }
 }

@@ -27,6 +27,7 @@ import {
 } from '../hooks/usePumpTires'
 import { plsToUsd, ipfsImageUrl } from '../services/pumptires'
 import { CANDLE_INTERVALS, TOKENS_FOR_SALE } from '../config/pumptires'
+import '../styles/trades.css'
 import {
   formatUsd,
   formatCryptoPrice,
@@ -137,8 +138,15 @@ export default function TrenchTokenModal({
   // from the instant it opens.
   const live = detail?.address ? { ...token, ...detail } : token
 
-  // Close on Escape, and stop the page behind from scrolling.
+  /*
+   * Dialog-only behaviour. Escape-to-close and locking the page behind belong
+   * to the modal; at /token/<address> this component *is* the page, so locking
+   * body scroll there left the dashboard below the fold unreachable by wheel or
+   * touch - the content was rendered, just impossible to scroll to.
+   */
   useEffect(() => {
+    if (variant === 'page') return undefined
+
     const onKey = (e) => {
       if (e.key === 'Escape') onClose?.()
     }
@@ -149,7 +157,7 @@ export default function TrenchTokenModal({
       document.removeEventListener('keydown', onKey)
       document.body.style.overflow = prevOverflow
     }
-  }, [onClose])
+  }, [onClose, variant])
 
   // Build the chart once per mount; data updates go through setData below.
   useEffect(() => {
@@ -666,14 +674,9 @@ export default function TrenchTokenModal({
                 <div
                   key={t.id || t.txHash}
                   className={`tm-trade font-mono ${t.type === 'buy' ? 'is-buy' : 'is-sell'} size-${sizeBand(t.usdValue)}`}
+                  /* Same wash mechanism and ceiling as the screener's tape. */
+                  style={{ '--wash': `${washWidth(t.usdValue)}%` }}
                 >
-                  {/* Translucent wash across the whole row, so side reads before
-                      any number does. Width tracks trade size. */}
-                  <span
-                    className="tm-trade-wash"
-                    style={{ width: `${washWidth(t.usdValue)}%` }}
-                    aria-hidden="true"
-                  />
                   <span className="tm-trade-side">{t.type.toUpperCase()}</span>
                   <span className="tcl-right tm-trade-usd">{formatUsd(t.usdValue)}</span>
                   <span className="tcl-right tm-trade-fig">{formatCompactCount(t.tokenAmount)}</span>

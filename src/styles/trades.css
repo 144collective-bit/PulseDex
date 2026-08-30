@@ -1,0 +1,158 @@
+/* ==========================================================================
+   TRADE TAPE - one spec, both surfaces
+
+   The screener's Live Swaps table and the token detail's trade list showed the
+   same thing in two different visual languages. This file defines the shared
+   treatment and both apply it, so a change here moves both together.
+
+   The design is the hybrid: the screener's chips, whale markers and copyable
+   maker, plus the token panel's row wash and side-coloured figures.
+
+   The wash is a background gradient driven by --wash rather than an extra
+   element, so it works identically on a <tr> and on a grid row.
+   ========================================================================== */
+
+.trade-row,
+.tm-trade {
+  --wash: 0%;
+  --wash-tint: transparent;
+
+  background-image: linear-gradient(
+    90deg,
+    var(--wash-tint) 0%,
+    var(--wash-tint) var(--wash),
+    transparent var(--wash)
+  );
+  background-repeat: no-repeat;
+  transition: background-color 0.15s ease;
+}
+
+.trade-row.row-buy,
+.tm-trade.is-buy {
+  --wash-tint: rgba(0, 255, 157, 0.16);
+}
+
+.trade-row.row-sell,
+.tm-trade.is-sell {
+  --wash-tint: rgba(244, 63, 94, 0.16);
+}
+
+.trade-row:hover,
+.tm-trade:hover {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+/* --- Side chip ----------------------------------------------------------- */
+.trade-type-tag,
+.tm-trade-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  font-family: var(--font-instrument);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+
+.trade-row.row-buy .trade-type-tag,
+.tm-trade.is-buy .tm-trade-side {
+  color: var(--pulse-green);
+  background: var(--pulse-green-bg);
+  border: 1px solid rgba(0, 255, 157, 0.32);
+}
+
+.trade-row.row-sell .trade-type-tag,
+.tm-trade.is-sell .tm-trade-side {
+  color: var(--pulse-red);
+  background: var(--pulse-red-bg);
+  border: 1px solid rgba(244, 63, 94, 0.32);
+}
+
+/* --- Figures ------------------------------------------------------------- */
+
+/* The USD value is the headline of the row and uses the display face. */
+.trade-usd,
+.tm-trade-usd {
+  font-family: var(--font-numeric) !important;
+  font-size: 16px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Everything else is instrumentation, tinted by side so direction reads
+   without having to find the chip. */
+.trade-amount,
+.trade-price,
+.tm-trade-fig,
+.tm-trade-maker,
+.maker-chip {
+  font-family: var(--font-instrument);
+  font-size: 13.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.trade-row.row-buy .trade-amount,
+.trade-row.row-buy .maker-chip,
+.tm-trade.is-buy .tm-trade-fig,
+.tm-trade.is-buy .tm-trade-maker {
+  color: var(--pulse-green);
+}
+
+.trade-row.row-sell .trade-amount,
+.trade-row.row-sell .maker-chip,
+.tm-trade.is-sell .tm-trade-fig,
+.tm-trade.is-sell .tm-trade-maker {
+  color: var(--pulse-red);
+}
+
+.trade-row .maker-chip,
+.tm-trade .tm-trade-maker { opacity: 0.85; }
+
+/* Price stays neutral - it is a level, not a direction. */
+.trade-price {
+  color: var(--text-secondary) !important;
+  opacity: 0.9;
+}
+
+.trade-time,
+.tm-trade-age {
+  font-family: var(--font-instrument);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Column headers ------------------------------------------------------ */
+.trades-header-row th,
+.tm-table-labels {
+  font-family: var(--font-instrument);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* --- Whale emphasis ------------------------------------------------------ */
+.trade-row.is-whale,
+.tm-trade.size-whale {
+  box-shadow: inset 2px 0 0 currentColor;
+}
+
+.trade-row.is-whale.row-buy,
+.tm-trade.size-whale.is-buy { color: var(--pulse-green); }
+
+.trade-row.is-whale.row-sell,
+.tm-trade.size-whale.is-sell { color: var(--pulse-red); }
+
+@media (max-width: 900px) {
+  .trade-usd, .tm-trade-usd { font-size: 15px; }
+  .trade-amount, .trade-price, .tm-trade-fig, .tm-trade-maker, .maker-chip { font-size: 12.5px; }
+  .trade-time, .tm-trade-age { font-size: 11.5px; }
+}

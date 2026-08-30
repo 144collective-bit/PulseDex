@@ -373,40 +373,58 @@
 
 /* ⚡ BUY $DEX - Harmonious PulseDex Cyber Glow Style */
 .btn-buy-dex-glow {
-  height: 34px;
+  height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 0 12px;
+  gap: 9px;
+  padding: 0 20px;
   border-radius: var(--radius-md);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 800;
-  letter-spacing: 0.5px;
-  color: #00e5ff;
+  letter-spacing: 0.06em;
+  color: #eaf6ff;
   background: rgba(0, 229, 255, 0.08);
   border: 1px solid rgba(0, 229, 255, 0.45);
   cursor: pointer;
   user-select: none;
   position: relative;
-  box-shadow: 0 0 12px rgba(0, 229, 255, 0.25), inset 0 0 8px rgba(0, 255, 157, 0.06);
-  animation: pulseDexCyberGlow 2.6s infinite ease-in-out;
+  isolation: isolate;
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.22), inset 0 0 8px rgba(0, 255, 157, 0.06);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
 }
 
-@keyframes pulseDexCyberGlow {
-  0%, 100% {
-    box-shadow: 0 0 10px rgba(0, 229, 255, 0.25), inset 0 0 6px rgba(0, 255, 157, 0.05);
-    border-color: rgba(0, 229, 255, 0.4);
-    color: #00e5ff;
-  }
-  50% {
-    box-shadow: 0 0 16px rgba(0, 229, 255, 0.55), 0 0 26px rgba(0, 255, 157, 0.3), inset 0 0 10px rgba(0, 229, 255, 0.15);
-    border-color: rgba(0, 255, 157, 0.7);
-    color: #ffffff;
-  }
+/*
+ * The glow is a separate layer whose opacity is animated, rather than
+ * keyframing box-shadow and colour on the button itself. Interpolating several
+ * shadow values plus a colour swap read as a hard on/off blink; fading one
+ * layer in and out is a genuinely smooth breath.
+ */
+.btn-buy-dex-glow::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  border: 1px solid rgba(0, 255, 157, 0.75);
+  box-shadow:
+    0 0 18px rgba(0, 229, 255, 0.55),
+    0 0 34px rgba(0, 255, 157, 0.28),
+    inset 0 0 12px rgba(0, 229, 255, 0.18);
+  opacity: 0;
+  animation: buyDexBreathe 3.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes buyDexBreathe {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-buy-dex-glow::before { animation: none; opacity: 0.4; }
 }
 
 .btn-buy-dex-glow:hover {
@@ -428,7 +446,18 @@
 
 .buy-dex-text {
   font-weight: 800;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.06em;
+}
+
+/* Same cyan-to-violet ramp as the DEX half of the PULSEDEX wordmark. A solid
+   colour is declared first so the label survives if the clip is unsupported. */
+.buy-dex-word {
+  color: var(--pulse-cyan);
+  background: linear-gradient(100deg, #00e5ff 0%, #3b82f6 48%, #a855f7 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 900;
 }
 
 /* Sign In Button */
@@ -1774,14 +1803,12 @@
   background: rgba(255, 255, 255, 0.03);
 }
 
+/* Sizing, weight and shape now come from the shared tape spec in
+   styles/trades.css so this table and the token panel's match. Only layout
+   that the shared file does not own is kept here. */
 .trade-type-tag {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  font-size: 9px;
-  font-weight: 700;
-  padding: 1px 5px;
-  border-radius: 3px;
 }
 
 .maker-chip {
@@ -10996,11 +11023,11 @@
   }
 
   .btn-buy-dex-glow {
-    height: 28px;
-    padding: 0 7px;
-    font-size: 9.5px;
-    gap: 3px;
-    letter-spacing: 0.2px;
+    height: 36px;
+    padding: 0 12px;
+    font-size: 12px;
+    gap: 6px;
+    letter-spacing: 0.04em;
     flex-shrink: 0;
   }
 
