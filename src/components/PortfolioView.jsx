@@ -26,27 +26,34 @@ import TokenLogo from './TokenLogo'
 import PulseTokenExplorer from './PulseTokenExplorer'
 import WalletConnectModal from './WalletConnectModal'
 import { useUserProfile } from '../context/UserProfileContext'
+import { useSiweAuth } from '../context/SiweAuthContext'
+import { readScoped, writeScoped } from '../utils/profileStorage'
 
 export default function PortfolioView({ onSelectTokenForChart }) {
+  const { account } = useSiweAuth()
   const { address: connectedAddress, isConnected } = useAccount()
   const { preferences } = useUserProfile()
   const [subTab, setSubTab] = useState('portfolio') // 'portfolio' | 'explorer'
 
   // Stored watch wallets: array of { address, label }
+  /**
+   * Watched addresses, scoped to the signed-in account.
+   *
+   * Stored under one shared key, the previous visitor's watched wallets were
+   * still listed for whoever signed in next on the same browser - the same
+   * leak the profile fields had. A watch list says what someone is following,
+   * which is not something to hand to the next user of a shared machine.
+   */
   const [wallets, setWallets] = useState(() => {
-    try {
-      const saved = localStorage.getItem('pulse_portfolio_wallets')
-      return saved ? JSON.parse(saved) : []
-    } catch {
-      return []
-    }
+    const saved = readScoped('portfolio_wallets', account, null)
+    return Array.isArray(saved) ? saved : []
   })
 
   // Custom tokens tracked manually: array of { address, symbol, name, decimals }
   const [customTokens, setCustomTokens] = useState(() => {
     try {
-      const saved = localStorage.getItem('pulse_custom_tokens')
-      return saved ? JSON.parse(saved) : []
+      const saved = readScoped('custom_tokens', account, null)
+      return Array.isArray(saved) ? saved : []
     } catch {
       return []
     }
@@ -54,6 +61,9 @@ export default function PortfolioView({ onSelectTokenForChart }) {
 
   const [activeWalletIndex, setActiveWalletIndex] = useState(0)
   const [newWalletInput, setNewWalletInput] = useState('')
+  // Inline rather than alert(): a blocking dialog is suppressed outright in
+  // some contexts, which made a rejected address look like a dead button.
+  const [walletError, setWalletError] = useState('')
   const [newWalletLabel, setNewWalletLabel] = useState('')
   const [showAddWalletModal, setShowAddWalletModal] = useState(false)
   const [showConnectModal, setShowConnectModal] = useState(false)
@@ -88,18 +98,26 @@ export default function PortfolioView({ onSelectTokenForChart }) {
         const exists = prev.some((w) => w.address.toLowerCase() === connectedAddress.toLowerCase())
         if (!exists) {
           const updated = [{ address: connectedAddress, label: 'Connected Wallet' }, ...prev]
-          localStorage.setItem('pulse_portfolio_wallets', JSON.stringify(updated))
+          writeScoped('portfolio_wallets', account, updated)
           return updated
         }
         return prev
       })
     }
-  }, [isConnected, connectedAddress])
+  }, [isConnected, connectedAddress, account])
+
+  // Swap to this account's own watch list when the signed-in address changes,
+  // so nothing from the previous account stays on screen.
+  useEffect(() => {
+    const saved = readScoped('portfolio_wallets', account, null)
+    setWallets(Array.isArray(saved) ? saved : [])
+    setActiveWalletIndex(0)
+  }, [account])
 
   // Save wallets
   const saveWallets = (newWallets) => {
     setWallets(newWallets)
-    localStorage.setItem('pulse_portfolio_wallets', JSON.stringify(newWallets))
+    writeScoped('portfolio_wallets', account, newWallets)
   }
 
   // Active wallet address to track
@@ -206,13 +224,23 @@ export default function PortfolioView({ onSelectTokenForChart }) {
   // Add Watch-only wallet
   const handleAddWallet = (e) => {
     e.preventDefault()
-    if (!newWalletInput || !newWalletInput.startsWith('0x') || newWalletInput.length !== 42) {
-      alert('Please enter a valid 42-character 0x PulseChain address.')
+    const candidate = newWalletInput.trim()
+
+    // Checked as real hex rather than by prefix and length. The old test
+    // accepted 0x followed by forty of any character, so a typed address with
+    // letters past 'f' was saved as a wallet that could never resolve.
+    if (!/^0x[a-fA-F0-9]{40}$/.test(candidate)) {
+      setWalletError('That is not a valid PulseChain address. It should be 0x followed by 40 hex characters.')
+      return
+    }
+
+    if (wallets.some((w) => w.address?.toLowerCase() === candidate.toLowerCase())) {
+      setWalletError('You are already tracking that address.')
       return
     }
 
     const newEntry = {
-      address: newWalletInput.trim(),
+      address: candidate,
       label: newWalletLabel.trim() || `Wallet ${wallets.length + 1}`,
     }
 
@@ -221,6 +249,7 @@ export default function PortfolioView({ onSelectTokenForChart }) {
     setActiveWalletIndex(updated.length - 1)
     setNewWalletInput('')
     setNewWalletLabel('')
+    setWalletError('')
     setShowAddWalletModal(false)
   }
 
@@ -259,7 +288,7 @@ export default function PortfolioView({ onSelectTokenForChart }) {
 
       const updated = [...customTokens, meta]
       setCustomTokens(updated)
-      localStorage.setItem('pulse_custom_tokens', JSON.stringify(updated))
+      writeScoped('custom_tokens', account, updated)
       setCustomTokenInput('')
       setShowAddTokenModal(false)
     } catch (err) {
@@ -276,7 +305,7 @@ export default function PortfolioView({ onSelectTokenForChart }) {
     if (!exists) {
       const updated = [...customTokens, tokenMeta]
       setCustomTokens(updated)
-      localStorage.setItem('pulse_custom_tokens', JSON.stringify(updated))
+      writeScoped('custom_tokens', account, updated)
     }
     setSubTab('portfolio')
   }
@@ -421,7 +450,7 @@ export default function PortfolioView({ onSelectTokenForChart }) {
 
           {/* Add Wallet Modal */}
           {showAddWalletModal && (
-            <div className="modal-overlay" onClick={() => setShowAddWalletModal(false)}>
+            <div className="modal-overlay" onClick={() => { setShowAddWalletModal(false); setWalletError('') }}>
               <div className="modal-content glass-panel" onClick={(e) => e.stopPropagation()}>
                 <h3 className="modal-title">Track Watch-Only Wallet</h3>
                 <p className="modal-desc">
@@ -439,15 +468,22 @@ export default function PortfolioView({ onSelectTokenForChart }) {
                     type="text"
                     placeholder="0x... (42-character PulseChain address)"
                     value={newWalletInput}
-                    onChange={(e) => setNewWalletInput(e.target.value)}
+                    onChange={(e) => {
+                      setNewWalletInput(e.target.value)
+                      if (walletError) setWalletError('')
+                    }}
                     className="modal-input"
                     required
                   />
+                  {walletError && (
+                    <p className="modal-error" role="alert">{walletError}</p>
+                  )}
+
                   <div className="modal-buttons">
                     <button
                       type="button"
                       className="btn-secondary"
-                      onClick={() => setShowAddWalletModal(false)}
+                      onClick={() => { setShowAddWalletModal(false); setWalletError('') }}
                     >
                       Cancel
                     </button>

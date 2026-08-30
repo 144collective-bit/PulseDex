@@ -436,7 +436,7 @@ export function UserProfileProvider({ children }) {
         tradeNotes: INITIAL_NOTES,
       })
     }
-  }, [account, currentUser, updateCurrentUser])
+  }, [currentUser, updateCurrentUser])
 
   // Trigger sound effect if enabled
   const triggerSound = useCallback(

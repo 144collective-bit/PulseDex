@@ -26,6 +26,7 @@ import {
 import { useUserProfile } from '../context/UserProfileContext'
 import { safeExternalUrl } from '../utils/formatters'
 import { useEscapeKey } from '../hooks/useEscapeKey'
+import { readScoped, writeScoped } from '../utils/profileStorage'
 
 // Default Curated Ecosystem Links with Verified Logos
 const DEFAULT_ECOSYSTEM_APPS = [
@@ -231,7 +232,7 @@ export default function EcosystemDirectory() {
   // Load custom links from localStorage
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('pulse_trenches_custom_links')
+      const saved = JSON.stringify(readScoped('trenches_custom_links', null, []))
       if (saved) setCustomLinks(JSON.parse(saved))
     } catch (e) {
       console.error('Error loading custom links:', e)
@@ -241,7 +242,7 @@ export default function EcosystemDirectory() {
   // Save custom links
   const saveCustomLinks = (items) => {
     setCustomLinks(items)
-    localStorage.setItem('pulse_trenches_custom_links', JSON.stringify(items))
+    writeScoped('trenches_custom_links', null, items)
   }
 
   const handleAddCustomApp = (e) => {

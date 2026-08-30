@@ -26,15 +26,18 @@ import DexComingSoon from './components/DexComingSoon'
 import WalletConnectModal from './components/WalletConnectModal'
 import UserProfileModal from './components/UserProfileModal'
 import ProfileView from './components/ProfileView'
-import { SiweAuthProvider } from './context/SiweAuthContext'
+import { SiweAuthProvider, useSiweAuth } from './context/SiweAuthContext'
 import { UserProfileProvider } from './context/UserProfileContext'
 import { FEATURES } from './config/features'
 
 import './App.css'
+import { readScoped, writeScoped } from './utils/profileStorage'
 
 const queryClient = new QueryClient()
 
 function MainApp() {
+  // Storage below is scoped to the signed-in account.
+  const { account } = useSiweAuth()
   const [activeTab, setActiveTab] = useState('home')
 
   // /token/<address> renders the full token page over the tab shell.
@@ -60,11 +63,16 @@ function MainApp() {
   const [mobileScreenerTab, setMobileScreenerTab] = useState('pairs') // 'pairs' | 'chart' | 'trades' | 'details'
   const [showWalletModal, setShowWalletModal] = useState(false)
 
-  // Watchlist stored in localStorage (array of lowercase pair addresses)
+  /**
+   * Watchlist: lowercase pair addresses, scoped to the signed-in account.
+   *
+   * A watch list says what someone is following, which is not something to
+   * leave visible to the next person who signs in on a shared browser.
+   */
   const [watchlist, setWatchlist] = useState(() => {
     try {
-      const saved = localStorage.getItem('pulse_watchlist')
-      return saved ? JSON.parse(saved) : []
+      const saved = readScoped('watchlist', account, null)
+      return Array.isArray(saved) ? saved : []
     } catch {
       return []
     }
@@ -104,13 +112,19 @@ function MainApp() {
   }, [])
 
   // Toggle pair in watchlist
+  // Swap to this account's own watchlist when the signed-in address changes.
+  useEffect(() => {
+    const saved = readScoped('watchlist', account, null)
+    setWatchlist(Array.isArray(saved) ? saved : [])
+  }, [account])
+
   const handleToggleWatchlist = (pairAddress) => {
     if (!pairAddress) return
     const addr = pairAddress.toLowerCase()
     setWatchlist((prev) => {
       const exists = prev.includes(addr)
       const updated = exists ? prev.filter((a) => a !== addr) : [...prev, addr]
-      localStorage.setItem('pulse_watchlist', JSON.stringify(updated))
+      writeScoped('watchlist', account, updated)
       return updated
     })
   }
