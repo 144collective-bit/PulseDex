@@ -178,3 +178,10 @@
   .account-btn.is-account .account-label { display: none; }
   .account-btn.is-account { padding: 7px; }
 }
+
+/* An uploaded picture in place of the generated mark. */
+.account-avatar.is-photo {
+  object-fit: cover;
+  background: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}

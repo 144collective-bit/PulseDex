@@ -3,6 +3,8 @@ import { User, LogOut, Loader2, Copy, Check, ExternalLink, IdCard } from 'lucide
 import { useSiweAuth, AUTH_STATUS } from '../context/SiweAuthContext'
 import { formatAddress } from '../utils/formatters'
 import { avatarAccent } from '../utils/tokenImage'
+import { useUserProfile } from '../context/UserProfileContext'
+import { isSafeAvatarUrl } from '../utils/avatarImage'
 import '../styles/account.css'
 
 const LABEL = {
@@ -20,6 +22,11 @@ const LABEL = {
  */
 export default function AccountButton({ onOpenProfile }) {
   const { status, account, error, signIn, signOut, isBusy } = useSiweAuth()
+  const { profile } = useUserProfile()
+
+  // The uploaded picture where there is one, the address-derived accent
+  // otherwise, so an account is recognisable either way.
+  const picture = isSafeAvatarUrl(profile?.avatarUrl) ? profile.avatarUrl : null
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const ref = useRef(null)
@@ -81,22 +88,30 @@ export default function AccountButton({ onOpenProfile }) {
       >
         {/* Derived from the address, so an account is recognisable at a glance
             before anyone has chosen a picture. */}
-        <span
-          className="account-avatar"
-          style={{ '--avatar-accent': accent }}
-          aria-hidden="true"
-        />
+        {picture ? (
+          <img className="account-avatar is-photo" src={picture} alt="" />
+        ) : (
+          <span
+            className="account-avatar"
+            style={{ '--avatar-accent': accent }}
+            aria-hidden="true"
+          />
+        )}
         <span className="account-label">{formatAddress(account)}</span>
       </button>
 
       {open && (
         <div className="account-menu" role="menu">
           <div className="account-menu-head">
-            <span
-              className="account-avatar is-lg"
-              style={{ '--avatar-accent': accent }}
-              aria-hidden="true"
-            />
+            {picture ? (
+              <img className="account-avatar is-lg is-photo" src={picture} alt="" />
+            ) : (
+              <span
+                className="account-avatar is-lg"
+                style={{ '--avatar-accent': accent }}
+                aria-hidden="true"
+              />
+            )}
             <span className="account-menu-ident">
               <span className="account-menu-name">{formatAddress(account, 6, 4)}</span>
               <span className="account-menu-sub">Signed in with wallet</span>

@@ -1,12 +1,13 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   User, Save, LogIn, LogOut,
   ShieldCheck, Volume2, VolumeX, Eye, EyeOff,
   Zap, CheckCircle2, Radio,
-  FileText, Mail,
+  FileText, Mail, Camera, Loader2, Trash2, Lock,
 } from 'lucide-react'
 import { useUserProfile } from '../context/UserProfileContext'
 import { useSiweAuth } from '../context/SiweAuthContext'
+import { fileToAvatarDataUrl, isSafeAvatarUrl, ACCEPT_ATTRIBUTE } from '../utils/avatarImage'
 
 function ToggleSwitch({ checked, onChange }) {
   return (
@@ -127,6 +128,34 @@ export default function ProfileView() {
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
   const [bio, setBio] = useState('')
+  const [avatarUrl, setAvatarUrl] = useState('')
+  const [avatarError, setAvatarError] = useState('')
+  const [avatarBusy, setAvatarBusy] = useState(false)
+  const fileInputRef = useRef(null)
+
+  /**
+   * Read a picked file, shrink it, and hold it until Save.
+   *
+   * Nothing is written on pick: a picture the user has not saved should not
+   * survive navigating away, and the rest of the form works the same way.
+   */
+  const pickAvatar = async (event) => {
+    const file = event.target.files?.[0]
+    // Reset the input so picking the same file twice still fires a change.
+    event.target.value = ''
+    if (!file) return
+
+    setAvatarError('')
+    setAvatarBusy(true)
+    const { dataUrl, error } = await fileToAvatarDataUrl(file)
+    setAvatarBusy(false)
+
+    if (error) {
+      setAvatarError(error)
+      return
+    }
+    setAvatarUrl(dataUrl)
+  }
   const [saveMsg, setSaveMsg] = useState(null)
   const [isSaving, setIsSaving] = useState(false)
 
@@ -138,6 +167,9 @@ export default function ProfileView() {
     setUsername(clamp(profile.username || currentUser?.username || '', LIMITS.username))
     setEmail(clamp(profile.email || currentUser?.email || '', LIMITS.email))
     setBio(clamp(profile.bio || '', LIMITS.bio))
+    // Storage is hand-editable, so what comes back is untrusted: only an image
+    // data URL is allowed to reach an <img src>.
+    setAvatarUrl(isSafeAvatarUrl(profile.avatarUrl) ? profile.avatarUrl : '')
   }, [profile, currentUser])
 
   const initials = (displayName || username || 'PT').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
@@ -152,9 +184,10 @@ export default function ProfileView() {
       username: username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '') || 'pulse_degen',
       email: email.trim(),
       bio: bio.trim(),
+      avatarUrl,
     })
     triggerSound('success')
-    setSaveMsg('Saved to local vault')
+    setSaveMsg('Saved on this device')
     setTimeout(() => { setSaveMsg(null); setIsSaving(false) }, 2500)
   }
 
@@ -167,11 +200,44 @@ export default function ProfileView() {
           <div className="profile-hero-content">
             <div className="profile-avatar-badge">
               <div className="profile-avatar-glow-ring" />
-              <span className="profile-avatar-text">{initials}</span>
+              {isAuthenticated && avatarUrl ? (
+                <img className="profile-avatar-img" src={avatarUrl} alt="" />
+              ) : (
+                <span className="profile-avatar-text">
+                  {isAuthenticated ? initials : <Lock size={20} />}
+                </span>
+              )}
+
+              {/* Editing a picture is only offered to the account that owns
+                  it; signed out there is nothing here to change. */}
+              {isAuthenticated && (
+                <>
+                  <button
+                    type="button"
+                    className="profile-avatar-edit"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={avatarBusy}
+                    aria-label={avatarUrl ? 'Change profile picture' : 'Add profile picture'}
+                    title={avatarUrl ? 'Change profile picture' : 'Add profile picture'}
+                  >
+                    {avatarBusy ? <Loader2 size={13} className="tch-spin" /> : <Camera size={13} />}
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept={ACCEPT_ATTRIBUTE}
+                    onChange={pickAvatar}
+                    className="visually-hidden-input"
+                    tabIndex={-1}
+                  />
+                </>
+              )}
             </div>
             <div className="profile-identity-col">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <h1 className="profile-display-name">{displayedName}</h1>
+                <h1 className="profile-display-name">
+                  {isAuthenticated ? displayedName : 'Signed out'}
+                </h1>
                 {/* Only claimed while a wallet signature actually backs it.
                     Shown unconditionally, it told signed-out visitors their
                     wallet was verified when no wallet was connected at all. */}
@@ -182,14 +248,36 @@ export default function ProfileView() {
                 )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span className="profile-handle-sub">@{displayedHandle}</span>
-                <span className="profile-dot-separator">·</span>
+                {/* Handle and bio are the person's own details, so they leave
+                    the screen with the session rather than lingering for
+                    whoever is at the machine next. */}
+                {isAuthenticated && (
+                  <>
+                    <span className="profile-handle-sub">@{displayedHandle}</span>
+                    <span className="profile-dot-separator">·</span>
+                  </>
+                )}
                 <span className="profile-network-sub"><Radio size={10} style={{ marginRight: 4 }} />PulseChain · 369</span>
               </div>
-              {bio && (
+              {isAuthenticated && bio && (
                 <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--text-secondary)', fontStyle: 'italic', margin: 0 }}>
                   &ldquo;{bio}&rdquo;
                 </p>
+              )}
+
+              {isAuthenticated && avatarUrl && (
+                <button
+                  type="button"
+                  className="profile-avatar-remove"
+                  onClick={() => { setAvatarUrl(''); setAvatarError('') }}
+                >
+                  <Trash2 size={11} />
+                  Remove picture
+                </button>
+              )}
+
+              {avatarError && (
+                <p className="profile-avatar-error" role="alert">{avatarError}</p>
               )}
             </div>
           </div>
@@ -206,26 +294,44 @@ export default function ProfileView() {
 
           {/* Full width now that the security card it used to sit beside has
               gone with password sign-in. */}
-          <SectionCard className="profile-cards-grid-full" icon={User} iconColor="var(--pulse-cyan)" title="Identity & Profile" subtitle="Your public trader persona on PulseChain">
-            <form onSubmit={saveProfile} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <FormField label="Display Name">
-                <StyledInput icon={User} type="text" maxLength={LIMITS.displayName} value={displayName} onChange={e => setDisplayName(clamp(e.target.value, LIMITS.displayName))} placeholder="e.g. Satoshi Whale" required />
-              </FormField>
-              <FormField label="Username" hint="a–z 0–9 _">
-                <StyledInput type="text" maxLength={LIMITS.username} value={username} onChange={e => setUsername(clamp(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''), LIMITS.username))} placeholder="pulse_whale" required />
-              </FormField>
-              <FormField label="Email Address" hint="Optional">
-                <StyledInput icon={Mail} type="email" maxLength={LIMITS.email} value={email} onChange={e => setEmail(clamp(e.target.value, LIMITS.email))} placeholder="name@domain.com" />
-              </FormField>
-              <FormField label="Trader Bio" hint="Optional">
-                <StyledInput icon={FileText} type="text" maxLength={LIMITS.bio} value={bio} onChange={e => setBio(clamp(e.target.value, LIMITS.bio))} placeholder="e.g. PulseChain LP provider & swing trader" />
-              </FormField>
-              <div className="profile-form-action-row">
-                <button type="submit" className="profile-save-btn" disabled={isSaving}><Save size={14} />{isSaving ? 'Saving…' : 'Save Changes'}</button>
-                {saveMsg && <span className="profile-success-chip animate-fade-in"><CheckCircle2 size={12} />{saveMsg}</span>}
-              </div>
-            </form>
-          </SectionCard>
+          {isAuthenticated ? (
+            <SectionCard className="profile-cards-grid-full" icon={User} iconColor="var(--pulse-cyan)" title="Identity & Profile" subtitle="Your public trader persona on PulseChain">
+              <form onSubmit={saveProfile} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <FormField label="Display Name">
+                  <StyledInput icon={User} type="text" maxLength={LIMITS.displayName} value={displayName} onChange={e => setDisplayName(clamp(e.target.value, LIMITS.displayName))} placeholder="e.g. Satoshi Whale" required />
+                </FormField>
+                <FormField label="Username" hint="a–z 0–9 _">
+                  <StyledInput type="text" maxLength={LIMITS.username} value={username} onChange={e => setUsername(clamp(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''), LIMITS.username))} placeholder="pulse_whale" required />
+                </FormField>
+                <FormField label="Email Address" hint="Optional">
+                  <StyledInput icon={Mail} type="email" maxLength={LIMITS.email} value={email} onChange={e => setEmail(clamp(e.target.value, LIMITS.email))} placeholder="name@domain.com" />
+                </FormField>
+                <FormField label="Trader Bio" hint="Optional">
+                  <StyledInput icon={FileText} type="text" maxLength={LIMITS.bio} value={bio} onChange={e => setBio(clamp(e.target.value, LIMITS.bio))} placeholder="e.g. PulseChain LP provider & swing trader" />
+                </FormField>
+                <div className="profile-form-action-row">
+                  <button type="submit" className="profile-save-btn" disabled={isSaving}><Save size={14} />{isSaving ? 'Saving…' : 'Save Changes'}</button>
+                  {saveMsg && <span className="profile-success-chip animate-fade-in"><CheckCircle2 size={12} />{saveMsg}</span>}
+                </div>
+              </form>
+            </SectionCard>
+          ) : (
+            /* Signed out, the form is not merely disabled but absent - a
+               disabled field still shows whose details it holds, which is
+               exactly what should leave the screen with the session. */
+            <div className="profile-locked-card profile-cards-grid-full">
+              <Lock size={20} />
+              <h3>Your profile is hidden</h3>
+              <p>
+                Sign in with your wallet to view and edit your profile. Nothing
+                is shown here while you are signed out.
+              </p>
+              <button type="button" className="btn-sm btn-glow-pulse" onClick={() => openAuthModal('signin')}>
+                <LogIn size={13} />
+                Sign in with wallet
+              </button>
+            </div>
+          )}
 
 
           <div className="profile-cards-grid-full">
@@ -281,10 +387,19 @@ export default function ProfileView() {
         <div className="profile-security-footer">
           <ShieldCheck size={15} style={{ color:'var(--pulse-green)', flexShrink:0 }} />
           <span>
-            <strong>Signed in with your wallet.</strong> PulseDex never sees a private
-            key and cannot move your funds — signing in only proves you control this
-            address. Profile details below are still saved on this device only;
-            syncing them across devices is coming.
+            {isAuthenticated ? (
+              <>
+                <strong>Signed in with your wallet.</strong> PulseDex never sees a
+                private key and cannot move your funds — signing in only proves you
+                control this address. Profile details are saved on this device only;
+                syncing them across devices is coming.
+              </>
+            ) : (
+              <>
+                <strong>Signed out.</strong> Your profile details are hidden and stay
+                on this device. Sign in with your wallet to view or edit them.
+              </>
+            )}
           </span>
         </div>
 

@@ -76,6 +76,8 @@ const DEFAULT_PROFILE = {
   displayName: 'Pulse Trader',
   username: 'pulse_degen',
   bio: 'Hunting alpha on PulseChain 🚀',
+  // Data URL of an uploaded picture, or empty for the lettered fallback.
+  avatarUrl: '',
 }
 
 const DEFAULT_PREFERENCES = {
@@ -85,7 +87,9 @@ const DEFAULT_PREFERENCES = {
   defaultCurrency: 'USD',
   chartInterval: '15m',
   autoHideSpam: true,
-  soundFxEnabled: true,
+  // Off by default. Sound that starts on its own is startling on a page
+  // someone opened to read prices, and a muted app is never the complaint.
+  soundFxEnabled: false,
   privacyMode: false,
   themeColor: 'theme-pulse-neon',
 }
@@ -282,7 +286,19 @@ export function UserProfileProvider({ children }) {
   useEffect(() => {
     purgeLegacyKeys()
     setProfile({ ...DEFAULT_PROFILE, ...readScoped('user_profile', account, {}) })
-    setPreferences({ ...DEFAULT_PREFERENCES, ...readScoped('user_preferences', account, {}) })
+
+    const storedPrefs = readScoped('user_preferences', account, {})
+    /*
+     * Sound effects used to default to on, so a stored `true` is almost
+     * certainly that old default rather than a choice anyone made. Flipped
+     * once, and the marker means a deliberate re-enable afterwards sticks.
+     */
+    if (storedPrefs.soundFxEnabled && !storedPrefs.audioDefaultMigrated) {
+      storedPrefs.soundFxEnabled = false
+    }
+    storedPrefs.audioDefaultMigrated = true
+    setPreferences({ ...DEFAULT_PREFERENCES, ...storedPrefs })
+    writeScoped('user_preferences', account, { ...DEFAULT_PREFERENCES, ...storedPrefs })
 
     const notes = readScoped('trade_notes', account, null)
     setTradeNotes(Array.isArray(notes) ? notes : INITIAL_NOTES)

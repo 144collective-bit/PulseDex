@@ -14319,3 +14319,136 @@
   border: 1px solid rgba(255, 61, 87, 0.28);
   border-radius: var(--radius-sm);
 }
+
+/* --------------------------------------------------------------------------
+   Profile picture
+   -------------------------------------------------------------------------- */
+.profile-avatar-badge { position: relative; }
+
+.profile-avatar-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+/* Camera control, tucked on the lower-right of the badge. */
+.profile-avatar-edit {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  color: #04070d;
+  background: linear-gradient(135deg, var(--pulse-cyan), var(--pulse-green));
+  border: 2px solid var(--bg-primary, #0b1220);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.profile-avatar-edit:hover:not(:disabled) {
+  transform: scale(1.08);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.45);
+}
+
+.profile-avatar-edit:focus-visible {
+  outline: 2px solid var(--pulse-cyan);
+  outline-offset: 3px;
+}
+
+.profile-avatar-edit:disabled { cursor: progress; opacity: 0.75; }
+
+/* The file input itself is never shown - the camera button triggers it - but
+   it stays in the DOM rather than display:none so the browser keeps it
+   functional and assistive tech can still reach it if focused. */
+.visually-hidden-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.profile-avatar-remove {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  padding: 4px 9px;
+  font-family: var(--font-instrument);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.profile-avatar-remove:hover {
+  color: var(--pulse-red);
+  border-color: rgba(255, 61, 87, 0.35);
+}
+
+.profile-avatar-error {
+  margin: 0;
+  font-family: var(--font-instrument);
+  font-size: 11px;
+  color: var(--pulse-red);
+}
+
+/* --------------------------------------------------------------------------
+   Signed-out profile
+   -------------------------------------------------------------------------- */
+.profile-locked-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 44px 24px;
+  text-align: center;
+  background: rgba(16, 22, 34, 0.6);
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  backdrop-filter: blur(14px) saturate(130%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+}
+
+.profile-locked-card svg { color: var(--text-muted); }
+
+.profile-locked-card h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.profile-locked-card p {
+  max-width: 400px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+/* Touch targets under ~44px are unreliable with a fingertip, and this one sits
+   on the edge of a circle where a near-miss lands on nothing. */
+@media (max-width: 768px) {
+  .profile-avatar-edit {
+    width: 40px;
+    height: 40px;
+    right: -4px;
+    bottom: -4px;
+  }
+}
