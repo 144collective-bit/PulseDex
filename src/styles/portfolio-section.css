@@ -217,3 +217,102 @@
 @media (max-width: 760px) {
   .pf-section .net-worth-value { font-size: 27px; }
 }
+
+/* --------------------------------------------------------------------------
+   Holdings table
+
+   The table was carrying 13px figures and 22px marks inside 83px rows on a
+   1800px-wide page: the space was already there, the content just wasn't
+   using it. Figures and marks grow into the row rather than the row growing.
+   -------------------------------------------------------------------------- */
+
+.pf-section .holdings-table th {
+  padding: 13px 16px;
+  font-family: var(--font-instrument);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--text-secondary);
+  background: rgba(0, 0, 0, 0.32);
+  border-bottom: 1px solid var(--pf-hairline);
+}
+
+.pf-section .holdings-table td {
+  padding: 14px 16px;
+  font-family: var(--font-numeric);
+  font-size: var(--fs-stat);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.pf-section .holdings-table tr:hover td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* The mark anchors the row, matching the treatment on the Home cards. */
+.pf-section .holding-asset-cell,
+.pf-section .token-cell-wrapper {
+  gap: 14px;
+}
+
+.pf-section .holdings-table .token-logo-img,
+.pf-section .holdings-table .token-logo-fallback {
+  width: 42px !important;
+  height: 42px !important;
+  min-width: 42px !important;
+  border: 1px solid rgba(0, 229, 255, 0.28) !important;
+  box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.06);
+}
+
+/* Ticker leads, full name recedes beneath it. */
+.pf-section .token-meta strong,
+.pf-section .holding-asset-cell strong {
+  font-family: var(--font-numeric);
+  font-size: 17px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.pf-section .token-meta small,
+.pf-section .holding-asset-cell small,
+.pf-section .th-sub {
+  font-family: var(--font-instrument);
+  font-size: var(--fs-micro);
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+/* Change reads as a bordered chip, the badge language used on the screener. */
+.pf-section .holdings-table .text-pulse-green,
+.pf-section .holdings-table .text-pulse-red {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: var(--fs-figure);
+  font-weight: 700;
+  border-radius: var(--radius-full);
+}
+
+.pf-section .holdings-table .text-pulse-green {
+  background: var(--pulse-green-bg);
+  border: 1px solid rgba(0, 255, 157, 0.3);
+}
+
+.pf-section .holdings-table .text-pulse-red {
+  background: var(--pulse-red-bg);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+@media (max-width: 900px) {
+  .pf-section .holdings-table td { font-size: 17px; padding: 12px 12px; }
+  .pf-section .holdings-table th { padding: 11px 12px; }
+  .pf-section .holdings-table .token-logo-img,
+  .pf-section .holdings-table .token-logo-fallback {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+  }
+}

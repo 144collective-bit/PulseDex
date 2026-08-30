@@ -7,11 +7,13 @@
    ========================================================================== */
 
 .home-page {
-  --hc-up: #22c55e;
-  --hc-down: #f6465d;
-  --hc-hairline: rgba(255, 255, 255, 0.06);
-  --hc-surface: rgba(16, 22, 34, 0.72);
-  --hc-label: rgba(148, 163, 184, 0.85);
+  /* Brand tokens, not stock ones. #22c55e read as generic fintech next to the
+     electric mint used everywhere else in the app. */
+  --hc-up: var(--pulse-green);
+  --hc-down: var(--pulse-red);
+  --hc-hairline: rgba(255, 255, 255, 0.08);
+  --hc-surface: rgba(16, 22, 34, 0.75);
+  --hc-label: var(--text-secondary);
 
   display: flex;
   flex-direction: column;
@@ -29,9 +31,6 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 18px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid var(--hc-hairline);
 }
 
 .home-title-block {
@@ -150,11 +149,14 @@
 .home-tile.accent-cyan { --tile-accent: var(--pulse-cyan); --tile-accent-soft: rgba(0, 229, 255, 0.07); }
 .home-tile.accent-purple { --tile-accent: var(--pulse-purple); --tile-accent-soft: rgba(217, 70, 239, 0.07); }
 .home-tile.accent-blue { --tile-accent: #3b9dff; --tile-accent-soft: rgba(59, 157, 255, 0.07); }
-.home-tile.accent-green { --tile-accent: var(--hc-up); --tile-accent-soft: rgba(34, 197, 94, 0.07); }
-.home-tile.accent-red { --tile-accent: var(--hc-down); --tile-accent-soft: rgba(246, 70, 93, 0.07); }
+.home-tile.accent-green { --tile-accent: var(--hc-up); --tile-accent-soft: rgba(0, 255, 157, 0.08); }
+.home-tile.accent-red { --tile-accent: var(--hc-down); --tile-accent-soft: rgba(244, 63, 94, 0.08); }
 
 .home-tile-label {
-  font-family: var(--font-numeric);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-instrument);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.12em;
@@ -271,13 +273,21 @@
   flex-shrink: 0;
 }
 
+/* The mark is the card's anchor, so it gets a defined ring and a brand-tinted
+   halo rather than sitting as a small image beside the text. */
 .cc-logo-wrap::before {
   content: '';
   position: absolute;
-  inset: -7px;
+  inset: -9px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(0, 229, 255, 0.09), transparent 70%);
+  background: radial-gradient(circle, rgba(0, 229, 255, 0.16), transparent 70%);
   pointer-events: none;
+}
+
+.cc-logo-wrap img,
+.cc-logo-wrap > div {
+  border: 1px solid rgba(0, 229, 255, 0.28) !important;
+  box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.06);
 }
 
 .cc-ident {
@@ -383,12 +393,14 @@
 
 .cc-change-pill.is-up {
   color: var(--hc-up);
-  background: rgba(34, 197, 94, 0.13);
+  background: var(--pulse-green-bg);
+  border: 1px solid rgba(0, 255, 157, 0.32);
 }
 
 .cc-change-pill.is-down {
   color: var(--hc-down);
-  background: rgba(246, 70, 93, 0.13);
+  background: var(--pulse-red-bg);
+  border: 1px solid rgba(244, 63, 94, 0.32);
 }
 
 /* Momentum band: how the day's move built up */
@@ -412,7 +424,7 @@
 }
 
 .cc-mo-label {
-  font-family: var(--font-numeric);
+  font-family: var(--font-instrument);
   font-size: 9.5px;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -420,7 +432,7 @@
 }
 
 .cc-mo-val {
-  font-family: var(--font-numeric);
+  font-family: var(--font-instrument);
   font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.015em;
@@ -432,8 +444,8 @@
 .cc-mo.is-flat .cc-mo-val { color: var(--text-muted); }
 
 /* Faint wash behind each cell reinforces direction without shouting. */
-.cc-mo.is-up { background: linear-gradient(180deg, rgba(34, 197, 94, 0.07), rgba(11, 16, 26, 0.55) 70%); }
-.cc-mo.is-down { background: linear-gradient(180deg, rgba(246, 70, 93, 0.07), rgba(11, 16, 26, 0.55) 70%); }
+.cc-mo.is-up { background: linear-gradient(180deg, rgba(0, 255, 157, 0.1), rgba(11, 16, 26, 0.55) 70%); }
+.cc-mo.is-down { background: linear-gradient(180deg, rgba(244, 63, 94, 0.1), rgba(11, 16, 26, 0.55) 70%); }
 
 /* Stat band */
 .cc-stats {
@@ -451,7 +463,7 @@
 }
 
 .cc-stat-label {
-  font-family: var(--font-numeric);
+  font-family: var(--font-instrument);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.09em;
@@ -496,7 +508,7 @@
 }
 
 .cc-flow-label {
-  font-family: var(--font-numeric);
+  font-family: var(--font-instrument);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.09em;
@@ -508,7 +520,7 @@
   display: inline-flex;
   align-items: baseline;
   gap: 5px;
-  font-family: var(--font-numeric);
+  font-family: var(--font-instrument);
   font-size: 13px;
   font-weight: 700;
 }
@@ -530,6 +542,7 @@
   display: block;
   height: 100%;
   background: var(--hc-up);
+  box-shadow: 0 0 10px rgba(0, 255, 157, 0.45);
   transition: width 0.45s ease;
 }
 
@@ -616,4 +629,14 @@
 @media (max-width: 380px) {
   /* Three stat columns get too narrow to hold a compact figure here. */
   .cc-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Live indicator, relocated from the removed page header onto the tile row. */
+.home-tile-live {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pulse-green);
+  box-shadow: 0 0 8px var(--pulse-green);
+  animation: homePulse 1.2s ease-in-out infinite;
 }

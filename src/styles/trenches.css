@@ -18,10 +18,12 @@
    */
   --trench-chrome: 352px;
 
-  --tr-up: #00e08a;
-  --tr-down: #f6465d;
+  /* Brand tokens, so the board matches the screener rather than approximating
+     it with near-miss greens and reds. */
+  --tr-up: var(--pulse-green);
+  --tr-down: var(--pulse-red);
   --tr-panel: rgba(13, 18, 28, 0.82);
-  --tr-hairline: rgba(255, 255, 255, 0.055);
+  --tr-hairline: rgba(255, 255, 255, 0.07);
   --tr-row-hover: rgba(255, 255, 255, 0.045);
 
   display: flex;
@@ -300,10 +302,10 @@
    -------------------------------------------------------------------------- */
 .trench-col-labels {
   display: grid;
-  grid-template-columns: 22px 38px minmax(0, 1fr) auto;
+  grid-template-columns: 26px 46px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
-  padding: 6px 12px;
+  gap: 12px;
+  padding: 7px 14px;
   font-size: 8.5px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -365,14 +367,14 @@
    * numbers aligned down the list, while the meta line gets the whole width
    * instead of competing with two right-hand cells for the same ~86px.
    */
-  grid-template-columns: 22px 38px minmax(0, 1fr) auto;
+  grid-template-columns: 26px 46px minmax(0, 1fr) auto;
   grid-template-areas:
     'rank logo ident price'
     'rank logo meta  side';
   align-items: center;
-  gap: 3px 10px;
+  gap: 4px 12px;
   width: 100%;
-  padding: 9px 12px;
+  padding: 9px 14px;
   text-align: left;
   color: inherit;
   background: transparent;
@@ -404,7 +406,7 @@
 }
 
 .tr-rank {
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--text-muted);
   text-align: right;
@@ -462,7 +464,7 @@
 }
 
 .tr-symbol {
-  font-size: 12.5px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text-primary);
   flex-shrink: 0;
@@ -473,7 +475,7 @@
 }
 
 .tr-name {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--text-muted);
   min-width: 0;
 }
@@ -482,19 +484,22 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 10px;
+  font-size: 10.5px;
   color: var(--text-secondary);
   white-space: nowrap;
   overflow: hidden;
   min-width: 0;
 }
 
+/* Volume is the first figure to go once the line runs out of room. */
+.trench-column .tr-meta > :nth-last-child(-n + 2) { display: none; }
+
 .tr-sep { color: var(--text-muted); opacity: 0.5; }
 .tr-age { color: var(--pulse-cyan); }
 
 
 .tr-price {
-  font-size: 11.5px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
@@ -526,13 +531,13 @@
 }
 
 .tr-change {
-  font-size: 10.5px;
+  font-size: 12.5px;
   font-weight: 700;
   white-space: nowrap;
 }
 
-.tr-change.is-up, .tr-change-chip.is-up { color: var(--tr-up); }
-.tr-change.is-down, .tr-change-chip.is-down { color: var(--tr-down); }
+.tr-change.is-up, .tr-change-chip.is-up { color: var(--pulse-green); }
+.tr-change.is-down, .tr-change-chip.is-down { color: var(--pulse-red); }
 .tr-change.is-flat { color: var(--text-muted); }
 
 
@@ -545,8 +550,8 @@
 
 .tr-bond-track {
   display: block;
-  width: 46px;
-  height: 4px;
+  width: 54px;
+  height: 5px;
   background: rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-full);
   overflow: hidden;
@@ -564,7 +569,7 @@
 .heat-hot .tr-bond-fill { background: linear-gradient(90deg, var(--pulse-yellow), #ff7a00); }
 
 .tr-bond-pct {
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 700;
   color: var(--text-secondary);
 }

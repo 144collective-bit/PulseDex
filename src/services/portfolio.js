@@ -186,9 +186,18 @@ export async function fetchWalletPortfolio(walletAddress, customTokens = []) {
       })
     }
 
-    // 3. Batch query DexScreener for live pricing across all discovered tokens
+    // 3. Query DexScreener for live pricing across all discovered tokens.
+    //
+    // One request per token on purpose. The multi-token endpoint caps its
+    // response at 30 pairs for the whole request regardless of how many
+    // addresses are asked for, so batching starves everything after the first
+    // few - which is why holdings further down the list priced at $0.00 while
+    // clearly having a market.
     const allAddresses = Array.from(discoveredTokensMap.values()).map((t) => t.address)
-    const pairs = await getPairsByTokens(allAddresses).catch(() => [])
+    const pairGroups = await Promise.all(
+      allAddresses.map((address) => getPairsByTokens([address]).catch(() => []))
+    )
+    const pairs = pairGroups.flat()
 
     const priceMap = new Map()
     pairs.forEach((p) => {

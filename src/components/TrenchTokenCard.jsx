@@ -55,7 +55,7 @@ export default function TrenchTokenCard({
           cid={token.imageCid}
           address={token.address}
           symbol={token.symbol}
-          size={34}
+          size={42}
           eager={eager}
         />
         {isNearGraduation && (
@@ -144,7 +144,7 @@ export function TrenchMoverRow({ token, onSelect, rank, eager = false }) {
           address={token.address}
           symbol={token.symbol}
           fallbackUrl={token.pair?.info?.imageUrl}
-          size={30}
+          size={38}
           eager={eager}
         />
       </span>

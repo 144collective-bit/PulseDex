@@ -34,10 +34,13 @@ function CardSkeleton() {
  * Built as its own glass panel rather than a cell in a strip, so the summary
  * row belongs to the same family as the asset cards below it.
  */
-function SummaryTile({ label, value, tone = '', accent = 'cyan' }) {
+function SummaryTile({ label, value, tone = '', accent = 'cyan', live = false }) {
   return (
     <div className={`home-tile accent-${accent}`}>
-      <span className="home-tile-label">{label}</span>
+      <span className="home-tile-label">
+        {label}
+        {live && <span className="home-tile-live" title="Refreshing" aria-hidden="true" />}
+      </span>
       <span className={`home-tile-val ${tone}`}>{value}</span>
     </div>
   )
@@ -76,18 +79,6 @@ export default function HomeView({ onSelectPairForChart }) {
   return (
     <div className="home-page">
       <header className="home-head">
-        <div className="home-title-block">
-          <div className="home-eyebrow">
-            <span className={`home-pulse ${isFetching ? 'is-live' : ''}`} aria-hidden="true" />
-            <span>PULSECHAIN · CORE ASSETS</span>
-          </div>
-          <h1 className="home-title">Market Overview</h1>
-          <p className="home-sub">
-            The backbone of the ecosystem — priced live, with supply read straight
-            from the chain.
-          </p>
-        </div>
-
         {rows.length > 0 && (
           <div className="home-tiles">
             <SummaryTile
@@ -110,6 +101,7 @@ export default function HomeView({ onSelectPairForChart }) {
               value={formatPercent(avgChange, 2) || '—'}
               tone={avgChange === null ? '' : avgUp ? 'is-up' : 'is-down'}
               accent={avgUp ? 'green' : 'red'}
+              live={isFetching}
             />
           </div>
         )}

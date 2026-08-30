@@ -11931,9 +11931,9 @@
 }
 
 .pf-cta-primary {
-  background: linear-gradient(135deg, #0066ff 0%, #d946ef 100%);
-  color: #fff;
-  box-shadow: 0 0 18px rgba(0, 102, 255, 0.4);
+  background: linear-gradient(135deg, var(--pulse-cyan) 0%, var(--pulse-green) 100%);
+  color: #04070d;
+  box-shadow: 0 0 18px rgba(0, 229, 255, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 
 .pf-cta-primary:hover {
@@ -12200,9 +12200,9 @@
   font-weight: 700;
   cursor: pointer;
   transition: all 0.2s ease;
-  background: linear-gradient(135deg, #0066ff 0%, #d946ef 100%);
-  color: #fff;
-  box-shadow: 0 0 18px rgba(0, 102, 255, 0.4);
+  background: linear-gradient(135deg, var(--pulse-cyan) 0%, var(--pulse-green) 100%);
+  color: #04070d;
+  box-shadow: 0 0 18px rgba(0, 229, 255, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 
 .pf-save-btn:hover:not(:disabled) {
@@ -12795,9 +12795,11 @@
   border: none;
 }
 .btn-glow-pulse {
-  background: linear-gradient(135deg, #0066ff 0%, #d946ef 100%);
-  color: #fff;
-  box-shadow: 0 0 16px rgba(0, 102, 255, 0.4);
+  /* Brand cyan-to-mint. The hardcoded blue-to-purple here overrode the themed
+     .btn-primary because App.css loads after theme.css. */
+  background: linear-gradient(135deg, var(--pulse-cyan) 0%, var(--pulse-green) 100%);
+  color: #04070d;
+  box-shadow: 0 0 18px rgba(0, 229, 255, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 
 
@@ -13070,9 +13072,11 @@
 }
 
 .btn-glow-pulse {
-  background: linear-gradient(135deg, #0066ff 0%, #d946ef 100%);
-  color: #fff;
-  box-shadow: 0 0 16px rgba(0, 102, 255, 0.4);
+  /* Brand cyan-to-mint. The hardcoded blue-to-purple here overrode the themed
+     .btn-primary because App.css loads after theme.css. */
+  background: linear-gradient(135deg, var(--pulse-cyan) 0%, var(--pulse-green) 100%);
+  color: #04070d;
+  box-shadow: 0 0 18px rgba(0, 229, 255, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 
 .btn-glow-pulse:hover {
@@ -13190,8 +13194,8 @@
   gap: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
-  background: linear-gradient(135deg, #0066ff 0%, #d946ef 100%);
-  color: #fff;
+  background: linear-gradient(135deg, var(--pulse-cyan) 0%, var(--pulse-green) 100%);
+  color: #04070d;
   border: none;
   box-shadow: 0 0 16px rgba(0, 102, 255, 0.4);
 }
@@ -14154,3 +14158,97 @@
 }
 
 .mobile-nav-item.active .mobile-nav-label { font-weight: 700; }
+
+/* ==========================================================================
+   PAGE WIDTH
+
+   Content centres past --page-max. Left full-bleed, an ultra-wide monitor
+   stretches the columns rather than the type, which is what left figures
+   marooned in their own cells on the portfolio table and the home board.
+   ========================================================================== */
+.home-page,
+.pf-section,
+.trenches-live-page {
+  width: 100%;
+  max-width: var(--page-max);
+  margin-inline: auto;
+}
+
+/* ==========================================================================
+   SCREENER SIDEBAR - legibility
+
+   Rows were truncating the base symbol to "W…" and "PL…" while the quote
+   ("/USDC") stayed whole. That is the wrong way round: the base symbol is the
+   token's identity and the quote is context, so the quote now gives way first
+   and the symbol keeps its characters.
+   ========================================================================== */
+/*
+ * Only above the stacking breakpoint. Unscoped, this overrode the
+ * max-width:1024px rule that collapses the screener to a single column, so a
+ * tablet kept a 336px sidebar with the rest of the row left empty.
+ */
+@media (min-width: 1025px) {
+  .screener-pro-layout {
+    grid-template-columns: 336px 1fr 395px;
+  }
+}
+
+.sidebar-base-sym {
+  font-size: 14.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  /* Never the first thing to give up space. */
+  flex: 0 0 auto;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.sidebar-quote-sym {
+  font-size: 11.5px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 0 1 auto;
+}
+
+/* The CORE pill is decoration next to an unreadable name, so it yields too. */
+.sidebar-core-pill { flex: 0 0 auto; }
+
+.sidebar-pair-title-row { gap: 4px; }
+.sidebar-pair-names { gap: 3px; }
+.sidebar-pair-sub-row { font-size: 10.5px; gap: 6px; }
+
+/* Marks grow to anchor each row, matching the home and portfolio treatment. */
+.sidebar-pair-row .token-logo-img,
+.sidebar-pair-row .token-logo-fallback {
+  width: 34px !important;
+  height: 34px !important;
+  min-width: 34px !important;
+}
+
+.sidebar-pair-price {
+  font-family: var(--font-instrument);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 1025px) and (max-width: 1400px) {
+  .screener-pro-layout { grid-template-columns: 310px 1fr 360px; }
+}
+
+/* Stacked screener: the sidebar wrapper is a flex row, so the pairs panel
+   sized to its own content and left the rest of the row empty once the layout
+   collapsed to a single column. Stretch it to the width it has been given. */
+@media (max-width: 1024px) {
+  .screener-sidebar-wrapper {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .sidebar-pairs-container {
+    width: 100%;
+    position: static;
+    max-height: none;
+  }
+}

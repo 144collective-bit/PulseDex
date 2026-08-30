@@ -73,7 +73,7 @@ export default function CoreAssetCard({ asset, onOpenChart }) {
             symbol={asset.symbol}
             address={asset.address}
             customUrl={asset.logoUrl}
-            size={40}
+            size={52}
           />
         </span>
 

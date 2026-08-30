@@ -37,7 +37,29 @@
    * fixed advance read technical rather than premium. Inter's tabular figures
    * still align in a column but match the headings around them.
    */
+  /*
+   * Figures split by size, not by page. Large display numbers - a headline
+   * price, a tile value - use the interface face, where mono's wide fixed
+   * advance reads technical. Small instrumentation - badges, chips, table
+   * cells, tickers - stays mono, which is where the terminal character lives.
+   */
   --font-numeric: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-instrument: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+
+  /* Shared type scale. Defined once so pages stop drifting apart. */
+  --fs-micro: 10px;   /* chip and badge text */
+  --fs-label: 11px;   /* stat labels, column headers */
+  --fs-body: 13px;    /* secondary copy */
+  --fs-figure: 15px;  /* instrumentation figures in dense rows */
+  --fs-stat: 21px;    /* card stat values */
+  --fs-display: 29px; /* headline price */
+
+  /*
+   * Content is centred past this width. Left full-bleed, figures on an
+   * ultra-wide monitor sit marooned in their own cells - the "small numbers in
+   * a wide open space" problem - because the columns stretch, not the type.
+   */
+  --page-max: 1520px;
 
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -134,8 +156,14 @@ body {
 
 /* Buttons */
 .btn-primary {
-  background: linear-gradient(135deg, var(--brand-blue) 0%, var(--brand-purple) 100%);
-  color: #ffffff;
+  /*
+   * Cyan to mint, the pair used throughout the screener and the ticker. The
+   * previous blue-to-purple gradient appeared nowhere else in the app and read
+   * as borrowed from another product. Near-black text because both stops are
+   * bright enough that white sits below contrast.
+   */
+  background: linear-gradient(135deg, var(--pulse-cyan) 0%, var(--pulse-green) 100%);
+  color: #04070d;
   font-weight: 700;
   padding: 8px 16px;
   border-radius: var(--radius-md);
@@ -145,12 +173,12 @@ body {
   align-items: center;
   gap: 8px;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 14px rgba(0, 102, 255, 0.3);
+  box-shadow: 0 4px 16px rgba(0, 229, 255, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
 .btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(138, 43, 226, 0.45);
+  box-shadow: 0 8px 24px rgba(0, 229, 255, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 .btn-secondary {
