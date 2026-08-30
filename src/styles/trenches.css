@@ -1785,21 +1785,80 @@
    TOKEN DETAIL - insights dashboard
    ========================================================================== */
 
+/*
+ * One dashboard, not a scatter of cards. A single frame with hairline dividers
+ * between regions reads as an instrument panel; separate bordered cards with
+ * gaps between them read as unrelated widgets that happen to sit together.
+ */
 .tm-insights {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 0;
   margin: 0 20px 16px;
+  /* Every other section in the dialog opts out of shrinking. Without this the
+     dashboard was the only flexible child, so it absorbed the whole overflow
+     and collapsed to its own borders while its contents spilled over the
+     chart below. */
+  flex-shrink: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 22%),
+    rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--tr-hairline);
+  border-radius: var(--radius-md);
+  overflow: hidden;
 }
 
+/* Title bar, so the block announces itself as one thing. */
+.tmi-bar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 18px;
+  background: rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid var(--tr-hairline);
+}
+
+.tmi-bar-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pulse-cyan);
+  box-shadow: 0 0 8px var(--pulse-cyan);
+  flex-shrink: 0;
+}
+
+.tmi-bar-title {
+  font-family: var(--font-instrument);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.tmi-bar-note {
+  margin-left: auto;
+  font-family: var(--font-instrument);
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+/* Regions are separated by rules, not by gaps and borders. */
 .tmi-panel {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 16px 18px;
-  background: rgba(0, 0, 0, 0.26);
-  border: 1px solid var(--tr-hairline);
-  border-radius: var(--radius-md);
+  background: none;
+  border: none;
+  border-top: 1px solid var(--tr-hairline);
+  border-radius: 0;
+}
+
+/* The two side-by-side regions get a divider between them. */
+.tmi-panel:nth-of-type(odd):not(.tmi-wide) {
+  border-right: 1px solid var(--tr-hairline);
 }
 
 .tmi-wide { grid-column: 1 / -1; }
@@ -2155,29 +2214,24 @@
 .tmi-metrics {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
+  gap: 0;
   padding: 0;
   background: none;
   border: none;
 }
 
+/* Divided by rules so the strip reads as one instrument row. */
 .tmi-metric {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 15px 16px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 42%),
-    rgba(0, 0, 0, 0.26);
-  border: 1px solid var(--tr-hairline);
-  border-radius: var(--radius-md);
-  transition: border-color 0.18s ease, transform 0.18s ease;
+  padding: 16px 18px;
+  border-right: 1px solid var(--tr-hairline);
+  transition: background 0.18s ease;
 }
 
-.tmi-metric:hover {
-  border-color: rgba(0, 229, 255, 0.2);
-  transform: translateY(-2px);
-}
+.tmi-metric:last-child { border-right: none; }
+.tmi-metric:hover { background: rgba(255, 255, 255, 0.028); }
 
 .tmi-metric-label {
   display: inline-flex;
@@ -2212,11 +2266,48 @@
 }
 
 @media (max-width: 1100px) {
+  /* Wrapping five cells needs a bottom rule as well as a right one. */
   .tmi-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .tmi-metric { border-bottom: 1px solid var(--tr-hairline); }
+  .tmi-metric:nth-child(3n) { border-right: none; }
+}
+
+@media (max-width: 900px) {
+  /* Single column: the side-by-side divider becomes a stacked one. */
+  .tm-insights { grid-template-columns: minmax(0, 1fr); }
+  .tmi-panel:nth-of-type(odd):not(.tmi-wide) { border-right: none; }
 }
 
 @media (max-width: 640px) {
-  .tmi-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  .tmi-metric { padding: 12px 13px; }
+  .tmi-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tmi-metric { padding: 13px 14px; }
+  .tmi-metric:nth-child(3n) { border-right: 1px solid var(--tr-hairline); }
+  .tmi-metric:nth-child(2n) { border-right: none; }
   .tmi-metric-val { font-size: 22px; }
+  .tmi-bar-note { display: none; }
+}
+
+/* Route through to the standalone token page, promoted into the header. */
+.tm-profile-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  font-family: var(--font-instrument);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #04070d;
+  background: linear-gradient(135deg, var(--pulse-cyan), var(--pulse-green));
+  border: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 0 14px rgba(0, 229, 255, 0.28);
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.tm-profile-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.45);
 }

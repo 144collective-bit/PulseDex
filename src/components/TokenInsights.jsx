@@ -143,6 +143,14 @@ export default function TokenInsights({ token, holders = [], trades = [] }) {
 
   return (
     <div className="tm-insights">
+      <header className="tmi-bar">
+        <span className="tmi-bar-dot" aria-hidden="true" />
+        <h3 className="tmi-bar-title">Token analytics</h3>
+        <span className="tmi-bar-note">
+          derived from {trades.length} recent trades and {holders.length} holders
+        </span>
+      </header>
+
       {/* ---- Headline metrics ---- */}
       <section className="tmi-metrics tmi-wide">
         {metrics.map(({ key, label, icon: Icon, value, sub, tone }) => (

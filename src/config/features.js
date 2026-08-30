@@ -15,9 +15,12 @@ export const FEATURES = {
   /** Markets tab. */
   markets: false,
 
-  /** The live DEX aggregator. When false the DEX tab shows the launch notice
-   *  instead; DexView.jsx is untouched and ready for when you finalise it. */
-  dexLive: false,
+  /** The DEX terminal. When false the DEX tab shows the launch notice instead.
+   *  The terminal reads live quotes from the PulseX router, but there is no
+   *  signing path anywhere in the app - no wallet client, no approvals, no
+   *  swap call - so nothing here can execute a trade. Wiring that up waits on
+   *  an explicit go-ahead. */
+  dexLive: true,
 
   /** The Trenches tab shows the live pump.tires bonding-curve board. When
    *  false it falls back to the curated ecosystem link directory, which is

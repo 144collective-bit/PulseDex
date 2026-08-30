@@ -448,6 +448,19 @@ export default function TrenchTokenModal({
                   <Send size={13} />
                 </a>
               )}
+
+              {/* Route through to the standalone page. Sits with the identity
+                  rather than in the footer, where it was a scroll away. */}
+              {onOpenFullPage && !isPage && (
+                <button
+                  type="button"
+                  className="tm-profile-btn"
+                  onClick={() => onOpenFullPage(live)}
+                >
+                  <Maximize2 size={12} />
+                  Token profile
+                </button>
+              )}
             </div>
           </div>
 
@@ -535,6 +548,14 @@ export default function TrenchTokenModal({
             </div>
           </div>
         )}
+
+        {/*
+          Dashboard sits above the chart, not below the trade tape. These are
+          the figures that decide whether a token is worth looking at further -
+          concentration, deployer behaviour, buy pressure - so they belong
+          before the detail rather than after a scroll past it.
+        */}
+        <TokenInsights token={live} holders={holders} trades={allTrades} />
 
         {/* ---------------- Chart ---------------- */}
         <div className="tm-chart-block">
@@ -727,9 +748,6 @@ export default function TrenchTokenModal({
           </div>
         </div>
 
-        {/* ---------------- Dashboard ---------------- */}
-        <TokenInsights token={live} holders={holders} trades={allTrades} />
-
         {/* ---------------- Footer ---------------- */}
         <footer className="tm-foot font-mono">
           {live.creatorAddress && (
@@ -741,15 +759,6 @@ export default function TrenchTokenModal({
             </span>
           )}
           <div className="tm-links">
-            {onOpenFullPage && !isPage && (
-              <button
-                type="button"
-                className="tm-link tm-link-primary"
-                onClick={() => onOpenFullPage(live)}
-              >
-                <Maximize2 size={11} /> Token page
-              </button>
-            )}
             <a
               href={`https://pump.tires/token/${encodeURIComponent(live.address)}`}
               target="_blank"

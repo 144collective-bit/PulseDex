@@ -17,9 +17,10 @@ import {
   ArrowRight,
 } from 'lucide-react'
 import TokenLogo from './TokenLogo'
-import SwitchSwapWidget from './SwitchSwapWidget'
+import SwapPanel from './dex/SwapPanel'
 import { useUserProfile } from '../context/UserProfileContext'
 import { formatCryptoPrice, safeExternalUrl, buildPulseXSwapUrl } from '../utils/formatters'
+import '../styles/dex.css'
 
 const NATIVE_PLS_ADDRESS = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
 
@@ -507,25 +508,13 @@ export default function TokenDetails({
 
       {/* ⚡ Instant DEX Aggregator Widget for Selected Token */}
       <div className="dex-token-swap-widget-card">
-        <div className="dex-token-swap-header">
-          <div className="flex items-center gap-1.5">
-            <span className="dex-token-swap-badge">⚡ INSTANT SWAP</span>
-            <span className="dex-token-swap-title font-mono text-xs font-bold text-white">
-              Trade {base.symbol} on PulseChain
-            </span>
-          </div>
-          <span className="dex-token-swap-sub font-mono text-[10px] text-muted">
-            Auto-Aggregated
-          </span>
-        </div>
-
-        <SwitchSwapWidget
+        {/* Our own panel, quoting PulseX directly, in place of the third-party
+            aggregator embed that used to sit here. */}
+        <SwapPanel
           key={`token-swap-${base.address || quote.address}`}
           initialFrom={swapFrom}
           initialTo={swapTo}
-          targetToken={base}
-          compact={true}
-          customHeight="760px"
+          compact
         />
       </div>
 

@@ -21,7 +21,7 @@ import TokenDetails from './components/TokenDetails'
 import MarketOverview from './components/MarketOverview'
 import PortfolioSection from './components/PortfolioSection'
 import TrenchesView from './components/TrenchesView'
-import DexView from './components/DexView'
+import DexTerminal from './components/DexTerminal'
 import DexComingSoon from './components/DexComingSoon'
 import TokenLaunchView from './components/TokenLaunchView'
 import WalletConnectModal from './components/WalletConnectModal'
@@ -258,9 +258,11 @@ function MainApp() {
 
         {activeTab === 'dex' &&
           (FEATURES.dexLive ? (
-            <DexView
-              onSelectPairForChart={handleSelectPair}
-              onOpenWalletModal={() => setShowWalletModal(true)}
+            <DexTerminal
+              pairs={topPairs}
+              isLoadingPairs={isLoadingTopPairs}
+              currentPair={currentPair}
+              onSelectPair={handleSelectPair}
             />
           ) : (
             <DexComingSoon />
