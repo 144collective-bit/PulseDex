@@ -172,7 +172,11 @@
   gap: 12px;
   cursor: pointer;
   user-select: none;
-  padding: 4px 0;
+  /* Padding so the glow has somewhere to fade out. Sitting flush, it ended
+     abruptly against the row edge and read as a cropped rectangle. */
+  padding: 6px 8px;
+  margin-left: -8px;
+  min-width: 0;
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -188,28 +192,31 @@
   width: var(--brand-h, 74px);
   min-width: var(--brand-h, 74px);
   object-fit: contain;
-  filter: drop-shadow(0 0 10px rgba(0, 229, 255, 0.9)) drop-shadow(0 0 20px rgba(217, 70, 239, 0.5));
+  filter: drop-shadow(0 0 5px rgba(0, 229, 255, 0.55)) drop-shadow(0 0 11px rgba(217, 70, 239, 0.28));
   transition: all 0.25s ease;
   display: block;
 }
 
 .logo-box:hover .brand-logo-img {
-  filter: drop-shadow(0 0 16px rgba(0, 229, 255, 1)) drop-shadow(0 0 28px rgba(217, 70, 239, 0.9));
+  filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.75)) drop-shadow(0 0 15px rgba(217, 70, 239, 0.45));
   transform: scale(1.04);
 }
 
 .brand-text-img {
   /* Slightly shorter than the mark so the two read as a matched pair. */
   height: calc(var(--brand-h, 74px) * 0.86);
-  max-width: none;
+  /* Shrinks with the bar rather than forcing the row wider than the viewport,
+     which is what the clip on .nav-left used to paper over. */
+  max-width: 100%;
+  min-width: 0;
   object-fit: contain;
   display: block;
-  filter: drop-shadow(0 0 14px rgba(0, 229, 255, 0.5)) drop-shadow(0 0 28px rgba(0, 255, 157, 0.3));
+  filter: drop-shadow(0 0 6px rgba(0, 229, 255, 0.34)) drop-shadow(0 0 13px rgba(0, 255, 157, 0.18));
   transition: all 0.25s ease;
 }
 
 .logo-box:hover .brand-text-img {
-  filter: drop-shadow(0 0 20px rgba(0, 229, 255, 0.85)) drop-shadow(0 0 36px rgba(0, 255, 157, 0.55));
+  filter: drop-shadow(0 0 9px rgba(0, 229, 255, 0.5)) drop-shadow(0 0 17px rgba(0, 255, 157, 0.3));
   transform: scale(1.02);
 }
 
@@ -6480,7 +6487,10 @@
     gap: 12px;
     min-width: 0;
     flex: 1 1 auto;
-    overflow: hidden;
+    /* No overflow:hidden here. `min-width: 0` is what allows this flex item to
+       shrink below its content; the clip was only ever collateral, and it cut
+       the brand's glow off flat against the left, top and bottom edges. The
+       wordmark shrinks instead - see .brand-text-img. */
   }
 
   .desktop-search {
@@ -11021,7 +11031,11 @@
   .logo-box {
     cursor: pointer;
     gap: 6px;
-    padding: 2px 0;
+    /* Keeps the inset that gives the glow room to fade. `padding: 2px 0` here
+       reinstated the flush edge the desktop rule exists to avoid, so the mark
+       was cropped again below 768px. */
+    padding: 5px 7px;
+    margin-left: -7px;
   }
 
 
