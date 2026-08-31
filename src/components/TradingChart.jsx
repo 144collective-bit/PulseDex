@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ExternalLink,
   Maximize2,
@@ -8,6 +8,8 @@ import {
   ArrowLeftRight,
   Share2,
   Check,
+  CandlestickChart,
+  AlertTriangle,
 } from 'lucide-react'
 import { buildPulseXSwapUrl } from '../utils/formatters'
 import PairChart from './PairChart'
@@ -37,6 +39,15 @@ export default function TradingChart({ pair, pairAddress }) {
    * page depends on.
    */
   const [source, setSource] = useState('native')
+
+  /*
+   * Whether the fallback below has already fired for this pair.
+   *
+   * Once only: if the embed also fails to render there is nothing to be gained
+   * by bouncing between two blank charts, and a reader who switches back
+   * deliberately should stay switched back.
+   */
+  const [autoSwitched, setAutoSwitched] = useState(false)
 
   // null = follow the responsive default height from CSS
   const [chartHeight, setChartHeight] = useState(() => {
@@ -107,10 +118,47 @@ export default function TradingChart({ pair, pairAddress }) {
 
   const activePairAddress =
     pairAddress || pair?.pairAddress || '0x1b45b9148791d3a104184Cd5DFE5CE57193a3ee9'
+  // A new pair deserves a fresh attempt at our own chart.
+  useEffect(() => {
+    setAutoSwitched(false)
+    setSource('native')
+  }, [pairAddress, pair?.pairAddress])
+
   const baseSymbol = pair?.baseToken?.symbol || 'TOKEN'
+  /*
+   * Which token the series should price.
+   *
+   * The two APIs do not agree on which side of a pool is the base. DexScreener
+   * calls the pinned PLS pool WPLS/DAI; GeckoTerminal, which serves the chart,
+   * calls the same pool DAI/WPLS - so the chart plotted DAI at about $1.00
+   * under a WPLS heading, beside a price that said $0.0000113. Naming the
+   * token settles it, and the chart then always plots whatever the header says
+   * it is showing.
+   */
+  const baseTokenAddress = pair?.baseToken?.address || null
   const quoteSymbol = pair?.quoteToken?.symbol || 'PLS'
 
   // Official DexScreener Real-Time Live Embed URL for PulseChain (Sound Muted)
+  /**
+   * Fall back to the embed when our own chart comes up empty.
+   *
+   * The data behind the live chart is rate limited by address, and it signals
+   * a limit by dropping its CORS header rather than returning a status - so
+   * from here it is indistinguishable from being offline. Rather than leave
+   * the reader looking at an error, the embed gets a turn.
+   *
+   * It is not a guaranteed rescue: DexScreener's embed needs storage the
+   * browser partitions away from third-party frames, and in many browsers it
+   * hangs on its own loading state. Hence the notice, and the way back.
+   */
+  const handleDataError = useCallback(() => {
+    setAutoSwitched((already) => {
+      if (already) return already
+      setSource('embed')
+      return true
+    })
+  }, [])
+
   const embedUrl = `https://dexscreener.com/pulsechain/${activePairAddress}?embed=1&theme=dark&trades=0&info=0&sound=0`
   const swapUrl = buildPulseXSwapUrl(pair?.quoteToken?.address, pair?.baseToken?.address)
 
@@ -230,15 +278,37 @@ export default function TradingChart({ pair, pairAddress }) {
             </a>
           )}
 
+          {/*
+            Switches the chart in place rather than sending the reader away.
+            The link out survives as the icon beside it, because that is the
+            path that always works when the embed will not render.
+          */}
+          <button
+            type="button"
+            className={`btn-icon ${source === 'embed' ? 'text-pulse-cyan is-active' : ''}`}
+            onClick={() => setSource(source === 'embed' ? 'native' : 'embed')}
+            aria-pressed={source === 'embed'}
+            title={
+              source === 'embed'
+                ? 'Showing the DexScreener chart — switch back to the live chart'
+                : "Show DexScreener's chart here instead"
+            }
+          >
+            <CandlestickChart size={13} />
+            <span className="btn-icon-label">
+              {source === 'embed' ? 'Live chart' : 'DexScreener'}
+            </span>
+          </button>
+
           <a
             href={`https://dexscreener.com/pulsechain/${activePairAddress}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="btn-icon text-pulse-cyan"
-            title="Open in DexScreener"
+            className="btn-icon"
+            title="Open this pair on DexScreener in a new tab"
+            aria-label="Open on DexScreener"
           >
             <ExternalLink size={13} />
-            <span className="btn-icon-label">DexScreener</span>
           </a>
 
           <button
@@ -251,14 +321,33 @@ export default function TradingChart({ pair, pairAddress }) {
         </div>
       </div>
 
+      {/*
+        Says why the chart changed under the reader.
+        A silent swap to a different provider's chart is the kind of thing that
+        reads as a bug.
+      */}
+      {autoSwitched && source === 'embed' && (
+        <div className="chart-fallback-note font-mono">
+          <AlertTriangle size={12} />
+          <span>
+            Live chart data is rate limited — showing DexScreener&apos;s chart instead.
+          </span>
+          <button type="button" className="chart-fallback-back" onClick={() => setSource('native')}>
+            Try the live chart
+          </button>
+        </div>
+      )}
+
       <div className="chart-iframe-container" ref={frameRef}>
         {source === 'native' ? (
           <PairChart
             key={activePairAddress}
             pairAddress={activePairAddress}
+            tokenAddress={baseTokenAddress}
             baseSymbol={baseSymbol}
             quoteSymbol={quoteSymbol}
             height="100%"
+            onDataError={handleDataError}
           />
         ) : (
           <iframe

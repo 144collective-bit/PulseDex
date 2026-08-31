@@ -108,3 +108,38 @@
 @media (prefers-reduced-motion: reduce) {
   .sparkline-dot { box-shadow: none; }
 }
+
+/* --------------------------------------------------------------------------
+   Tones
+   -------------------------------------------------------------------------- */
+.sparkline.tone-up { --spark: var(--pulse-green); }
+.sparkline.tone-down { --spark: var(--pulse-red); }
+
+/* --------------------------------------------------------------------------
+   Summary tile
+
+   A day's shape behind an aggregate figure. Taller and fainter than the row
+   treatment: a tile is mostly whitespace, so the line has room, but it sits
+   directly under a large numeral and must never compete with it.
+   -------------------------------------------------------------------------- */
+.home-tile { position: relative; overflow: hidden; }
+.home-tile > *:not(.sparkline) { position: relative; z-index: 1; }
+
+.sparkline.is-tile {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 58%;
+  z-index: 0;
+  opacity: 0.5;
+  pointer-events: none;
+  /* Grounded on the tile's bottom edge and faded in from the left, so it reads
+     as depth under the figure rather than a chart behind it. */
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 38%, #000);
+  mask-image: linear-gradient(90deg, transparent, #000 38%, #000);
+}
+
+.sparkline.is-tile .sparkline-line { stroke-width: 1.25px; opacity: 0.6; }
+.sparkline.is-tile .sparkline-stop-top { stop-opacity: 0.26; }
+.sparkline.is-tile .sparkline-stop-bottom { stop-opacity: 0.02; }

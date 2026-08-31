@@ -1,6 +1,8 @@
 import { AlertTriangle } from 'lucide-react'
 import CoreAssetCard from './CoreAssetCard'
 import { useCoreAssets } from '../hooks/useCoreAssets'
+import { useCoreAggregateSeries } from '../hooks/useCoreAggregateSeries'
+import Sparkline from './Sparkline'
 import { CORE_ASSETS } from '../config/coreAssets'
 import { formatUsd, formatPercent } from '../utils/formatters'
 import '../styles/home.css'
@@ -35,9 +37,33 @@ function CardSkeleton() {
  * Built as its own glass panel rather than a cell in a strip, so the summary
  * row belongs to the same family as the asset cards below it.
  */
-function SummaryTile({ label, value, tone = '', accent = 'cyan', live = false }) {
+function SummaryTile({ label, value, tone = '', accent = 'cyan', live = false, series = null }) {
+  /*
+   * The line follows the figure it sits under: green while the aggregate is
+   * above where it started the day, red below. The tiles are the one place a
+   * directional tint earns its keep - unlike an asset card, they carry no
+   * change pill and no coloured badge, so the line is the only thing saying
+   * which way the day went.
+   */
+  const direction =
+    series && series.length > 1
+      ? series[series.length - 1] >= series[0]
+        ? 'up'
+        : 'down'
+      : 'accent'
+
   return (
     <div className={`home-tile accent-${accent}`}>
+      {series && (
+        <Sparkline
+          values={series}
+          tone={direction}
+          variant="tile"
+          showDot={false}
+          label={`${label}, last 24 hours`}
+        />
+      )}
+
       <span className="home-tile-label">
         {label}
         {live && <span className="home-tile-live" title="Refreshing" aria-hidden="true" />}
@@ -56,6 +82,13 @@ function SummaryTile({ label, value, tone = '', accent = 'cyan', live = false })
 export default function HomeView({ onSelectPairForChart }) {
   const { data: assets, isLoading, isError, isFetching } = useCoreAssets()
   const rows = assets || []
+
+  /*
+   * History for the tiles, assembled from the series the cards already fetch -
+   * so it costs no extra requests. Liquidity is absent because OHLCV carries
+   * no record of pool depth and no free source does.
+   */
+  const aggregate = useCoreAggregateSeries(rows)
 
   const totalLiquidity = rows.reduce((sum, a) => sum + (a.liquidityUsd || 0), 0)
   const totalVolume = rows.reduce((sum, a) => sum + (a.volume24h || 0), 0)
@@ -85,11 +118,13 @@ export default function HomeView({ onSelectPairForChart }) {
             <SummaryTile
               label="Combined Cap"
               value={formatUsd(totalMarketCap, 1)}
+              series={aggregate.marketCap}
               accent="cyan"
             />
             <SummaryTile
               label="24h Volume"
               value={formatUsd(totalVolume, 1)}
+              series={aggregate.volume}
               accent="purple"
             />
             <SummaryTile
@@ -100,6 +135,7 @@ export default function HomeView({ onSelectPairForChart }) {
             <SummaryTile
               label="Avg 24h"
               value={formatPercent(avgChange, 2) || '—'}
+              series={aggregate.change}
               tone={avgChange === null ? '' : avgUp ? 'is-up' : 'is-down'}
               accent={avgUp ? 'green' : 'red'}
               live={isFetching}

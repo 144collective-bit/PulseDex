@@ -114,17 +114,59 @@ function derivePlsSupply(pair) {
   return cap / price
 }
 
+/** Trades in the last day before a pool's price is treated as a real one. */
+const LIVE_TXNS_24H = 25
+
+/** And a dollar figure with it, so a handful of dust trades does not qualify. */
+const LIVE_VOLUME_24H = 1_000
+
+/** DexScreener's id for PulseX, across its versions. */
+const isPulseX = (pair) => String(pair?.dexId || '').toLowerCase().startsWith('pulsex')
+
+const liquidityOf = (pair) => parseFloat(pair?.liquidity?.usd || 0)
+const volumeOf = (pair) => parseFloat(pair?.volume?.h24 || 0)
+const txnsOf = (pair) => (pair?.txns?.h24?.buys || 0) + (pair?.txns?.h24?.sells || 0)
+
+/** A pool that actually traded today, rather than one merely holding money. */
+const isLive = (pair) => txnsOf(pair) >= LIVE_TXNS_24H && volumeOf(pair) >= LIVE_VOLUME_24H
+
 /**
- * Pick the deepest pool for a token - the shallow ones carry unreliable prices.
+ * Pick the pool a token's price should be read from.
+ *
+ * Depth alone is the wrong test, and quietly produced wrong prices on this
+ * board. PulseChain carries a set of pools - eHEX/NananaX, WPLS/NananaX,
+ * WPLS/MULE and others on 9mm - holding one to two million dollars of paired
+ * liquidity and trading once a day, at prices that drift far from the market:
+ * eHEX read $0.001327 against a real $0.001215, and PLS would have read
+ * $0.0000126 against $0.00001126. Both were the deepest pool for their token
+ * and both were nine to twelve per cent wrong. The pinned pair on PLS in the
+ * config was a hand-patch over this same fault.
+ *
+ * So depth is the tiebreak, not the test. PulseX comes first because it is the
+ * chain's primary venue and the one these assets are quoted against; a pool
+ * that traded today comes before one that did not; and only then does size
+ * decide. Each rule is a fallback rather than a filter, so a token with no
+ * PulseX market, or no market at all today, still resolves to something.
  */
-function deepestPair(pairs, tokenAddress) {
+function selectPair(pairs, tokenAddress) {
   const target = tokenAddress.toLowerCase()
-  return pairs
-    .filter((p) => p.baseToken?.address?.toLowerCase() === target)
-    .sort(
-      (a, b) =>
-        parseFloat(b.liquidity?.usd || 0) - parseFloat(a.liquidity?.usd || 0)
-    )[0]
+  const candidates = pairs.filter(
+    (p) => p.baseToken?.address?.toLowerCase() === target
+  )
+  if (!candidates.length) return undefined
+
+  // Higher is better, and the gaps are wide enough that depth can never
+  // promote a tier - the point of the ordering is that it outranks size.
+  const tier = (pair) => {
+    const pulsex = isPulseX(pair)
+    const live = isLive(pair)
+    if (pulsex && live) return 3
+    if (pulsex) return 2
+    if (live) return 1
+    return 0
+  }
+
+  return candidates.sort((a, b) => tier(b) - tier(a) || liquidityOf(b) - liquidityOf(a))[0]
 }
 
 /**
@@ -155,7 +197,18 @@ export async function getCoreAssets() {
   })
 
   return CORE_ASSETS.map((asset) => {
-    const pair = pinnedById[asset.id] || deepestPair(pairs, asset.address)
+    /*
+     * A pin is a preference, not an instruction.
+     *
+     * Pinning names one pool forever, and pools do not last forever - the ones
+     * this board had to be protected from are themselves pools that were
+     * healthy once and now trade once a day. A pin that outlived its pool
+     * would reintroduce exactly the fault it was added to avoid, silently. So
+     * it is honoured only while it still trades, and otherwise the ranking
+     * decides, which is now able to.
+     */
+    const pinned = pinnedById[asset.id]
+    const pair = (pinned && isLive(pinned) ? pinned : null) || selectPair(pairs, asset.address)
     const onChain = supplyById[asset.id] || {}
 
     const priceUsd = parseFloat(pair?.priceUsd || 0)

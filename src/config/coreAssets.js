@@ -41,10 +41,15 @@ export const CORE_ASSETS = [
     decimals: 18,
     verified: true,
     /*
-     * Pinned to the canonical WPLS/DAI pool on PulseX. Picking the deepest
-     * pool where WPLS is the base token lands on an obscure pair instead,
-     * because WPLS is the quote side of nearly every real market - that pool
-     * reported a correct price but $0.10 of 24h volume and no 24h change.
+     * The canonical WPLS/DAI pool on PulseX, preferred rather than pinned.
+     *
+     * This was a hand-patch over a fault in pool selection, which used to take
+     * the deepest pool and so landed PLS on a 9mm pool holding $2M and trading
+     * once a day, twelve per cent above the market. Selection weighs venue and
+     * activity ahead of depth now and would find a sound pool on its own; a
+     * stablecoin-quoted market is still the better reference for a USD price,
+     * so the preference stays - and is dropped automatically if this pool ever
+     * stops trading.
      */
     pairAddress: '0xE56043671df55dE5CDf8459710433C10324DE0aE',
   },

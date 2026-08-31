@@ -1398,18 +1398,35 @@
   min-height: 0;
 }
 
+/*
+ * A 39px instrument bar, matching the reference height.
+ *
+ * The controls used to sit on 4px of padding in an 8px bar, which made them
+ * fiddly next to a chart you are dragging lines across. Everything in here is
+ * now on a common 28px control height inside a fixed-height bar, with real
+ * dividers between groups rather than bare spacing.
+ */
 .pair-chart-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex-shrink: 0;
-  padding: 8px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  height: 39px;
+  padding: 0 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Vertical rule between groups of controls. */
+.pair-chart-bar .bar-sep {
+  width: 1px;
+  height: 18px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.09);
 }
 
 .pair-chart-pair {
   font-family: var(--font-instrument);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--text-primary);
@@ -1423,12 +1440,14 @@
 }
 
 .pair-chart-interval {
-  padding: 4px 9px;
+  min-width: 30px;
+  height: 28px;
+  padding: 0 8px;
   font-family: var(--font-instrument);
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
@@ -1514,4 +1533,517 @@
 .chart-source-btn.active {
   color: var(--pulse-cyan);
   background: var(--pulse-cyan-bg);
+}
+
+/* ==========================================================================
+   Chart tools
+
+   Type, scale and studies, sitting in the chart's own bar. Everything here is
+   computed from candles the chart already holds, so none of it costs a request
+   - which is the reason the tool set could grow at all, given the upstream
+   API limits by address.
+   ========================================================================== */
+
+.chart-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* The intervals push everything else right; the tools sit beside them. */
+.pair-chart-intervals { margin-left: auto; }
+
+.chart-type-group {
+  display: flex;
+  gap: 1px;
+  padding: 1px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-sm);
+}
+
+.chart-type-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 26px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--radius-sm) - 1px);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.chart-type-btn:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.07); }
+
+.chart-type-btn.active {
+  color: var(--pulse-cyan);
+  background: var(--pulse-cyan-bg);
+}
+
+.chart-log-btn {
+  height: 28px;
+  padding: 0 9px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.chart-log-btn:hover { color: var(--text-primary); }
+
+.chart-log-btn.active {
+  color: var(--pulse-cyan);
+  background: var(--pulse-cyan-bg);
+  border-color: rgba(0, 229, 255, 0.3);
+}
+
+.chart-menu { position: relative; display: flex; }
+
+.chart-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.chart-menu-btn:hover { color: var(--text-primary); }
+
+.chart-menu-btn.active {
+  color: var(--pulse-cyan);
+  background: var(--pulse-cyan-bg);
+  border-color: rgba(0, 229, 255, 0.3);
+}
+
+.chart-menu-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  font-size: 9px;
+  font-weight: 700;
+  color: #04121a;
+  background: var(--pulse-cyan);
+  border-radius: var(--radius-full);
+}
+
+/* --------------------------------------------------------------------------
+   Studies menu
+   -------------------------------------------------------------------------- */
+.chart-menu-panel {
+  z-index: 80;
+  min-width: 196px;
+  padding: 5px;
+  /* Opaque: a chart is dense and reads straight through a translucent panel. */
+  background: #0c111a;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55);
+}
+
+.cmp-group {
+  padding: 6px 8px 3px;
+  font-family: var(--font-instrument);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.cmp-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 5px 8px;
+  font-size: 11px;
+  text-align: left;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.cmp-item:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.07); }
+.cmp-item.is-on { color: var(--text-primary); }
+
+/* Hidden but still holding its box, so the labels stay in one column. */
+.cmp-item .is-hidden { visibility: hidden; }
+
+.cmp-swatch {
+  width: 9px;
+  height: 2px;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+.cmp-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 8px 4px;
+  margin-top: 5px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.cmp-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  padding: 3px 8px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+}
+
+.cmp-reset:hover { color: var(--pulse-cyan); border-color: rgba(0, 229, 255, 0.35); }
+
+.cmp-note { font-size: 9.5px; color: var(--text-muted); }
+
+/* The caret says the button opens something, which an icon-only one does not. */
+.chart-menu-caret { opacity: 0.6; flex-shrink: 0; }
+.chart-menu-label { display: inline-flex; align-items: center; }
+
+/*
+ * Periods laid out in columns rather than a list.
+ *
+ * Eleven averages down a single column is a menu that runs off a laptop
+ * screen; as a grid of short numeric labels it is one glance.
+ */
+.chart-menu-panel.is-wide { min-width: 232px; }
+
+.cmp-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+}
+
+.cmp-grid .cmp-item { padding: 5px 6px; gap: 5px; }
+
+/* --------------------------------------------------------------------------
+   Narrow
+   -------------------------------------------------------------------------- */
+@media (max-width: 900px) {
+  /*
+   * The bar wraps rather than shedding labels.
+   *
+   * "EMA" and "RSI" are the whole identity of those two buttons - hiding the
+   * text leaves a caret and a badge, which says nothing. The general studies
+   * menu is an icon already and needs no label to lose.
+   */
+  .chart-menu-btn { padding: 0 6px; }
+  .chart-menu-caret { display: none; }
+
+  /*
+   * Scrolls sideways rather than wrapping.
+   *
+   * The bar has a fixed height now, so a wrapped second row would simply be
+   * clipped by it - the controls would be there and invisible. Nothing inside
+   * may shrink either, or the row compresses until the labels collide instead
+   * of overflowing into something scrollable.
+   */
+  .pair-chart-bar {
+    gap: 8px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .pair-chart-bar::-webkit-scrollbar { display: none; }
+  .pair-chart-bar > *,
+  .chart-tools > * { flex-shrink: 0; }
+
+  .pair-chart-intervals { margin-left: 0; }
+}
+
+@media (max-width: 560px) {
+  /* Bars and area are the two a phone can least afford to spend width on. */
+  .chart-type-btn[aria-label="Bars"],
+  .chart-type-btn[aria-label="Area"] { display: none; }
+}
+
+/* --------------------------------------------------------------------------
+   Drawing rail
+   -------------------------------------------------------------------------- */
+.pair-chart-body { display: flex; }
+
+/* The canvas takes what the rail leaves. */
+.pair-chart-canvas { flex: 1 1 auto; min-width: 0; }
+
+/*
+ * Sized against the reference.
+ *
+ * DexScreener's own rail measures 52px wide with full-width 36px rows stacked
+ * flush - no gaps, no rounded islands. Ours was 32px with 24px buttons and 3px
+ * gaps, which is about two-thirds the target and reads as an afterthought
+ * beside the chart. These are their proportions in our colours: a tool rail is
+ * a piece of instrument furniture and the conventions are worth following.
+ */
+.chart-draw-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  flex-shrink: 0;
+  width: 52px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.025);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+
+  /*
+   * Scrolls rather than clipping.
+   *
+   * The rail is now eleven controls - about 436px - and the chart body is
+   * resizable down to well under that, so on a short chart the last tools were
+   * simply cut off by the panel's own overflow with no way to reach them. The
+   * scrollbar is hidden because a visible one inside a 52px rail is mostly
+   * scrollbar.
+   */
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.chart-draw-rail::-webkit-scrollbar { display: none; }
+
+.cdr-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 36px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  /* A left marker rather than a box: the active state has to read at a glance
+     down a column of nine, and an outline on each would fence them off. */
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.13s ease, background 0.13s ease, border-color 0.13s ease;
+}
+
+.cdr-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.cdr-btn.active {
+  color: var(--pulse-cyan);
+  background: var(--pulse-cyan-bg);
+  border-left-color: var(--pulse-cyan);
+}
+
+.cdr-btn:disabled { opacity: 0.28; cursor: default; }
+
+.cdr-btn:focus-visible {
+  outline: 2px solid var(--pulse-cyan);
+  outline-offset: -2px;
+}
+
+.cdr-sep {
+  width: 100%;
+  height: 1px;
+  margin: 5px 0;
+  background: rgba(255, 255, 255, 0.09);
+}
+
+/* --------------------------------------------------------------------------
+   Style menu
+
+   Colour, weight and pattern used to be six swatches pinned to the rail. They
+   are here instead so the same control can restyle the selected drawing as
+   well as set the pen - and so the rail stays a list of things to do.
+   -------------------------------------------------------------------------- */
+.cdr-style { position: relative; display: flex; width: 100%; }
+
+/* A dot on the palette button, so the current colour is visible without
+   opening anything. */
+.cdr-btn { position: relative; }
+
+.cdr-style-dot {
+  position: absolute;
+  right: 9px;
+  bottom: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+}
+
+.cdr-style-menu {
+  z-index: 80;
+  min-width: 184px;
+  padding: 6px;
+  background: #0c111a;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55);
+}
+
+.cdr-menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px 7px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.cdr-preview { width: 34px; height: 8px; flex-shrink: 0; }
+
+.cdr-swatches {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  padding: 2px 6px 4px;
+}
+
+.cdr-swatch {
+  height: 16px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+/* A ring rather than a tick: the swatch is small and a tick inside it is mud. */
+.cdr-swatch.active {
+  border-color: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+
+.cdr-widths {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  padding: 2px 6px 4px;
+}
+
+.cdr-width {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.cdr-width span { display: block; width: 60%; border-radius: 2px; }
+
+.cdr-width.active {
+  background: var(--pulse-cyan-bg);
+  border-color: rgba(0, 229, 255, 0.32);
+}
+
+.cdr-style-menu .cmp-item { gap: 6px; }
+
+/* Crosshair while a tool is armed, so the pointer says it will place a point. */
+.pair-chart-body.is-drawing .pair-chart-canvas { cursor: crosshair; }
+
+@media (max-width: 560px) {
+  /* A 32px rail is a tenth of a phone screen, and drawing with a fingertip on
+     a 300px chart is not a thing anyone does. */
+  .chart-draw-rail { display: none; }
+}
+
+/* A refresh that failed while the chart still holds good data: a mark in the
+   bar, not a sheet over the candles. */
+.pair-chart-stale {
+  display: flex;
+  align-items: center;
+  color: var(--pulse-yellow, #fbbf24);
+  cursor: help;
+}
+
+/* --------------------------------------------------------------------------
+   Fallback notice
+
+   Shown when the live chart's data was rate limited and the embed took over.
+   -------------------------------------------------------------------------- */
+.chart-fallback-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 7px 12px;
+  font-size: 10.5px;
+  color: var(--pulse-yellow, #fbbf24);
+  background: rgba(251, 191, 36, 0.08);
+  border-bottom: 1px solid rgba(251, 191, 36, 0.2);
+}
+
+.chart-fallback-back {
+  padding: 2px 8px;
+  font-size: 10px;
+  color: var(--pulse-cyan);
+  background: transparent;
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+}
+
+.chart-fallback-back:hover { background: var(--pulse-cyan-bg); }
+
+/* The repurposed button reads as engaged while the embed is showing. */
+.btn-icon.is-active {
+  background: var(--pulse-cyan-bg);
+  border-color: rgba(0, 229, 255, 0.3);
+}
+
+/* --------------------------------------------------------------------------
+   Study buttons in the drawing rail
+
+   EMA and RSI moved here from the bar across the top. They are text rather
+   than icons because "EMA" is the name of the thing and no glyph says it more
+   clearly in 52px.
+   -------------------------------------------------------------------------- */
+.cdr-study { position: relative; display: flex; width: 100%; }
+
+.cdr-study-btn {
+  flex-direction: column;
+  gap: 1px;
+  height: 34px;
+}
+
+.cdr-study-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+.cdr-study-count {
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 1px 3px;
+  color: #04121a;
+  background: var(--pulse-cyan);
+  border-radius: var(--radius-full);
 }

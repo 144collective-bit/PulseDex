@@ -1,15 +1,7 @@
-import { useId, useMemo } from 'react'
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { getPoolCandles } from '../services/geckoterminal'
-
-/**
- * How much of the box the line is allowed to use.
- *
- * A series drawn edge to edge clips its own stroke at the extremes and reads
- * as if it ran off the top. This keeps the peak and the trough inside.
- */
-const PAD_TOP = 0.14
-const PAD_BOTTOM = 0.1
+import Sparkline from './Sparkline'
 
 /**
  * Points needed before a line is worth drawing.
@@ -23,48 +15,10 @@ const PAD_BOTTOM = 0.1
 const MIN_POINTS = 8
 
 /**
- * The viewBox the path is built in.
+ * A live price line for one token, fetched from the chart API.
  *
- * Arbitrary - the SVG is stretched to whatever box it is given. Round numbers
- * keep the path readable in the DOM.
- */
-const VB_W = 100
-const VB_H = 100
-
-function buildPaths(values) {
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const span = max - min
-
-  const usable = VB_H * (1 - PAD_TOP - PAD_BOTTOM)
-  const top = VB_H * PAD_TOP
-
-  const y = (v) =>
-    // A flat series has no span to scale against; it sits on the midline
-    // rather than dividing by zero.
-    span === 0 ? top + usable / 2 : top + usable - ((v - min) / span) * usable
-
-  const step = VB_W / (values.length - 1)
-  const points = values.map((v, i) => [i * step, y(v)])
-
-  const line = points.map(([px, py], i) => `${i ? 'L' : 'M'}${px.toFixed(2)} ${py.toFixed(2)}`).join(' ')
-  const area = `${line} L${VB_W} ${VB_H} L0 ${VB_H} Z`
-
-  return { line, area, last: points[points.length - 1] }
-}
-
-/**
- * A live price line for one token.
- *
- * Draws the token's recent closes as a line over a fading area - the shape of
- * the last few hours, not a chart to read values off. There are no axes and no
- * crosshair on purpose: it belongs in a header beside the figures it
- * summarises, and anything more would compete with them.
- *
- * Built as an SVG path rather than through the charting library. A card
- * carries several of these at once, each of them a couple of hundred pixels
- * wide, and a chart instance apiece would cost a canvas, a resize observer and
- * a render loop for something with no interaction at all.
+ * The drawing itself is Sparkline's job; what lives here is the fetching and
+ * the two guards that decide whether the series deserves to be drawn at all.
  *
  * `tokenAddress` matters more than it looks: the series comes back in the
  * pool's own orientation, and for a token that sits on the quote side that is
@@ -75,14 +29,11 @@ export default function TokenSparkline({
   tokenAddress,
   interval = '1h',
   variant = 'inline',
+  tone = 'accent',
   showDot = true,
   className = '',
   label,
 }) {
-  // Unique per instance: two cards on a page would otherwise share one
-  // gradient id and the second would silently take the first's fill.
-  const gradientId = useId()
-
   /*
    * Refreshed every five minutes, not every one.
    *
@@ -91,10 +42,9 @@ export default function TokenSparkline({
    * the same unauthenticated API, which throttles by address, and when it
    * throttles it answers by dropping its CORS header rather than returning a
    * status - so one page fetching too eagerly takes the charts down with it,
-   * with nothing in the response to say why. Six cards at this rate is a fifth
-   * of what the six were costing at sixty seconds.
+   * with nothing in the response to say why.
    */
-  const { data: candles, isLoading, isError } = useQuery({
+  const { data: candles } = useQuery({
     queryKey: ['sparkline', poolAddress?.toLowerCase(), tokenAddress?.toLowerCase(), interval],
     queryFn: () => getPoolCandles(poolAddress, interval, { tokenAddress }),
     enabled: Boolean(poolAddress),
@@ -105,7 +55,7 @@ export default function TokenSparkline({
     retry: 1,
   })
 
-  const shape = useMemo(() => {
+  const values = useMemo(() => {
     const usable = (candles || []).filter((c) => Number.isFinite(c.close) && c.close > 0)
     if (usable.length < MIN_POINTS) return null
 
@@ -120,70 +70,18 @@ export default function TokenSparkline({
     const traded = usable.reduce((sum, c) => sum + (c.volume || 0), 0)
     if (traded <= 0) return null
 
-    const closes = usable.map((c) => c.close)
-    const paths = buildPaths(closes)
-    return { ...paths, rising: closes[closes.length - 1] >= closes[0] }
+    return usable.map((c) => c.close)
   }, [candles])
 
-  /*
-   * Nothing is drawn until there is a shape to draw.
-   *
-   * No spinner and no error text either: this sits behind a card's own
-   * figures, which are already telling the reader whether the data arrived.
-   * A failed sparkline should leave the card exactly as it was without it.
-   */
-  if (isLoading || isError || !shape) {
-    return <span className={`sparkline is-${variant} is-empty ${className}`} aria-hidden="true" />
-  }
-
-  const [lastX, lastY] = shape.last
-
   return (
-    <span
-      className={`sparkline is-${variant} ${shape.rising ? 'is-rising' : 'is-falling'} ${className}`}
-      /* Decoration beside figures that already say all of this in words. */
-      role={label ? 'img' : undefined}
-      aria-label={label}
-      aria-hidden={label ? undefined : true}
-    >
-      <svg
-        viewBox={`0 0 ${VB_W} ${VB_H}`}
-        /* Stretched to the box it is given: the shape is what matters, not the
-           aspect ratio it was computed in. */
-        preserveAspectRatio="none"
-        focusable="false"
-      >
-        <defs>
-          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" className="sparkline-stop-top" />
-            <stop offset="100%" className="sparkline-stop-bottom" />
-          </linearGradient>
-        </defs>
-
-        <path className="sparkline-area" d={shape.area} fill={`url(#${gradientId})`} />
-        <path
-          className="sparkline-line"
-          d={shape.line}
-          fill="none"
-          /* The viewBox is stretched, so a plain stroke width would be
-             stretched with it - thick on a wide card, thin on a narrow one. */
-          vectorEffect="non-scaling-stroke"
-        />
-      </svg>
-
-      {/*
-        The head of the line, as an element rather than a <circle>.
-
-        The viewBox is stretched independently on each axis, which turns a
-        circle into an ellipse - wide and flat on a card header. Positioned in
-        percentages outside the SVG it stays round at any size.
-      */}
-      {showDot && (
-        <span
-          className="sparkline-dot"
-          style={{ left: `${lastX}%`, top: `${lastY}%` }}
-        />
-      )}
-    </span>
+    <Sparkline
+      values={values}
+      tone={tone}
+      variant={variant}
+      showDot={showDot}
+      className={className}
+      label={label}
+      minPoints={MIN_POINTS}
+    />
   )
 }
