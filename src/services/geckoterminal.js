@@ -43,16 +43,27 @@ export const DEFAULT_INTERVAL = '1h'
  * tuples; the chart library rejects unsorted or duplicated timestamps, so the
  * order is reversed and duplicates dropped here rather than at the call site.
  */
-export async function getPoolCandles(poolAddress, intervalId = DEFAULT_INTERVAL) {
+export async function getPoolCandles(poolAddress, intervalId = DEFAULT_INTERVAL, options = {}) {
   if (!poolAddress) return []
 
   const interval =
     CHART_INTERVALS.find((i) => i.id === intervalId) ||
     CHART_INTERVALS.find((i) => i.id === DEFAULT_INTERVAL)
 
+  /*
+   * Which side of the pool to price, when the caller cares.
+   *
+   * The series is quoted in the pool's own orientation, which is not always
+   * the one wanted: PLS is pinned to the DAI/WPLS pool, where DAI is the base
+   * token, so the default series is DAI at about $1.00 and would have drawn a
+   * flat line labelled PLS. Naming the token leaves no room for that - the API
+   * accepts a contract address here and works out the side itself.
+   */
+  const token = options.tokenAddress ? `&token=${options.tokenAddress}` : ''
+
   const url =
     `${BASE}/pools/${poolAddress}/ohlcv/${interval.timeframe}` +
-    `?aggregate=${interval.aggregate}&limit=${interval.limit}`
+    `?aggregate=${interval.aggregate}&limit=${interval.limit}${token}`
 
   const cached = cache.get(url)
   if (cached && Date.now() - cached.at < CACHE_TTL) return cached.candles

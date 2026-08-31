@@ -174,9 +174,15 @@ export async function getCoreAssets() {
       pairAddress: pair?.pairAddress || null,
       logoUrl: pair?.info?.imageUrl || null,
       priceUsd,
-      // Four windows of momentum, which is what the card charts instead of a
-      // sparkline - there is no free price history endpoint for these pairs,
-      // and these values are reported directly.
+      /*
+       * Four windows of momentum, reported directly by the market API.
+       *
+       * These used to be all the card had, for want of any free price history
+       * for these pairs. There is history now - GeckoTerminal covers them by
+       * pool address - and the card draws it behind its header, but these stay
+       * the figures of record: they are the venue's own numbers, while the
+       * line is a shape read off hourly closes.
+       */
       change5m: pair?.priceChange?.m5 ?? null,
       change1h: pair?.priceChange?.h1 ?? null,
       change6h: pair?.priceChange?.h6 ?? null,

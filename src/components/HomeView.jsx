@@ -4,6 +4,7 @@ import { useCoreAssets } from '../hooks/useCoreAssets'
 import { CORE_ASSETS } from '../config/coreAssets'
 import { formatUsd, formatPercent } from '../utils/formatters'
 import '../styles/home.css'
+import '../styles/sparkline.css'
 
 /** Placeholder card so the grid holds its shape before data lands. */
 function CardSkeleton() {

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { BadgeCheck, Copy, Check, LineChart, ArrowUp, ArrowDown } from 'lucide-react'
 import TokenLogo from './TokenLogo'
+import TokenSparkline from './TokenSparkline'
 import {
   formatCryptoPrice,
   formatCompactCount,
@@ -68,6 +69,25 @@ export default function CoreAssetCard({ asset, onOpenChart }) {
       <span className="cc-accent" aria-hidden="true" />
 
       <header className="cc-head">
+        {/*
+          The last 24 hours, behind the identity block.
+
+          Placed here rather than under the price: the header is the one band
+          of the card with empty space on its right, so the line gets a run of
+          its own without displacing a figure or adding height. It is masked
+          out over the logo and symbol and reads at full strength only in the
+          gap before the buttons.
+        */}
+        {asset.pairAddress && (
+          <TokenSparkline
+            poolAddress={asset.pairAddress}
+            tokenAddress={asset.address}
+            interval="1h"
+            variant="backdrop"
+            label={`${asset.symbol} price, last 24 hours`}
+          />
+        )}
+
         <span className="cc-logo-wrap">
           <TokenLogo
             symbol={asset.symbol}

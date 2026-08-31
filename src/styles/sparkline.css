@@ -1,0 +1,110 @@
+/* ==========================================================================
+   Token sparkline
+
+   A live price line for one token. Two treatments share one component:
+
+   `inline`   - the line as an object in its own right, drawn at full strength.
+   `backdrop` - the same line dropped behind a card's figures at low opacity,
+                where it reads as texture that happens to be true rather than
+                as a chart competing for attention.
+   ========================================================================== */
+
+.sparkline {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* Its own line colour, so a variant or a state can re-tint the whole thing
+     - fill, stroke and dot - by changing one value. */
+  --spark: var(--pulse-cyan);
+  pointer-events: none;
+}
+
+.sparkline svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.sparkline-line {
+  stroke: var(--spark);
+  stroke-width: 1.5px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.sparkline-stop-top { stop-color: var(--spark); stop-opacity: 0.28; }
+.sparkline-stop-bottom { stop-color: var(--spark); stop-opacity: 0; }
+
+.sparkline-dot {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  /* The coordinates place its centre, not its corner. */
+  margin: -2.5px 0 0 -2.5px;
+  background: var(--spark);
+  border-radius: 50%;
+  box-shadow: 0 0 6px var(--spark);
+}
+
+/* Nothing drawn, but the box is still claimed so the layout does not jump when
+   the series lands a moment later. */
+.sparkline.is-empty { visibility: hidden; }
+
+/* --------------------------------------------------------------------------
+   Backdrop
+   -------------------------------------------------------------------------- */
+
+/*
+ * Behind the figures, and low in the band.
+ *
+ * Two things stop it reading as a chart drawn over the card. It occupies only
+ * the lower part of the header, so the symbol and the verified tick sit in
+ * clear air and the line crosses nothing heavier than the name line. And its
+ * fill is grounded on the header's bottom edge, where the price row begins -
+ * the same seam the reference design uses, which is what makes the shape read
+ * as texture rather than as a plot floating in the middle of a box.
+ *
+ * The fill does most of the work here and the stroke very little: a bright
+ * line at low opacity still reads as a line, while a soft wash under a faint
+ * stroke reads as depth.
+ */
+.sparkline.is-backdrop {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 64%;
+  z-index: 0;
+  opacity: 0.55;
+  /*
+   * Faded at both ends: in from the left so it never competes with the mark
+   * and the symbol, and out at the right so it stops short of the action
+   * buttons rather than running underneath them.
+   */
+  -webkit-mask-image: linear-gradient(90deg, transparent 6%, #000 46%, #000 88%, transparent);
+  mask-image: linear-gradient(90deg, transparent 6%, #000 46%, #000 88%, transparent);
+}
+
+.sparkline.is-backdrop .sparkline-line { stroke-width: 1.1px; opacity: 0.55; }
+.sparkline.is-backdrop .sparkline-stop-top { stop-opacity: 0.3; }
+.sparkline.is-backdrop .sparkline-stop-bottom { stop-opacity: 0.02; }
+
+/* The head of the line would sit under the action buttons, where it reads as
+   a stray dot rather than the end of a series. */
+.sparkline.is-backdrop .sparkline-dot { display: none; }
+
+/*
+ * Cyan whichever way the price went.
+ *
+ * Tinting it green and red was tried and dropped: the card already carries the
+ * direction three times over - the accent along its top edge, the change pill,
+ * and the four momentum windows - and a fourth in the background turned the
+ * header into a colour field. Cyan reads as the app's own line rather than as
+ * another verdict on the same number.
+ */
+
+@media (prefers-reduced-motion: reduce) {
+  .sparkline-dot { box-shadow: none; }
+}

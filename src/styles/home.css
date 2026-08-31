@@ -264,6 +264,23 @@
   align-items: center;
   gap: 12px;
   padding: 16px 18px 13px;
+  /*
+   * Containing block for the price line behind it, which is absolutely
+   * positioned across the whole band.
+   */
+  position: relative;
+}
+
+/*
+ * Everything in the header sits above the line.
+ *
+ * The line is at z-index 0 and these are its siblings, so without this they
+ * would paint in source order and the logo - which draws a tinted halo through
+ * a ::before - would end up under it.
+ */
+.cc-head > *:not(.sparkline) {
+  position: relative;
+  z-index: 1;
 }
 
 /* Soft glow behind the mark, so logos of any shape sit on the same footing. */
