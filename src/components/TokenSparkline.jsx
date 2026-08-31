@@ -83,12 +83,25 @@ export default function TokenSparkline({
   // gradient id and the second would silently take the first's fill.
   const gradientId = useId()
 
+  /*
+   * Refreshed every five minutes, not every one.
+   *
+   * This is a line across a whole day; the last five minutes of it are a
+   * pixel. The reason to be careful is the shared budget: the pair charts read
+   * the same unauthenticated API, which throttles by address, and when it
+   * throttles it answers by dropping its CORS header rather than returning a
+   * status - so one page fetching too eagerly takes the charts down with it,
+   * with nothing in the response to say why. Six cards at this rate is a fifth
+   * of what the six were costing at sixty seconds.
+   */
   const { data: candles, isLoading, isError } = useQuery({
     queryKey: ['sparkline', poolAddress?.toLowerCase(), tokenAddress?.toLowerCase(), interval],
     queryFn: () => getPoolCandles(poolAddress, interval, { tokenAddress }),
     enabled: Boolean(poolAddress),
-    staleTime: 60_000,
-    refetchInterval: 60_000,
+    staleTime: 5 * 60_000,
+    refetchInterval: 5 * 60_000,
+    // A refetch on every tab return would undo the rate above.
+    refetchOnWindowFocus: false,
     retry: 1,
   })
 

@@ -72,8 +72,15 @@ export async function getPoolCandles(poolAddress, intervalId = DEFAULT_INTERVAL,
   try {
     res = await fetch(url)
   } catch {
-    // A rejected connection rather than a status: the rate limiter refuses the
-    // request outright, so there is no code to report.
+    /*
+     * A rejected connection rather than a status.
+     *
+     * The limiter does not answer with 429 - it stops sending the
+     * `Access-Control-Allow-Origin` header, so the browser rejects the
+     * response before any code reaches us. Every caller sharing this API goes
+     * dark at once when it happens, which is why the callers are deliberately
+     * unhurried about how often they ask.
+     */
     throw new Error('Chart data is rate limited right now. Try again in a moment.')
   }
 
