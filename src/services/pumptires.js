@@ -50,6 +50,14 @@ export function ipfsImageUrl(cid) {
   return `${IPFS_CDN}${cid.trim()}`
 }
 
+/** First usable CID of the ones given, trimmed; null if none of them are. */
+function pickCid(...candidates) {
+  for (const cid of candidates) {
+    if (isValidCid(cid)) return cid.trim()
+  }
+  return null
+}
+
 /**
  * Social fields arrive inconsistently: `web` is a full URL, while `twitter` and
  * `telegram` are usually bare handles ("JabroniPulse") and occasionally full
@@ -122,16 +130,22 @@ export function normalizeToken(raw) {
     pairAddress: raw.pair_address || null,
     lockedLp: raw.locked_lp,
 
-    // The deployer arrives as a nested object, not flat creator_* fields - the
-    // previous flat reads always resolved to empty, so the deployer panel had
-    // nothing to show even where the API supplied a full profile.
-    creatorAddress: raw.creator?.address || '',
-    creatorUsername: raw.creator?.username || '',
+    /*
+     * The deployer arrives in two different shapes and both have to be read.
+     *
+     * The detail endpoint nests it under `creator`; the board's list endpoint
+     * returns flat `creator_*` fields instead. Reading only the nested form
+     * left the deployer empty on every row of the board - the API was sending
+     * a username the whole time and nothing ever looked at it.
+     */
+    creatorAddress: raw.creator?.address || raw.creator_address || '',
+    creatorUsername: raw.creator?.username || raw.creator_username || '',
     creatorBio: raw.creator?.bio || '',
-    creatorTwitter: socialUrl(raw.creator?.twitter_username, 'https://x.com/'),
-    creatorAvatarCid: isValidCid(raw.creator?.avatar_cid)
-      ? raw.creator.avatar_cid.trim()
-      : null,
+    creatorTwitter: socialUrl(
+      raw.creator?.twitter_username || raw.creator_twitter_username,
+      'https://x.com/'
+    ),
+    creatorAvatarCid: pickCid(raw.creator?.avatar_cid, raw.creator_avatar_cid),
     createdAt: Number(raw.created_timestamp || 0),
     launchedAt: Number(raw.launch_timestamp || 0),
     lastActivityAt: Number(raw.latest_activity_timestamp || 0),

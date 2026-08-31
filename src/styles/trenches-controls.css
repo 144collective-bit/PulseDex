@@ -1,0 +1,939 @@
+/* ==========================================================================
+   Trenches: screener controls and momentum signals
+
+   The board was a feed - three fixed orderings, no way to narrow them, and no
+   reading of how fast anything was moving. This file holds the controls that
+   turn it into a screener and the signals that make a row worth acting on.
+
+   Kept separate from trenches.css, which is already 2,900 lines, and imported
+   after it so these rules win where they deliberately restate one.
+   ========================================================================== */
+
+/*
+ * The board's own colour tokens, repeated at the root.
+ *
+ * They are declared on `.trenches-live-page`, which is where everything that
+ * uses them lives - except the two menus, which are portalled to the body to
+ * escape the panels that would otherwise clip them. Out there the page-scoped
+ * declarations do not resolve, so `background: var(--tr-dock-bg)` computed to
+ * nothing and the menu rendered transparent over the board.
+ *
+ * The page-level copies stay and still win inside the page; these only cover
+ * what is rendered outside it. The brand and text tokens already live on
+ * :root in App.css and needed no such help.
+ */
+:root {
+  --tr-dock-bg: #0c111a;
+  --tr-hairline: rgba(255, 255, 255, 0.07);
+}
+
+/* --------------------------------------------------------------------------
+   Filter bar
+   -------------------------------------------------------------------------- */
+.trench-filter-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: var(--tr-panel);
+  border: 1px solid var(--tr-hairline);
+  border-radius: var(--radius-lg);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+
+  /*
+   * Positioned and lifted, so the quality popover can escape the board.
+   *
+   * `backdrop-filter` makes this bar a stacking context, which trapped the
+   * popover's z-index inside it: the panels below are stacking contexts of
+   * their own and painted later, so they drew straight over a menu that was
+   * open and hit-testable underneath them. Lifting the whole bar puts its
+   * children above the board again.
+   */
+  position: relative;
+  z-index: 30;
+}
+
+.tfb-lead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  color: var(--text-muted);
+}
+
+.tfb-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  font-size: 9px;
+  color: #04121a;
+  background: var(--pulse-cyan);
+  border-radius: var(--radius-full);
+}
+
+.tfb-group {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.tfb-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.tfb-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.tfb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: color 0.13s ease, background 0.13s ease, border-color 0.13s ease;
+}
+
+.tfb-chip:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tfb-chip.is-on {
+  color: var(--pulse-cyan);
+  background: rgba(0, 229, 255, 0.12);
+  border-color: rgba(0, 229, 255, 0.36);
+}
+
+.tfb-chip:focus-visible {
+  outline: 2px solid var(--pulse-cyan);
+  outline-offset: 1px;
+}
+
+.tfb-star.is-on {
+  color: var(--pulse-yellow);
+  background: rgba(251, 191, 36, 0.13);
+  border-color: rgba(251, 191, 36, 0.4);
+}
+
+.tfb-star .is-filled { fill: currentColor; }
+
+.tfb-star-count {
+  font-size: 9px;
+  opacity: 0.75;
+}
+
+.tfb-tail {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* Dotted, not solid: it marks a phrase carrying a note, not a link. */
+.tfb-showing {
+  border-bottom: 1px dotted rgba(255, 255, 255, 0.22);
+  cursor: help;
+}
+
+.tfb-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--tr-hairline);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+}
+
+.tfb-reset:hover {
+  color: var(--pulse-cyan);
+  border-color: rgba(0, 229, 255, 0.35);
+}
+
+/* --------------------------------------------------------------------------
+   Per-column ordering menu
+   -------------------------------------------------------------------------- */
+.trench-sort {
+  position: relative;
+  display: flex;
+}
+
+.trench-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 128px;
+  padding: 2px 6px;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+}
+
+.trench-sort-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.trench-sort-btn.is-active {
+  color: var(--pulse-cyan);
+  background: rgba(0, 229, 255, 0.12);
+  border-color: rgba(0, 229, 255, 0.32);
+}
+
+.trench-sort-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Positioned by FloatingMenu, which portals it to the body - only the look
+   is set here. */
+.trench-sort-menu {
+  z-index: 80;
+  min-width: 176px;
+  padding: 5px;
+  /* Opaque: the rows behind it are dense text and read straight through a
+     translucent panel. */
+  background: var(--tr-dock-bg);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55);
+}
+
+.trench-sort-group {
+  padding: 5px 8px 3px;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.trench-sort-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 5px 8px;
+  font-size: 11px;
+  text-align: left;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.trench-sort-item:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.trench-sort-item[aria-checked="true"] { color: var(--pulse-cyan); }
+
+/* Hidden but still holding its box, so the labels stay in one column. */
+.trench-sort-item .is-hidden { visibility: hidden; }
+
+/*
+ * The head now carries an ordering control as well as a title and a running
+ * total, and at three columns wide that is more than it can hold. Nothing in
+ * it could shrink - the title, the total and the button all refused to wrap -
+ * so they drew over each other. Both sides may shrink now, the title
+ * truncates, and the total leaves before the ordering does: how a column is
+ * sorted matters more than what it adds up to.
+ */
+.trench-panel-head { gap: 6px; }
+
+.tph-title-group { flex: 1 1 auto; min-width: 0; }
+
+.tph-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tph-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.tph-count {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1250px) {
+  .trench-column .tph-agg { display: none; }
+  .trench-sort-btn { max-width: 96px; }
+}
+
+@media (max-width: 1050px) {
+  /* Only the icon: at this width the label was eating the column title. */
+  .trench-sort-btn { max-width: none; padding: 3px 5px; }
+  .trench-sort-label { display: none; }
+}
+
+/*
+ * Two lines on a phone: the title, then its controls.
+ *
+ * A 112px column leaves the heading about 84px once its padding and dot are
+ * paid for, and the ordering and quality buttons want 55 of it - which left
+ * "New Launches" fifteen pixels and rendered it as "N…". Wrapping costs one
+ * short line per column and gives all three their full names back; they had
+ * been truncating to "King of …" and "Graduati…" even before these controls
+ * arrived.
+ */
+@media (max-width: 420px) {
+  .slot-new .trench-panel-head,
+  .slot-koth .trench-panel-head,
+  .slot-grad .trench-panel-head {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
+  .slot-new .tph-title-group,
+  .slot-koth .tph-title-group,
+  .slot-grad .tph-title-group { flex: 1 1 100%; }
+
+  .slot-new .tph-meta,
+  .slot-koth .tph-meta,
+  .slot-grad .tph-meta {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+  }
+
+  /*
+   * With a line of its own the title very nearly fits: "King of the Hill"
+   * wanted 96px of the 82 the dot and its gap left behind. Half a point of
+   * type and a tighter gap close it, and all three names then render whole.
+   */
+  .slot-new .tph-title,
+  .slot-koth .tph-title,
+  .slot-grad .tph-title { font-size: 9.5px; }
+
+  .slot-new .tph-title-group,
+  .slot-koth .tph-title-group,
+  .slot-grad .tph-title-group { gap: 3px; }
+}
+
+/*
+ * What the metadata line carries, by width.
+ *
+ * The line and the label strip above it shed the same figures at the same
+ * widths, so the strip never names a column that is no longer there. Volume
+ * goes first; age and market cap are what the line is for.
+ */
+/*
+ * Volume needs a board about 1700px wide.
+ *
+ * Below that the metadata line gets around 105px and "10h · MC $6.6K · V $8.2K"
+ * needs 162, so the figure was cut mid-number on every row - which the fade
+ * mask hid at narrow widths and simply sliced above 1500 where the mask is
+ * off. It leaves cleanly instead, and the label strip leaves with it.
+ */
+@media (max-width: 1700px) {
+  .trench-column .tr-vol,
+  .trench-column .tr-sep-vol { display: none; }
+
+  /* The Graduations column carries a badge the other two do not, and it was
+     taking the width its own metadata line needed. In a column named
+     Graduations the rocket says it. */
+  .slot-grad .tr-grad-word { display: none; }
+}
+
+/* --------------------------------------------------------------------------
+   Row: star, velocity, ATH, deployer, arrival flash
+   -------------------------------------------------------------------------- */
+
+/* The arrival marker is absolutely positioned, so the row is its container. */
+.trench-row { position: relative; }
+
+/*
+ * A fifth track for the star.
+ *
+ * Restated here rather than edited in place in trenches.css, where the row's
+ * tracks and areas are set across three separate passes - and restated at each
+ * of that file's breakpoints too, because a single unqualified rule here would
+ * outrank all of them and hand a 300px column the widths meant for a 460px one.
+ */
+.trench-row {
+  grid-template-columns: 30px 52px minmax(0, 1fr) minmax(0, auto) 20px;
+  grid-template-areas:
+    'rank logo ident price star'
+    'rank logo meta  side  star'
+    'rank logo bond  bond  star';
+}
+
+.trench-row.is-grad {
+  grid-template-areas:
+    'rank logo ident price star'
+    'rank logo meta  side  star';
+}
+
+/* Three columns share the width from here down, so every track gives some back. */
+@media (max-width: 1400px) {
+  .trench-row { grid-template-columns: 26px 46px minmax(0, 1fr) minmax(0, auto) 18px; }
+  .tr-star { width: 18px; height: 18px; }
+}
+
+/*
+ * Three columns on a laptop leave each row about 274px inside its padding, and
+ * the fixed furniture - rank, logo, star, four gaps - was claiming 116px of it
+ * before a single figure was drawn. The price then took the rest as an `auto`
+ * track, leaving the metadata line 65px for a line that needed 100 and the
+ * token name about 12px.
+ *
+ * Everything that is not a number gives some back here.
+ */
+@media (max-width: 1150px) {
+  .trench-row {
+    grid-template-columns: 20px 38px minmax(0, 1fr) minmax(0, auto) 16px;
+    gap: 5px 7px;
+  }
+
+  .tr-star { width: 16px; height: 16px; }
+  .tr-logo img,
+  .tr-logo .token-logo-fallback { width: 38px; height: 38px; }
+
+  .trench-column .tr-price { font-size: 12.5px; }
+  .trench-column .tr-meta { font-size: 10.5px; }
+  .trench-column .tr-symbol { font-size: 13.5px; }
+  .trench-column .tr-name { font-size: 10.5px; }
+
+  /* The chip is the least load-bearing thing on the line once the row is this
+     tight - the price and the change still say whether it is moving. */
+  .trench-column .tr-ath { display: none; }
+}
+
+/*
+ * Below this the age loses.
+ *
+ * It is the one figure the column itself already answers - New Launches is
+ * ordered by it and the rows are numbered - whereas the market cap is what
+ * decides whether a row is worth opening, and a clipped "MC $2…" answers
+ * nothing at all.
+ */
+@media (max-width: 1050px) {
+  .trench-column .tr-age,
+  .trench-column .tr-sep-age,
+  .trench-column .tcl-age { display: none; }
+}
+
+/* The movers rail has no star and keeps its own four-track shape. */
+.trench-row.is-mover {
+  grid-template-columns: 22px 34px minmax(0, 1fr) auto;
+  grid-template-areas:
+    'rank logo ident price'
+    'rank logo meta  side';
+}
+
+.tr-star {
+  grid-area: star;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  width: 20px;
+  height: 20px;
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  /*
+   * Only on hover, on focus, or once starred. A permanently lit column of grey
+   * stars reads as decoration and competes with the figures beside it.
+   */
+  opacity: 0;
+  transition: opacity 0.13s ease, color 0.13s ease;
+}
+
+.trench-row:hover .tr-star,
+.trench-row:focus-within .tr-star,
+.tr-star.is-on { opacity: 1; }
+
+.tr-star:hover {
+  color: var(--pulse-yellow);
+  background: rgba(251, 191, 36, 0.12);
+}
+
+.tr-star.is-on { color: var(--pulse-yellow); }
+.tr-star.is-on svg { fill: currentColor; }
+
+.tr-star:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--pulse-cyan);
+  outline-offset: 1px;
+}
+
+/* A starred row carries its own mark, so it is findable in an unsorted column
+   without hunting for a lit star. */
+.trench-row.is-watched { border-left-color: rgba(251, 191, 36, 0.55); }
+
+.tr-vel {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.tr-vel.is-up { color: var(--pulse-green); }
+.tr-vel.is-down { color: var(--pulse-red); }
+
+.tr-eta {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  color: var(--pulse-cyan);
+}
+
+.tr-ath {
+  padding: 1px 5px;
+  font-size: 9.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--pulse-yellow);
+  background: rgba(251, 191, 36, 0.1);
+  border-radius: var(--radius-sm);
+}
+
+/*
+ * A row that just arrived.
+ *
+ * One sweep rather than a loop: a column taking a launch every few seconds
+ * would otherwise be permanently in motion, which is tiring to read and makes
+ * the genuinely new row no easier to find.
+ */
+.trench-row.is-new { animation: trenchArrive 1.1s ease-out; }
+
+.trench-row.is-new::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: var(--pulse-cyan);
+  box-shadow: 0 0 9px var(--pulse-cyan);
+}
+
+@keyframes trenchArrive {
+  0% { background: rgba(0, 229, 255, 0.16); }
+  100% { background: transparent; }
+}
+
+/* --------------------------------------------------------------------------
+   Board alerts
+   -------------------------------------------------------------------------- */
+.trench-alerts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-width: min(300px, calc(100vw - 32px));
+  /* The stack itself must not swallow clicks aimed at the board behind it. */
+  pointer-events: none;
+}
+
+.trench-alert {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 5px;
+  background: var(--tr-dock-bg);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-left-width: 2px;
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+  animation: trenchAlertIn 0.24s ease-out;
+}
+
+.trench-alert.is-grad { border-left-color: var(--pulse-green); }
+.trench-alert.is-koth { border-left-color: var(--pulse-yellow); }
+
+.trench-alert-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 3px 5px;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.trench-alert-main:hover { background: rgba(255, 255, 255, 0.06); }
+
+.ta-icon { display: flex; flex-shrink: 0; }
+.is-grad .ta-icon { color: var(--pulse-green); }
+.is-koth .ta-icon { color: var(--pulse-yellow); }
+
+.ta-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.ta-label {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.ta-symbol {
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+}
+
+.trench-alert-close {
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.trench-alert-close:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@keyframes trenchAlertIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trench-row.is-new,
+  .trench-alert { animation: none; }
+}
+
+/* --------------------------------------------------------------------------
+   Narrow
+   -------------------------------------------------------------------------- */
+@media (max-width: 900px) {
+  /* Clear of the app's fixed bottom nav. */
+  .trench-alerts { bottom: calc(74px + env(safe-area-inset-bottom, 0px)); }
+
+  /* One line that scrolls sideways, rather than a four-line wrapped block that
+     pushes the board off the screen before it starts. */
+  .trench-filter-bar {
+    flex-wrap: nowrap;
+    gap: 12px;
+    overflow-x: auto;
+    padding: 7px 9px;
+    scrollbar-width: none;
+  }
+
+  .trench-filter-bar::-webkit-scrollbar { display: none; }
+
+  .tfb-group,
+  .tfb-chips { flex-wrap: nowrap; }
+
+  /*
+   * Nothing in the bar may shrink.
+   *
+   * A flex item shrinks before its container overflows, so `overflow-x: auto`
+   * on its own bought nothing: the row compressed every chip until the labels
+   * drew over each other and there was no overflow left to scroll. Refusing to
+   * shrink is what turns it into a scrolling strip.
+   */
+  .tfb-lead,
+  .tfb-group,
+  .tfb-chips,
+  .tfb-chip,
+  .tfb-label,
+  .tfb-tail { flex-shrink: 0; }
+
+  .tfb-tail { margin-left: 0; }
+
+  /* The star sits in the row corner: the stacked row has no fifth track. */
+  .slot-new .trench-row,
+  .slot-koth .trench-row,
+  .slot-grad .trench-row {
+    grid-template-areas:
+      'logo  ident'
+      'price side'
+      'meta  meta'
+      'bond  bond';
+  }
+
+  .slot-grad .trench-row,
+  .slot-new .trench-row.is-grad,
+  .slot-koth .trench-row.is-grad {
+    grid-template-areas:
+      'logo  ident'
+      'price side'
+      'meta  meta';
+  }
+
+  .slot-new .tr-star,
+  .slot-koth .tr-star,
+  .slot-grad .tr-star {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    /* Always visible: there is no hover on a touch screen. */
+    opacity: 1;
+    width: 22px;
+    height: 22px;
+  }
+}
+
+@media (max-width: 420px) {
+  .slot-new .trench-row,
+  .slot-koth .trench-row,
+  .slot-grad .trench-row {
+    grid-template-areas:
+      'logo  ident'
+      'price price'
+      'side  side'
+      'meta  meta'
+      'bond  bond';
+  }
+
+  .slot-grad .trench-row,
+  .slot-new .trench-row.is-grad,
+  .slot-koth .trench-row.is-grad {
+    grid-template-areas:
+      'logo  ident'
+      'price price'
+      'side  side'
+      'meta  meta';
+  }
+
+  /* The deployer and the ATH chip are the first things a 112px column cannot
+     afford; the market cap and the curve are what it is for. */
+  .slot-new .tr-ath,
+  .slot-koth .tr-ath,
+  .slot-grad .tr-ath { display: none; }
+}
+
+/* --------------------------------------------------------------------------
+   End of an auto-loaded column
+   -------------------------------------------------------------------------- */
+.trench-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 14px 12px 18px;
+  font-size: 10px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   Launch quality menu
+   -------------------------------------------------------------------------- */
+.trench-quality {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+}
+
+/*
+ * Sized for a column heading, not the filter bar.
+ *
+ * The heading already carries a title, a running total, a count and the
+ * ordering control inside about 300px, so this is an icon and a badge. The
+ * shield fills in when anything is on, which is the whole state at a glance.
+ */
+.trench-quality-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 5px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+}
+
+.trench-quality-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.trench-quality-btn.is-on {
+  color: var(--pulse-green);
+  background: rgba(0, 255, 157, 0.13);
+  border-color: rgba(0, 255, 157, 0.4);
+}
+
+.trench-quality-btn.is-on svg { fill: rgba(0, 255, 157, 0.18); }
+
+.trench-quality-btn:focus-visible {
+  outline: 2px solid var(--pulse-cyan);
+  outline-offset: 1px;
+}
+
+.tqb-count {
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Positioned by FloatingMenu, which portals it to the body. */
+.trench-quality-menu {
+  z-index: 80;
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  padding: 10px;
+  /* Opaque, like the sort menu: the board behind it is dense text. */
+  background: var(--tr-dock-bg);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.6);
+}
+
+.tqm-head { margin-bottom: 8px; }
+
+.tqm-title {
+  margin-bottom: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+
+.tqm-note {
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.tqm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.tqm-row {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 9px;
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.tqm-row:hover { background: rgba(255, 255, 255, 0.05); }
+
+.tqm-row input {
+  width: 13px;
+  height: 13px;
+  margin-top: 1px;
+  accent-color: var(--pulse-green);
+  cursor: pointer;
+}
+
+.tqm-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tqm-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.tqm-row.is-on .tqm-label { color: var(--text-primary); }
+
+.tqm-hint {
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+
+/* The live count of what each signal would remove - the switch's evidence. */
+.tqm-count {
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-full);
+}
+
+.tqm-row.is-on .tqm-count {
+  color: var(--pulse-green);
+  background: rgba(0, 255, 157, 0.13);
+}
+
+.tqm-actions {
+  display: flex;
+  gap: 6px;
+  padding-top: 9px;
+  margin-top: 8px;
+  border-top: 1px solid var(--tr-hairline);
+}
+
+.tqm-foot {
+  padding-top: 7px;
+  font-size: 9.5px;
+  color: var(--text-muted);
+}
+
+/* On a phone the menu takes the width it can get; FloatingMenu clamps it to
+   the viewport either way. */
+@media (max-width: 620px) {
+  .trench-quality-menu { width: calc(100vw - 24px); }
+}

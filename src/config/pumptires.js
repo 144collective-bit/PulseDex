@@ -35,18 +35,30 @@ export const TRENCH_COLUMNS = [
     id: 'new',
     title: 'New Launches',
     filter: 'created_timestamp',
+    /*
+     * Orderings this column can ask the feed for.
+     *
+     * `latest_activity_timestamp` is undocumented but real - it is the only
+     * other value the endpoint accepts, and it turns this column into a
+     * "recently traded" board. Everything else (market_value, total_volume_usd,
+     * price, tokens_sold) comes back empty, which is why sorting by those is
+     * done on the client over loaded rows instead.
+     */
+    feeds: ['created_timestamp', 'latest_activity_timestamp'],
     accent: 'cyan',
   },
   {
     id: 'koth',
     title: 'King of the Hill',
     filter: 'top_bonding',
+    feeds: ['top_bonding'],
     accent: 'yellow',
   },
   {
     id: 'grad',
     title: 'Graduations',
     filter: 'launch_timestamp',
+    feeds: ['launch_timestamp'],
     accent: 'green',
   },
 ]

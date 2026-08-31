@@ -12,11 +12,23 @@
 
 .trenches-live-page {
   /*
-   * The app shell scrolls the whole document, so the board can't inherit a
-   * height from a flex parent. It claims the viewport minus the chrome stacked
-   * above it and scrolls inside its panels instead. Re-tuned per breakpoint.
+   * The app's own chrome around this page, which it cannot see from in here:
+   * the sticky navbar (138) and the marquee under it (29), plus the 12/40 of
+   * vertical padding on .app-main-content that the page sits inside. That
+   * padding is the part that is easy to forget - it left the board 52px too
+   * tall and the page scrolling by exactly that on every screen.
+   *
+   * Constant above 768px; every override of it in App.css is below that, well
+   * under the 901px where this is used.
    */
-  --trench-chrome: 352px;
+  --tr-app-chrome: 219px;
+
+  /*
+   * An opaque stand-in for the panel, for the menus and toasts that float over
+   * the board. The panel colour itself is 82% over the page, which is right
+   * for a panel and wrong for anything with dense text behind it.
+   */
+  --tr-dock-bg: #0c111a;
 
   /* Brand tokens, so the board matches the screener rather than approximating
      it with near-miss greens and reds. */
@@ -179,7 +191,6 @@
     'new koth grad activity'
     'new koth grad movers';
   gap: 10px;
-  height: calc(100vh - var(--trench-chrome));
   min-height: 460px;
 }
 
@@ -198,6 +209,35 @@
 .slot-new,
 .slot-koth,
 .slot-grad { grid-row: 1 / -1; }
+
+/*
+ * One screen, with the board taking whatever the header leaves.
+ *
+ * The board used to claim `100vh` minus a hand-tuned figure for everything
+ * stacked above it, re-tuned at each breakpoint. That figure went stale the
+ * moment the filter bar was added - it was 87px short at 961px - and it could
+ * not have been right anyway, because the bar wraps to a second line at some
+ * widths. The page claims the screen instead and the board takes the rest, so
+ * anything added above it is accounted for by having been laid out.
+ */
+@media (min-width: 901px) {
+  .trenches-live-page { height: calc(100vh - var(--tr-app-chrome)); }
+
+  /*
+   * Page-scoped so it outranks the `min-height` floors the breakpoints below
+   * set on the board. Those were written when the board sized itself from a
+   * fixed figure; at 460 and 560 they stopped it shrinking to fit at all.
+   *
+   * A floor is still wanted, just a much lower one - it should do nothing on a
+   * normal screen and only stop the panels collapsing to a row apiece on a
+   * very short one, where the page scrolls a little instead.
+   */
+  .trenches-live-page .trenches-board {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 360px;
+  }
+}
 
 /* --------------------------------------------------------------------------
    Panel shell - shared by columns, tape and movers
@@ -336,6 +376,23 @@
 .trench-col-labels .tcl-rank { grid-column: 1; }
 .trench-col-labels .tcl-ident { grid-column: 3; }
 .trench-col-labels .tcl-num { grid-column: 4; text-align: right; white-space: nowrap; }
+
+/*
+ * The label sheds a figure at a time as the column narrows, in the same order
+ * as the row below it, so the two never disagree about what is on screen.
+ * The market cap is the last one standing - it is the figure that decides
+ * whether a row is worth opening.
+ */
+@media (max-width: 1700px) { .trench-column .tcl-vol { display: none; } }
+
+/* One line, always. Wrapped, it doubled the strip's height and pushed a row
+   into the seam under the heading. */
+.trench-col-labels .tcl-ident {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+  min-width: 0;
+}
 /* The bonding label rides with the price label now that they share a track. */
 .trench-col-labels .tcl-bond { display: none; }
 
@@ -344,6 +401,20 @@
 }
 
 .tcl-right { text-align: right; }
+
+/*
+ * Heading and labels, as one block above the scrolling list.
+ *
+ * They are wrapped together so they cannot come apart - docked separately they
+ * had assumed a fixed heading height and left a seam that a row showed through.
+ * It has to refuse to shrink: it is a flex child of a panel whose other child
+ * is a list of arbitrary length.
+ */
+.trench-panel-dock {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
 
 /* --------------------------------------------------------------------------
    Scroll bodies
@@ -507,8 +578,14 @@
   min-width: 0;
 }
 
-/* Volume is the first figure to go once the line runs out of room. */
-.trench-column .tr-meta > :nth-last-child(-n + 2) { display: none; }
+/*
+ * Figures leave the metadata line by class, not by position.
+ *
+ * The old rule hid the last two children, which happened to be the volume and
+ * its separator - a coincidence that broke the moment the line's contents
+ * changed. Naming them also lets the label strip above shed the same figures
+ * at the same widths, so the two never disagree about what is on screen.
+ */
 
 .tr-sep { color: var(--text-muted); opacity: 0.5; }
 .tr-age { color: var(--pulse-cyan); }
@@ -1245,8 +1322,6 @@
 /* --------------------------------------------------------------------------
    Responsive
    -------------------------------------------------------------------------- */
-.trenches-mobile-switcher { display: none; }
-
 @media (max-width: 1400px) {
   .trenches-board {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1262,16 +1337,19 @@
 }
 
 @media (max-width: 1100px) {
-  .trenches-live-page { --trench-chrome: 420px; }
   .trenches-live-head { grid-template-columns: 1fr; gap: 11px; }
   .tlh-stats { flex-wrap: wrap; gap: 14px; }
 }
 
 @media (max-width: 900px) {
   .trenches-live-page {
-    /* Header + switcher above, and the app's fixed bottom nav below. */
-    --trench-chrome: 400px;
-    padding: 8px 9px 14px;
+    /*
+     * The board scrolls with the page here, so the fixed bottom nav has to be
+     * paid for in real padding - it used to be covered by the board's own
+     * viewport-height sum, and without it the last rows of the movers rail sat
+     * behind the nav bar.
+     */
+    padding: 8px 9px calc(78px + env(safe-area-inset-bottom, 0px));
   }
 
   .trenches-live-head { padding: 9px 11px; gap: 9px; }
@@ -1285,34 +1363,53 @@
      which is injected after this file. */
   .trenches-live-page .trench-ticker { display: none; }
 
-  /* Five panels don't fit the shared 4-column switcher grid. */
-  .trenches-live-page .trenches-mobile-switcher {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 4px;
-  }
-
-  .trenches-mobile-switcher .mobile-switcher-btn {
-    flex-direction: column;
-    gap: 3px;
-    padding: 6px 2px;
-    font-size: 9.5px;
-  }
-
-  /* One panel at a time on small screens, driven by mobile-panel-* */
+  /*
+   * Three columns in portrait, with the two live rails stacked beneath them.
+   *
+   * The board used to collapse behind a switcher that showed one panel at a
+   * time, which hid the comparison the board exists to make - new launches
+   * against King of the Hill against graduations, side by side. Three columns
+   * survive a portrait phone because the row folds into a stack at this same
+   * width (see "Narrow row" further down), so nothing has to fit sideways into
+   * a 112px track.
+   */
   .trenches-board {
-    display: block;
-    height: calc(100vh - var(--trench-chrome));
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: auto auto auto;
+    grid-template-areas:
+      'new koth grad'
+      'activity activity activity'
+      'movers movers movers';
+    gap: 8px;
+    /* The board grows with the page rather than being pinned to one screen. */
+    height: auto;
+    min-height: 0;
+  }
+
+  .trenches-slot { display: flex; min-height: 0; }
+  .slot-new, .slot-koth, .slot-grad { grid-row: 1; }
+
+  /*
+   * Each panel gets a fixed height and scrolls its own list, the same as on a
+   * wide screen. The page scrolls between the three columns and the two rails
+   * below them, because five panels cannot share one phone screen and still
+   * show anything.
+   */
+  .slot-new,
+  .slot-koth,
+  .slot-grad {
+    height: 70vh;
+    min-height: 340px;
+  }
+
+  .slot-activity,
+  .slot-movers {
+    height: 54vh;
     min-height: 280px;
   }
 
-  .trenches-slot { display: none; height: 100%; }
-
-  .mobile-panel-new .slot-new,
-  .mobile-panel-koth .slot-koth,
-  .mobile-panel-grad .slot-grad,
-  .mobile-panel-activity .slot-activity,
-  .mobile-panel-movers .slot-movers { display: flex; }
+  .trenches-slot .trench-column { height: 100%; min-height: 0; }
 
   .trench-modal-backdrop { padding: 0; }
 
@@ -1338,15 +1435,18 @@
 
   .trench-col-labels,
   .trench-row { grid-template-columns: 20px 34px minmax(0, 1fr) auto; }
+  /* The three token columns override this with a stacked row further down. */
 
   /* The ident sub-line can't hold age + market cap + volume at phone widths,
      and a clipped "V" with no figure is worse than no volume at all. Market cap
      is the one that decides whether a row is worth a tap. */
-  /* The trailing figure is the first to go when the line runs out of room. */
-  .tr-meta > :nth-last-child(-n + 2) { display: none; }
+  /* Volume and the deployer are the figures a phone column cannot afford. */
+  .trench-column .tr-vol,
+  .trench-column .tr-sep-vol { display: none; }
 
   /* Keep the column label honest about what the rows below actually show. */
   .tcl-vol { display: none; }
+
 }
 
 /* --------------------------------------------------------------------------
@@ -2390,13 +2490,13 @@
 .tr-side { gap: 10px; }
 
 /*
- * Volume no longer has to be dropped. That rule hid the last two children
- * whenever the line ran out of room, which at 371px columns meant always —
- * the widened board gives it the space it was missing.
+ * The rule that used to sit here restored the metadata line's last two
+ * children above 1500px, on the reading that a wider board had room for the
+ * volume again. Measured, it does not: at 1600px the line gets 105px and needs
+ * 162. Volume now leaves and returns by name, at 1700px, in
+ * trenches-controls.css - and this rule outranked that one, being a class more
+ * specific, which is why it had to go rather than simply be edited.
  */
-@media (min-width: 1500px) {
-  .trench-column .tr-meta > :nth-last-child(-n + 2) { display: flex; }
-}
 
 /* Marks anchor the taller row. Movers are excluded: that rail keeps a 34px
    logo track, and a 46px mark there spills out of its own grid cell. */
@@ -2606,3 +2706,268 @@
 
 /* The labels strip has to track the row's padding to stay aligned over it. */
 .trench-col-labels { padding: 9px 13px; gap: 12px; }
+
+/* ==========================================================================
+   BOARD HEIGHT
+
+   The board is pinned to one screen and each panel scrolls its own list, which
+   is the shape it had before and the one it has gone back to. It was tried the
+   other way - columns grown to their content with the page doing the scrolling
+   - and the cost was that the three lists could no longer be read against each
+   other: following King of the Hill meant losing sight of New Launches, which
+   is the comparison the board exists to make.
+
+   The base grid at the top of this file already sets that height. What lived
+   here were the overrides that undid it, along with the sticky column headings
+   and the sticky rail lane that only a scrolling page needed. All of it is
+   gone rather than disabled; the headings sit above their own scroll body
+   again and stay put without any help.
+
+   Narrow screens are the exception, below - three columns with the two live
+   rails stacked underneath cannot fit in one screen, so there the page scrolls
+   between the sections while each panel still scrolls its own list.
+   ========================================================================== */
+
+/* ==========================================================================
+   Narrow row
+
+   Three columns on a phone give each row about 118px of width, and even a
+   tablet in portrait only gets ~250px; no sideways layout survives either.
+   Below 900px the token row folds into a stack instead - logo and symbol, then
+   price and change, then the market cap, then the bonding bar - so every
+   figure keeps its own line and none of them collide.
+
+   Scoped to the three token slots. The rails below run the full width of the
+   board and keep their table shape.
+   ========================================================================== */
+@media (max-width: 900px) {
+  .trenches-board { gap: 6px; }
+
+  .slot-new .trench-row,
+  .slot-koth .trench-row,
+  .slot-grad .trench-row {
+    position: relative;
+    grid-template-columns: 36px minmax(0, 1fr);
+    grid-template-areas:
+      'logo  ident'
+      'price side'
+      'meta  meta'
+      'bond  bond';
+    align-items: center;
+    gap: 5px 8px;
+    padding: 9px 9px 10px;
+  }
+
+  .slot-grad .trench-row,
+  .slot-new .trench-row.is-grad,
+  .slot-koth .trench-row.is-grad {
+    grid-template-areas:
+      'logo  ident'
+      'price side'
+      'meta  meta';
+  }
+
+  /* The rank leaves the grid for the corner - a whole track for two digits is
+     a tenth of the row's width. */
+  .slot-new .tr-rank,
+  .slot-koth .tr-rank,
+  .slot-grad .tr-rank {
+    position: absolute;
+    top: 3px;
+    left: 5px;
+    font-size: 9px;
+    line-height: 1;
+    opacity: 0.55;
+  }
+
+  .slot-new .tr-logo img, .slot-new .tr-logo .token-logo-fallback,
+  .slot-koth .tr-logo img, .slot-koth .tr-logo .token-logo-fallback,
+  .slot-grad .tr-logo img, .slot-grad .tr-logo .token-logo-fallback {
+    width: 36px;
+    height: 36px;
+  }
+
+  /* Symbol over name rather than beside it: side by side the name got about
+     30px, which is two characters and an ellipsis. */
+  .slot-new .tr-ident,
+  .slot-koth .tr-ident,
+  .slot-grad .tr-ident {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+  }
+
+  .slot-new .tr-symbol,
+  .slot-koth .tr-symbol,
+  .slot-grad .tr-symbol { font-size: 13.5px; max-width: 100%; }
+
+  .slot-new .tr-name,
+  .slot-koth .tr-name,
+  .slot-grad .tr-name {
+    max-width: 100%;
+    font-size: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .slot-new .tr-price-cell,
+  .slot-koth .tr-price-cell,
+  .slot-grad .tr-price-cell { justify-content: flex-start; }
+
+  .slot-new .tr-price,
+  .slot-koth .tr-price,
+  .slot-grad .tr-price { font-size: 13px; }
+
+  .slot-new .tr-change,
+  .slot-koth .tr-change,
+  .slot-grad .tr-change { font-size: 11.5px; }
+
+  .slot-new .tr-meta,
+  .slot-koth .tr-meta,
+  .slot-grad .tr-meta { font-size: 10.5px; gap: 4px; }
+
+  .slot-new .tr-bond,
+  .slot-koth .tr-bond,
+  .slot-grad .tr-bond { gap: 7px; }
+
+  .slot-new .tr-bond-pct,
+  .slot-koth .tr-bond-pct,
+  .slot-grad .tr-bond-pct { font-size: 10.5px; }
+
+  /* A stacked row has no columns left to label. */
+  .slot-new .trench-col-labels,
+  .slot-koth .trench-col-labels,
+  .slot-grad .trench-col-labels { display: none; }
+
+  .slot-new .trench-panel-head,
+  .slot-koth .trench-panel-head,
+  .slot-grad .trench-panel-head { padding: 8px 9px; }
+
+  .slot-new .tph-title,
+  .slot-koth .tph-title,
+  .slot-grad .tph-title { font-size: 10px; letter-spacing: 0.03em; }
+}
+
+/*
+ * A heading has to fit its own column.
+ *
+ * The head is a space-between flex row, and both the title and the running
+ * total refuse to wrap - in a 180px column they simply drew over each other.
+ * The total goes (the count beside it is the useful half) and the title
+ * truncates rather than overflowing, which is the backstop for a name too long
+ * for any column.
+ *
+ * Scoped to the token columns: the rails below them run the full width of the
+ * board and have room for both.
+ */
+@media (max-width: 900px) {
+  .slot-new .tph-agg,
+  .slot-koth .tph-agg,
+  .slot-grad .tph-agg { display: none; }
+
+  .slot-new .tph-title-group,
+  .slot-koth .tph-title-group,
+  .slot-grad .tph-title-group { flex: 1 1 auto; min-width: 0; }
+
+  .slot-new .tph-title,
+  .slot-koth .tph-title,
+  .slot-grad .tph-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/*
+ * Below 420px the column is about 112px wide.
+ *
+ * Price and change shared a line, which the graduated column could not hold:
+ * a price, a percentage and a GRAD badge drew straight over one another. Each
+ * gets its own line here, and the age drops out of the metadata - the column
+ * is ordered by it, so the market cap is the figure that earns the space.
+ */
+@media (max-width: 420px) {
+  .slot-new .trench-row,
+  .slot-koth .trench-row,
+  .slot-grad .trench-row {
+    grid-template-areas:
+      'logo  ident'
+      'price price'
+      'side  side'
+      'meta  meta'
+      'bond  bond';
+    gap: 4px 7px;
+    padding: 8px 7px 9px;
+  }
+
+  .slot-grad .trench-row,
+  .slot-new .trench-row.is-grad,
+  .slot-koth .trench-row.is-grad {
+    grid-template-areas:
+      'logo  ident'
+      'price price'
+      'side  side'
+      'meta  meta';
+  }
+
+  .slot-new .tr-side,
+  .slot-koth .tr-side,
+  .slot-grad .tr-side { justify-content: flex-start; gap: 5px; }
+
+  .slot-new .tr-meta .tr-age,
+  .slot-koth .tr-meta .tr-age,
+  .slot-grad .tr-meta .tr-age,
+  .slot-new .tr-meta .tr-sep,
+  .slot-koth .tr-meta .tr-sep,
+  .slot-grad .tr-meta .tr-sep { display: none; }
+
+  .slot-new .tr-symbol,
+  .slot-koth .tr-symbol,
+  .slot-grad .tr-symbol { font-size: 12px; }
+
+  .slot-new .tr-name,
+  .slot-koth .tr-name,
+  .slot-grad .tr-name { display: none; }
+
+  .slot-new .tr-price,
+  .slot-koth .tr-price,
+  .slot-grad .tr-price { font-size: 11.5px; }
+
+  .slot-new .tr-logo img, .slot-new .tr-logo .token-logo-fallback,
+  .slot-koth .tr-logo img, .slot-koth .tr-logo .token-logo-fallback,
+  .slot-grad .tr-logo img, .slot-grad .tr-logo .token-logo-fallback {
+    width: 30px;
+    height: 30px;
+  }
+
+  .slot-new .trench-row,
+  .slot-koth .trench-row,
+  .slot-grad .trench-row { grid-template-columns: 30px minmax(0, 1fr); }
+
+  .slot-grad .tr-grad-tag { padding: 2px 5px; font-size: 8.5px; }
+
+  /* The row count goes too, and the tracking with it, so the heading can say
+     what the column is rather than truncating to "NEW …". Every row below it
+     is already numbered. */
+  .slot-new .tph-count,
+  .slot-koth .tph-count,
+  .slot-grad .tph-count { display: none; }
+
+  /* Sentence case rather than caps: at this size the caps cost about 15% of
+     the width, which is the difference between "King of the Hill" and
+     "KING OF THE HI…". */
+  .slot-new .tph-title,
+  .slot-koth .tph-title,
+  .slot-grad .tph-title {
+    font-size: 9.5px;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .slot-new .tph-title-group,
+  .slot-koth .tph-title-group,
+  .slot-grad .tph-title-group { gap: 4px; }
+
+  .trenches-board { gap: 4px; }
+}

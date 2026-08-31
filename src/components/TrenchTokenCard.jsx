@@ -1,6 +1,8 @@
-import { Crown, Rocket, Lock } from 'lucide-react'
+import { Crown, Rocket, Lock, Star } from 'lucide-react'
 import TrenchTokenLogo from './TrenchTokenLogo'
 import { plsToUsd } from '../services/pumptires'
+import { formatVelocity, formatEta } from '../hooks/useBondingVelocity'
+import { drawdownFromAth } from '../utils/trenchBoard'
 import {
   formatUsd,
   formatCryptoPrice,
@@ -9,11 +11,52 @@ import {
 } from '../utils/formatters'
 
 /**
+ * Below this the drawdown is noise around the high rather than a fall from it.
+ * A row printing new highs every few seconds would otherwise flicker a chip.
+ */
+const ATH_CHIP_THRESHOLD = -8
+
+/** Star that adds a token to the watchlist, shared by both row shapes. */
+function WatchStar({ watched, onToggle, symbol }) {
+  if (!onToggle) return null
+
+  return (
+    <span
+      className={`tr-star ${watched ? 'is-on' : ''}`}
+      role="button"
+      tabIndex={0}
+      aria-pressed={watched}
+      aria-label={watched ? `Unstar ${symbol}` : `Star ${symbol}`}
+      title={watched ? 'Remove from watchlist' : 'Add to watchlist'}
+      /*
+       * A span, not a button. The row itself is a <button> and HTML forbids a
+       * button inside one - React renders it anyway and the browser closes the
+       * outer element early, which broke the row's own click target. The
+       * handlers below give it the behaviour a button would have had.
+       */
+      onClick={(e) => {
+        e.stopPropagation()
+        onToggle()
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          e.stopPropagation()
+          onToggle()
+        }
+      }}
+    >
+      <Star size={12} />
+    </span>
+  )
+}
+
+/**
  * One record on the trenches board.
  *
- * Laid out as a dense two-line row rather than a card: a screener lives or dies
- * on how many rows fit on screen, and every number sits in a fixed column so
- * digits don't shift sideways as the feed ticks.
+ * Laid out as a dense three-line row rather than a card: a screener lives or
+ * dies on how many rows fit on screen, and every number sits in a fixed column
+ * so digits don't shift sideways as the feed ticks.
  */
 export default function TrenchTokenCard({
   token,
@@ -22,6 +65,10 @@ export default function TrenchTokenCard({
   variant = 'new',
   rank,
   eager = false,
+  velocity,
+  watched = false,
+  onToggleWatch,
+  isNew = false,
 }) {
   if (!token) return null
 
@@ -41,12 +88,40 @@ export default function TrenchTokenCard({
   // Heat band for the bonding bar - the closer to graduation, the hotter.
   const heat = progress >= 90 ? 'hot' : progress >= 60 ? 'warm' : 'cool'
 
+  const velocityLabel = formatVelocity(velocity?.perMin)
+  const etaLabel = formatEta(velocity?.etaMin)
+
+  const drawdown = drawdownFromAth(token)
+  const showAth = drawdown !== null && drawdown <= ATH_CHIP_THRESHOLD
+
+  /*
+   * The deployer, on the row's tooltip rather than in it.
+   *
+   * It went on the metadata line first and did not fit at any width the board
+   * actually uses: even a 383px column leaves that line about 129px, and age,
+   * market cap and volume already need 140. Rather than clip a figure on every
+   * row for a name most tokens do not carry, it rides the hover text - and the
+   * detail panel behind the row shows it in full.
+   */
+  const deployer = token.creatorUsername?.trim()
+  const rowTitle = deployer
+    ? `${token.name} · deployed by ${deployer} - open detail`
+    : `${token.name} - open detail`
+
   return (
     <button
       type="button"
-      className={`trench-row ${isNearGraduation ? 'is-king' : ''} ${isGraduated ? 'is-grad' : ''}`}
+      className={[
+        'trench-row',
+        isNearGraduation ? 'is-king' : '',
+        isGraduated ? 'is-grad' : '',
+        watched ? 'is-watched' : '',
+        isNew ? 'is-new' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       onClick={() => onSelect?.(token)}
-      title={`${token.name} - open detail`}
+      title={rowTitle}
     >
       <span className="tr-rank font-mono">{rank}</span>
 
@@ -81,16 +156,29 @@ export default function TrenchTokenCard({
         </span>
       </span>
 
-      {/* Second line spans the full row width, so the meta figures never clip */}
+      {/* Second line spans the full row width, so the meta figures never clip.
+          Each figure carries its own class rather than relying on its position,
+          so the breakpoints below can drop them in a deliberate order. */}
       <span className="tr-meta font-mono">
         <span className="tr-age">{formatTimeAgo(timestamp)}</span>
-        <span className="tr-sep" aria-hidden="true">·</span>
-        <span>MC {formatUsd(marketCapUsd)}</span>
-        <span className="tr-sep" aria-hidden="true">·</span>
-        <span>V {formatUsd(token.volumeUsd)}</span>
+        <span className="tr-sep tr-sep-age" aria-hidden="true">·</span>
+        <span className="tr-mc">MC {formatUsd(marketCapUsd)}</span>
+        <span className="tr-sep tr-sep-vol" aria-hidden="true">·</span>
+        <span className="tr-vol">V {formatUsd(token.volumeUsd)}</span>
       </span>
 
       <span className="tr-side">
+        {/* How far off the high, which is the difference between a token still
+            running and one that already had its move. */}
+        {/* Just the figure and a down caret. Spelling out "ATH" cost about
+            24px of a track the metadata line was already short of, and the
+            tooltip carries the meaning. */}
+        {showAth && (
+          <span className="tr-ath font-mono" title="Below its all-time high">
+            ▾{Math.abs(Math.round(drawdown))}%
+          </span>
+        )}
+
         {changeLabel ? (
           <span className={`tr-change font-mono ${isUp ? 'is-up' : 'is-down'}`}>
             {changeLabel}
@@ -102,7 +190,11 @@ export default function TrenchTokenCard({
         {isGraduated && (
           <span className="tr-grad-tag font-mono">
             <Rocket size={9} />
-            GRAD
+            {/* The word is wrapped so it can drop on its own in the
+                Graduations column, where every row is graduated and the icon
+                is enough - the width it frees is what stops that column's
+                metadata line clipping. */}
+            <span className="tr-grad-word">GRAD</span>
             {token.lockedLp && <Lock size={8} className="tr-lock" />}
           </span>
         )}
@@ -113,7 +205,8 @@ export default function TrenchTokenCard({
         Sharing that cell it claimed ~81px of a 145px track, which squeezed the
         metadata line into 133px when it needed 190 - so age, market cap and
         volume clipped on every row even at full width. On its own line it also
-        gets a bar long enough to read as progress.
+        gets a bar long enough to read as progress, and room for how fast that
+        bar is actually moving.
       */}
       {!isGraduated && (
         <span className="tr-bond">
@@ -121,8 +214,28 @@ export default function TrenchTokenCard({
             <span className="tr-bond-fill" style={{ width: `${Math.max(2, progress)}%` }} />
           </span>
           <span className="tr-bond-pct font-mono">{progress.toFixed(0)}%</span>
+
+          {velocityLabel && (
+            <span
+              className={`tr-vel font-mono ${velocity.perMin > 0 ? 'is-up' : 'is-down'}`}
+              title="Curve movement per minute, measured over the last 10 minutes"
+            >
+              {velocityLabel}
+            </span>
+          )}
+          {etaLabel && (
+            <span className="tr-eta font-mono" title="Estimated time to graduation at the current rate">
+              ~{etaLabel}
+            </span>
+          )}
         </span>
       )}
+
+      <WatchStar
+        watched={watched}
+        symbol={token.symbol}
+        onToggle={onToggleWatch ? () => onToggleWatch(token.address) : null}
+      />
     </button>
   )
 }

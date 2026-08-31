@@ -1,16 +1,24 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Flame, Search, X, Activity, Rocket, Crown, Sparkles } from 'lucide-react'
+import { Flame, Search, X } from 'lucide-react'
 import TrenchColumn from './TrenchColumn'
 import TrenchTicker from './TrenchTicker'
 import TrenchActivityFeed from './TrenchActivityFeed'
 import TrenchDexMovers from './TrenchDexMovers'
 import TrenchTokenModal from './TrenchTokenModal'
+import TrenchFilterBar from './TrenchFilterBar'
+import TrenchAlerts from './TrenchAlerts'
 import EcosystemDirectory from './EcosystemDirectory'
 import { usePlsPrice, useTokenColumn, useProtocolStats } from '../hooks/usePumpTires'
+import { useTrenchBoardView } from '../hooks/useTrenchBoardView'
+import { useTrenchWatchlist } from '../hooks/useTrenchWatchlist'
+import { useBoardAlerts } from '../hooks/useBoardAlerts'
+import { useBoardKeyboard } from '../hooks/useBoardKeyboard'
 import { TRENCH_COLUMNS } from '../config/pumptires'
 import { FEATURES } from '../config/features'
 import { formatUsd, formatCompactCount } from '../utils/formatters'
 import '../styles/trenches.css'
+// After trenches.css, so the rules it deliberately restates win.
+import '../styles/trenches-controls.css'
 
 /**
  * Live bonding-curve board for the pump.tires launchpad.
@@ -25,10 +33,26 @@ import '../styles/trenches.css'
 export default function TrenchesView({ onOpenTokenPage }) {
   const [search, setSearch] = useState('')
   const [selectedToken, setSelectedToken] = useState(null)
-  const [mobilePanel, setMobilePanel] = useState('new')
 
   const { data: plsPrice } = usePlsPrice()
   const { data: stats } = useProtocolStats()
+
+  const {
+    filters,
+    updateFilters,
+    resetFilters,
+    quality,
+    updateQuality,
+    orders,
+    setColumnOrder,
+    reportCounts,
+    totals,
+  } = useTrenchBoardView()
+
+  const { watchedSet, isWatched, toggle: toggleWatch, count: watchlistCount } =
+    useTrenchWatchlist()
+
+  const onBoardKeyDown = useBoardKeyboard()
 
   // Unfiltered King-of-the-Hill list, shared with the matching column through
   // React Query's cache — this drives the ticker and the trade tape's targets.
@@ -60,17 +84,37 @@ export default function TrenchesView({ onOpenTokenPage }) {
     return () => window.clearTimeout(id)
   }, [search])
 
+  /*
+   * The other two columns' lists, for the alert diffing below.
+   *
+   * These are the same queries the columns themselves run - React Query serves
+   * both callers from one cache entry, so subscribing here costs no extra
+   * requests. The New column's key follows whichever feed it is reading.
+   */
+  const { data: newData } = useTokenColumn(orders.new.feed, debouncedSearch)
+  const { data: gradData } = useTokenColumn('launch_timestamp', debouncedSearch)
+
+  const newTokens = useMemo(
+    () => newData?.pages.flatMap((p) => p.tokens) || [],
+    [newData]
+  )
+  const gradTokens = useMemo(
+    () => gradData?.pages.flatMap((p) => p.tokens) || [],
+    [gradData]
+  )
+
+  const { newAddresses, alerts, dismiss } = useBoardAlerts({
+    newTokens,
+    gradTokens,
+    kothTokens,
+    // A search narrows every column, so arrivals and departures are the query
+    // changing rather than the launchpad moving.
+    enabled: !debouncedSearch,
+  })
+
   if (!FEATURES.trenchesLive) {
     return <EcosystemDirectory />
   }
-
-  const mobileTabs = [
-    { id: 'new', label: 'New', icon: Sparkles },
-    { id: 'koth', label: 'King', icon: Crown },
-    { id: 'grad', label: 'Grad', icon: Rocket },
-    { id: 'activity', label: 'Trades', icon: Activity },
-    { id: 'movers', label: 'DEX', icon: Flame },
-  ]
 
   return (
     <div className="trenches-live-page">
@@ -142,33 +186,53 @@ export default function TrenchesView({ onOpenTokenPage }) {
         onSelectToken={setSelectedToken}
       />
 
-      {/* Mobile panel switcher — mirrors the screener's segment control */}
-      <div className="mobile-screener-switcher trenches-mobile-switcher font-mono">
-        {mobileTabs.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            className={`mobile-switcher-btn ${mobilePanel === id ? 'active' : ''}`}
-            onClick={() => setMobilePanel(id)}
-          >
-            <Icon size={13} />
-            <span>{label}</span>
-          </button>
-        ))}
-      </div>
+      {/*
+        Board.
 
-      {/* Board */}
-      <div className={`trenches-board mobile-panel-${mobilePanel}`}>
+        There used to be a segment control above this that showed one panel at
+        a time on a narrow screen. The board keeps all three token columns side
+        by side at every width now, with the two live rails stacked underneath,
+        so there is nothing left for it to switch between.
+      */}
+      <TrenchFilterBar
+        filters={filters}
+        onChange={updateFilters}
+        onReset={resetFilters}
+        shown={totals.shown}
+        loaded={totals.loaded}
+        watchlistCount={watchlistCount}
+      />
+
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions --
+          the handler only ever acts on a focused row, which is a button. */}
+      <div className="trenches-board" onKeyDown={onBoardKeyDown}>
+        {/*
+          Launch quality is New Launches' own control: passing the handler is
+          what gives a column the menu, and only that column gets it.
+        */}
         {TRENCH_COLUMNS.map((col) => (
           <div key={col.id} className={`trenches-slot slot-${col.id}`}>
             <TrenchColumn
               title={col.title}
-              filter={col.filter}
+              filter={orders[col.id].feed}
+              feeds={col.feeds}
               accent={col.accent}
               variant={col.id}
               search={debouncedSearch}
               plsPrice={plsPrice}
               onSelectToken={setSelectedToken}
+              sort={orders[col.id].sort}
+              onSortChange={(sort) => setColumnOrder(col.id, { sort })}
+              onFeedChange={(feed) => setColumnOrder(col.id, { feed })}
+              filters={filters}
+              onResetFilters={resetFilters}
+              watchedSet={watchedSet}
+              isWatched={isWatched}
+              onToggleWatch={toggleWatch}
+              onCounts={reportCounts}
+              newAddresses={col.id === 'new' ? newAddresses : null}
+              quality={col.id === 'new' ? quality : null}
+              onQualityChange={col.id === 'new' ? updateQuality : null}
             />
           </div>
         ))}
@@ -185,6 +249,8 @@ export default function TrenchesView({ onOpenTokenPage }) {
           <TrenchDexMovers onSelectToken={setSelectedToken} />
         </div>
       </div>
+
+      <TrenchAlerts alerts={alerts} onDismiss={dismiss} onSelectToken={setSelectedToken} />
 
       {selectedToken && (
         <TrenchTokenModal
