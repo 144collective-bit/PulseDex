@@ -4,7 +4,7 @@ import { useWalletPortfolio, selectHoldings } from '../../services/walletData'
 import { ModuleEmpty, ModuleError, ModuleLoading } from '../../components/ModuleStates'
 import { useDashboardActions } from '../../state/DashboardProvider'
 import { toTokenRef } from '../../state/tokens'
-import { formatUsd } from '../../../utils/formatters'
+import { formatUsd, formatAddress } from '../../../utils/formatters'
 
 /**
  * Individual positions.
@@ -66,6 +66,15 @@ export default function Holdings({ config }) {
                 >
                   <TokenLogo symbol={t.symbol} address={t.address} size={18} />
                   <span className="dash-table-symbol">{t.symbol}</span>
+                  {/* Two holdings can carry the same ticker and be entirely
+                      different assets at entirely different prices. Where that
+                      happens the contract is the only thing telling them
+                      apart, so it is shown. */}
+                  {t.ambiguousSymbol && t.address ? (
+                    <span className="dash-token-addr" title={t.address}>
+                      {formatAddress(t.address)}
+                    </span>
+                  ) : null}
                 </button>
               </th>
               <td>{Number(t.balance ?? 0).toLocaleString('en-US', { maximumFractionDigits: 4 })}</td>

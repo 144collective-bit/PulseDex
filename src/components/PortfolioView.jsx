@@ -28,6 +28,7 @@ import WalletConnectModal from './WalletConnectModal'
 import { useUserProfile } from '../context/UserProfileContext'
 import { useSiweAuth } from '../context/SiweAuthContext'
 import { readScoped, writeScoped } from '../utils/profileStorage'
+import { formatAddress } from '../utils/formatters'
 
 export default function PortfolioView({ onSelectTokenForChart }) {
   const { account } = useSiweAuth()
@@ -843,6 +844,15 @@ export default function PortfolioView({ onSelectTokenForChart }) {
                                   <div className="holding-names">
                                     <div className="flex items-center gap-1.5">
                                       <span className="holding-sym font-bold">{token.symbol}</span>
+                                      {/* Same ticker, different contract, different
+                                          price. The name does not separate them
+                                          either - the forked and bridged DAI are both
+                                          "Dai Stablecoin" - so the address does. */}
+                                      {token.ambiguousSymbol && token.address && (
+                                        <span className="dup-sym-tag" title={token.address}>
+                                          {formatAddress(token.address)}
+                                        </span>
+                                      )}
                                       {token.isCustom && <span className="custom-tag">Custom</span>}
                                       {token.isSpam && <span className="spam-tag">Unverified</span>}
                                     </div>

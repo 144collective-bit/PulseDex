@@ -257,10 +257,29 @@ export async function fetchWalletPortfolio(walletAddress, customTokens = []) {
     const totalUsd = portfolioTokens.reduce((acc, t) => acc + (t.valueUsd || 0), 0)
     const totalPls = plsPriceUsd > 0 ? totalUsd / plsPriceUsd : 0
 
-    // Assign portfolio percentage
+    /*
+     * Percentage of the total, and a flag for symbols that repeat.
+     *
+     * Symbols are not unique on PulseChain and holdings are where that bites
+     * hardest. A test wallet of 55 tokens held two DAI, two PEPE and two of an
+     * emoji ticker - in the DAI case, one is the forked Ethereum contract
+     * trading near a fifth of a cent and the other is the bridged one trading
+     * near a dollar. Both rows are correct and both say "DAI", so a reader
+     * comparing them concludes the app has mispriced their stablecoin.
+     *
+     * The list knows which symbols collide; the views that draw it do not, so
+     * the answer is computed once here rather than three times downstream.
+     */
+    const symbolCounts = portfolioTokens.reduce((counts, t) => {
+      const key = (t.symbol || '').toLowerCase()
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+      return counts
+    }, new Map())
+
     const tokensWithPct = portfolioTokens.map((t) => ({
       ...t,
       portfolioPct: totalUsd > 0 ? (t.valueUsd / totalUsd) * 100 : 0,
+      ambiguousSymbol: (symbolCounts.get((t.symbol || '').toLowerCase()) ?? 0) > 1,
     }))
 
     return {

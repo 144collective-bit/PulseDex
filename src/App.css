@@ -14732,3 +14732,25 @@
   .sidebar-pair-names { flex: 1 1 auto; min-width: 0; }
   .sidebar-pair-right { padding-left: 4px; }
 }
+
+/*
+ * Two holdings, one ticker.
+ *
+ * Symbols are not unique on PulseChain, and a wallet routinely holds two
+ * tokens calling themselves the same thing at wildly different prices - the
+ * forked and the bridged DAI are the common case, and they share a name as
+ * well as a symbol. Where the list detects a collision the contract is shown,
+ * quietly, because it is the only thing that separates the rows.
+ */
+.dup-sym-tag {
+  padding: 1px 5px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.04);
+  font-family: var(--font-instrument);
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+  cursor: help;
+}
