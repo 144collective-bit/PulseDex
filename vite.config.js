@@ -72,5 +72,21 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   if (env.SESSION_SECRET) process.env.SESSION_SECRET = env.SESSION_SECRET
 
-  return { plugins: [react(), vercelApiDev()] }
+  return {
+    plugins: [react(), vercelApiDev()],
+
+    /*
+     * Tests run through Vite's own resolver.
+     *
+     * That matters more than it looks: the app imports without file
+     * extensions, which Node alone cannot resolve, so a plain `node` test file
+     * fails on the first import. Sharing the config means a test sees exactly
+     * the module graph the app does.
+     */
+    test: {
+      environment: 'node',
+      include: ['src/**/*.test.js'],
+      restoreMocks: true,
+    },
+  }
 })
