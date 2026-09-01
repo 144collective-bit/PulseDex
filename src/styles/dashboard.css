@@ -1,0 +1,1695 @@
+/*
+ * The modular dashboard.
+ *
+ * Everything here is scoped under `.dash-page` apart from the two overlays,
+ * which sit over the page by position rather than by DOM parent. Nothing may
+ * leak: this stylesheet is bundled with every other surface in the app, and a
+ * bare `.is-up` or `table` rule would quietly restyle the screener.
+ *
+ * The visual language is the one the rest of PulseDEX already uses - the glass
+ * panel, the cyan accent, the mono instrumentation face - so a page built out
+ * of modules still reads as the same product rather than as a widget host
+ * bolted onto the side of it.
+ */
+
+.dash-page {
+  --dash-gap: 12px;
+  --dash-head-h: 34px;
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--dash-gap);
+  width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+}
+
+/* ------------------------------------------------------------------ toolbar */
+
+/*
+ * Sticky, because the canvas is as tall as the layout someone built, and the
+ * controls that edit it must not scroll away halfway through the editing.
+ */
+.dash-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: var(--bg-card);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+/* Editing is a mode, and a mode should be visible without reading the buttons. */
+.dash-toolbar.is-customizing {
+  border-color: rgba(0, 229, 255, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(0, 229, 255, 0.08);
+}
+
+.dash-toolbar-left,
+.dash-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dash-dashboard-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font: 600 13px/1 var(--font-sans);
+  cursor: pointer;
+}
+
+.dash-dashboard-picker:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-subtle);
+}
+
+.dash-dashboard-picker svg {
+  color: var(--pulse-cyan);
+}
+
+/* Sized to the name it replaces, so renaming does not shunt the toolbar. */
+.dash-rename {
+  width: 180px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+/*
+ * The save indicator reports; it never instructs. Saving is automatic, so this
+ * is the only honest shape for it - and it holds a width so the toolbar does
+ * not jump between "Saving…" and "Saved".
+ */
+.dash-save-state {
+  min-width: 58px;
+  font: 500 var(--fs-label) / 1 var(--font-instrument);
+  color: var(--text-muted);
+  transition: color 0.2s ease;
+}
+
+.dash-save-error {
+  min-width: 0;
+  color: var(--pulse-red);
+}
+
+/* -------------------------------------------------------------- context bar */
+
+.dash-context-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: rgba(13, 18, 28, 0.6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.dash-context-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dash-context-label {
+  font: 600 var(--fs-label) / 1 var(--font-instrument);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/*
+ * Pushed to the far end and deliberately quiet. It answers "why did only some
+ * panels change?", which is a question asked once and then never again.
+ */
+.dash-context-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: var(--fs-body);
+  color: var(--text-muted);
+}
+
+.dash-context-note svg {
+  color: var(--pulse-cyan);
+}
+
+/* ------------------------------------------------------------------- canvas */
+
+.dash-canvas {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--dash-gap);
+}
+
+.dash-canvas-main {
+  flex: 1 1 auto;
+  /* Without this a wide module can push the flex item past the viewport and
+     the whole page scrolls sideways. */
+  min-width: 0;
+}
+
+.dash-grid-wrap {
+  width: 100%;
+}
+
+.dash-grid-item {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+/*
+ * The one-column view. Plain boxes rather than the grid engine, which has
+ * nothing to place at a single column and does not settle when asked to.
+ */
+.dash-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dash-gap);
+}
+
+.dash-stack-item {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+/*
+ * A module with an open menu or token panel has to paint over its neighbours.
+ * Raising something inside it would not do it: grid items are positioned, so a
+ * later one wins whatever happens within an earlier one. The item itself is
+ * what has to come forward.
+ */
+.dash-grid-item:has(.dash-menu),
+.dash-grid-item:has(.dash-token-panel) {
+  z-index: 20;
+}
+
+/* The drop target, while something is dragged over it. */
+.dash-page .react-grid-placeholder {
+  background: rgba(0, 229, 255, 0.14);
+  border: 1px dashed rgba(0, 229, 255, 0.45);
+  border-radius: var(--radius-md);
+  opacity: 1;
+}
+
+.dash-page .react-grid-item.react-draggable-dragging {
+  z-index: 40;
+  cursor: grabbing;
+}
+
+.dash-page .react-grid-item.react-draggable-dragging .dash-module {
+  border-color: rgba(0, 229, 255, 0.4);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+}
+
+/* The library ships a base64 arrow that is invisible on a dark ground. */
+.dash-page .react-resizable-handle {
+  background-image: none;
+}
+
+.dash-page .react-resizable-handle::after {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+/* ------------------------------------------------------------------- module */
+
+.dash-module {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg-card);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  /*
+   * Visible on purpose. The header menu and the token panel open downward and
+   * outward, and clipping them to the module would make both unusable in a
+   * short tile. The body below does its own clipping instead.
+   */
+  overflow: visible;
+}
+
+.dash-module.is-editing {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.dash-module.is-locked {
+  border-style: dashed;
+}
+
+.dash-module-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: 0 0 auto;
+  height: var(--dash-head-h);
+  padding: 0 6px 0 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* The whole header is the drag grip while customising, so it says so. */
+.dash-page.is-customizing .dash-module-header {
+  cursor: grab;
+}
+
+.dash-page.is-customizing .dash-module-actions {
+  cursor: default;
+}
+
+.dash-module-title {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+}
+
+.dash-module-title svg {
+  flex: 0 0 auto;
+  align-self: center;
+  color: var(--pulse-cyan);
+}
+
+.dash-module-title h3 {
+  font: 600 var(--fs-body) / 1.2 var(--font-sans);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dash-module-subtitle {
+  font: 500 var(--fs-micro) / 1 var(--font-instrument);
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.dash-module-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+
+.dash-module-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  color: var(--pulse-cyan);
+  background: var(--pulse-cyan-bg);
+}
+
+.dash-module-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 10px;
+  overflow: auto;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.dash-module-note {
+  margin-top: 8px;
+  font-size: var(--fs-micro);
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.dash-module-missing {
+  border-color: rgba(244, 63, 94, 0.3);
+}
+
+.dash-module-missing code {
+  font-family: var(--font-instrument);
+  color: var(--text-secondary);
+}
+
+/* -------------------------------------------------------------------- state */
+
+/*
+ * Loading, empty, error and not-connected all land here. They centre in
+ * whatever space the module has, so a state in a three-row tile and a state in
+ * a nine-row tile look like the same thing rather than two different bugs.
+ */
+.dash-module-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 100%;
+  padding: 12px;
+  text-align: center;
+  font-size: var(--fs-body);
+  color: var(--text-muted);
+}
+
+.dash-module-state svg {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.dash-module-state-error svg {
+  color: var(--pulse-red);
+  opacity: 1;
+}
+
+.dash-module-state-hint {
+  max-width: 34ch;
+  font-size: var(--fs-micro);
+  line-height: 1.5;
+  color: var(--text-muted);
+  opacity: 0.85;
+}
+
+.dash-spin {
+  animation: dash-spin 0.9s linear infinite;
+}
+
+@keyframes dash-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-spin {
+    animation-duration: 3s;
+  }
+}
+
+/* ------------------------------------------------------------------ buttons */
+
+.dash-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 11px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font: 600 12px/1 var(--font-sans);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.dash-btn:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: var(--text-primary);
+}
+
+.dash-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.dash-btn-primary {
+  background: var(--pulse-cyan-bg);
+  border-color: rgba(0, 229, 255, 0.35);
+  color: var(--pulse-cyan);
+}
+
+.dash-btn-primary:hover:not(:disabled) {
+  background: rgba(0, 229, 255, 0.2);
+  border-color: rgba(0, 229, 255, 0.5);
+  color: var(--pulse-cyan);
+}
+
+.dash-btn-danger {
+  background: var(--pulse-red-bg);
+  border-color: rgba(244, 63, 94, 0.35);
+  color: var(--pulse-red);
+}
+
+.dash-btn-sm {
+  height: 24px;
+  padding: 0 8px;
+  font-size: var(--fs-micro);
+}
+
+.dash-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.dash-icon-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-primary);
+}
+
+.dash-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.dash-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 4px 0 10px;
+  background: var(--pulse-red-bg);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+/* ------------------------------------------------------------------- inputs */
+
+.dash-input {
+  width: 100%;
+  height: 30px;
+  padding: 0 9px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font: 500 12px/1 var(--font-sans);
+}
+
+.dash-input:focus-visible {
+  outline: none;
+  border-color: rgba(0, 229, 255, 0.45);
+}
+
+select.dash-input {
+  cursor: pointer;
+}
+
+.dash-page :focus-visible {
+  outline: 2px solid rgba(0, 229, 255, 0.5);
+  outline-offset: 1px;
+}
+
+/* -------------------------------------------------------------------- menus */
+
+.dash-menu-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.dash-menu {
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  min-width: 168px;
+  padding: 4px;
+  /* Opaque, not translucent. These open over charts and tables, and a menu you
+     can read the candles through is not a menu. */
+  background: #131a26;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+
+.dash-menu-wide {
+  min-width: 246px;
+}
+
+/* The dashboard picker hangs off the left edge of the toolbar, not the right. */
+.dash-toolbar-left .dash-menu {
+  right: auto;
+  left: 0;
+}
+
+.dash-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 9px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font: 500 12px/1.3 var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+}
+
+.dash-menu button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-primary);
+}
+
+.dash-menu button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.dash-menu button svg {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+.dash-menu button:hover:not(:disabled) svg {
+  color: var(--pulse-cyan);
+}
+
+.dash-menu .dash-menu-danger {
+  color: var(--pulse-red);
+}
+
+.dash-menu .dash-menu-danger:hover svg {
+  color: var(--pulse-red);
+}
+
+/* Keeps unticked rows aligned with the ticked one. */
+.dash-menu-gap {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 13px;
+}
+
+.dash-menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border-subtle);
+}
+
+/* A preset is a name and a reason, stacked. */
+.dash-menu-wide button span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dash-menu-wide strong {
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.dash-menu-wide small {
+  font-size: var(--fs-micro);
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------ library */
+
+.dash-library-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(4, 6, 10, 0.6);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+.dash-library {
+  display: flex;
+  flex-direction: column;
+  width: min(460px, 100%);
+  height: 100%;
+  background: #0c111a;
+  border-left: 1px solid var(--border-subtle);
+  box-shadow: -18px 0 48px rgba(0, 0, 0, 0.5);
+}
+
+.dash-library-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 14px 10px;
+}
+
+.dash-library-header h2 {
+  font: 600 15px/1 var(--font-sans);
+}
+
+.dash-library-search {
+  margin: 0 14px 10px;
+}
+
+.dash-library-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 14px 18px;
+}
+
+.dash-library-group + .dash-library-group {
+  margin-top: 16px;
+}
+
+.dash-library-group h3 {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 6px 0;
+  background: #0c111a;
+  font: 600 var(--fs-label) / 1 var(--font-instrument);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.dash-library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px;
+}
+
+.dash-library-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.dash-library-card:hover {
+  border-color: rgba(0, 229, 255, 0.28);
+}
+
+.dash-library-card-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.dash-library-card-head svg {
+  flex: 0 0 auto;
+  color: var(--pulse-cyan);
+}
+
+.dash-library-card-head h4 {
+  font: 600 13px/1.2 var(--font-sans);
+}
+
+.dash-library-card p {
+  font-size: var(--fs-micro);
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.dash-library-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.dash-library-size {
+  font: 500 var(--fs-micro) / 1 var(--font-instrument);
+  color: var(--text-muted);
+}
+
+/* Said before the module is added, not after it renders empty. */
+.dash-library-card .dash-library-note {
+  padding: 5px 7px;
+  background: rgba(251, 191, 36, 0.1);
+  border-radius: var(--radius-sm);
+  color: var(--pulse-yellow);
+}
+
+/* ------------------------------------------------------------- configurator */
+
+/*
+ * A column beside the canvas rather than a dialog over it. Changes apply as
+ * they are made, so the module being configured has to stay visible - a modal
+ * would hide the only thing that shows whether the change was right.
+ */
+.dash-config {
+  position: sticky;
+  top: 54px;
+  flex: 0 0 300px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 120px);
+  background: var(--bg-card);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.dash-config-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 8px 10px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.dash-config-header h2 {
+  font: 600 13px/1.2 var(--font-sans);
+}
+
+.dash-config-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+}
+
+.dash-config-desc {
+  font-size: var(--fs-micro);
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.dash-config-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: none;
+}
+
+/* Dimmed while the module follows the toolbar, so the reason the fields do
+   nothing is visible rather than mysterious. */
+.dash-config-fields:disabled {
+  opacity: 0.45;
+}
+
+.dash-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dash-field-inline {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.dash-field-inline .dash-field-help {
+  grid-column: 2;
+}
+
+.dash-field-inline input[type='checkbox'] {
+  accent-color: var(--pulse-cyan);
+}
+
+.dash-field-label {
+  font: 600 var(--fs-label) / 1 var(--font-instrument);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.dash-field-help {
+  font-size: var(--fs-micro);
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* ----------------------------------------------------------- hidden modules */
+
+.dash-hidden {
+  margin-top: var(--dash-gap);
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.dash-hidden h3 {
+  margin-bottom: 8px;
+  font: 600 var(--fs-label) / 1 var(--font-instrument);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.dash-hidden ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dash-hidden li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.dash-hidden li > span {
+  flex: 1 1 auto;
+}
+
+/* -------------------------------------------------------------------- empty */
+
+.dash-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 64px 20px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.dash-empty h2 {
+  font: 600 17px/1.2 var(--font-sans);
+}
+
+.dash-empty p {
+  font-size: var(--fs-body);
+  color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------- selectors */
+
+.dash-token-select {
+  position: relative;
+  display: inline-flex;
+}
+
+.dash-token-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 7px 0 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font: 600 12px/1 var(--font-sans);
+  cursor: pointer;
+}
+
+.dash-token-trigger:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.dash-token-trigger svg:last-child {
+  color: var(--text-muted);
+}
+
+.dash-token-placeholder {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.dash-token-symbol {
+  font-family: var(--font-instrument);
+}
+
+.dash-token-panel {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  z-index: 50;
+  width: 268px;
+  padding: 8px;
+  background: #131a26;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+
+.dash-token-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 9px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.dash-token-search svg {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+.dash-token-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font: 500 12px/1 var(--font-sans);
+}
+
+.dash-token-list {
+  max-height: 264px;
+  overflow-y: auto;
+  margin-top: 6px;
+}
+
+.dash-token-group {
+  padding: 7px 4px 4px;
+  font: 600 var(--fs-micro) / 1 var(--font-instrument);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.dash-token-group-warn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--pulse-yellow);
+}
+
+.dash-token-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dash-token-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.dash-token-row .dash-token-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+}
+
+.dash-token-verified {
+  flex: 0 0 auto;
+  color: var(--pulse-green);
+}
+
+.dash-token-addr {
+  flex: 0 0 auto;
+  font: 500 var(--fs-micro) / 1 var(--font-instrument);
+  color: var(--text-muted);
+}
+
+/*
+ * The unverified-token warning. Loud on purpose: several contracts answer to
+ * the same ticker on PulseChain, and only one of them is the asset someone
+ * means.
+ */
+.dash-token-warning {
+  margin: 6px 4px 2px;
+  padding: 7px 8px;
+  background: rgba(251, 191, 36, 0.1);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-micro);
+  line-height: 1.5;
+  color: var(--pulse-yellow);
+}
+
+.dash-pair-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dash-pair-flip {
+  flex: 0 0 auto;
+}
+
+/* ------------------------------------------------------------------- shared */
+
+.dash-stat-row {
+  display: grid;
+  grid-template-columns: repeat(var(--dash-stat-cols, 2), minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dash-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dash-stat dt {
+  font: 600 var(--fs-label) / 1 var(--font-instrument);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.dash-stat dd {
+  font: 600 var(--fs-figure) / 1.2 var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dash-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.dash-table th,
+.dash-table td {
+  padding: 5px 6px;
+  text-align: right;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.dash-table thead th {
+  position: sticky;
+  /* Cancels the module body's padding, so the header sits flush with the top
+     of the scroll area rather than floating a row down it. */
+  top: -10px;
+  z-index: 1;
+  background: #121826;
+  font: 600 var(--fs-label) / 1 var(--font-instrument);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.dash-table th:first-child,
+.dash-table td:first-child {
+  text-align: left;
+}
+
+.dash-table tbody tr {
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.dash-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.dash-table tbody td,
+.dash-table tbody th {
+  font-family: var(--font-instrument);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.dash-table-dense th,
+.dash-table-dense td {
+  padding: 3px 6px;
+  font-size: var(--fs-micro);
+}
+
+.dash-table-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.dash-table-link:hover .dash-table-symbol {
+  color: var(--pulse-cyan);
+}
+
+.dash-table-symbol {
+  font-family: var(--font-instrument);
+  font-weight: 600;
+}
+
+.dash-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1px;
+}
+
+.dash-page .is-up {
+  color: var(--pulse-green);
+}
+
+.dash-page .is-down {
+  color: var(--pulse-red);
+}
+
+.dash-page .is-warn {
+  color: var(--pulse-yellow);
+}
+
+.dash-muted {
+  color: var(--text-muted);
+}
+
+.dash-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --------------------------------------------------------------- price card */
+
+.dash-price-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  height: 100%;
+}
+
+.dash-price-card-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* Ticker over metric. Side by side they run together, because the two are one
+   phrase - "PLS price" - not two labels. */
+.dash-price-card-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dash-price-card-symbol {
+  font: 700 13px/1 var(--font-instrument);
+  color: var(--text-primary);
+}
+
+.dash-price-card-metric {
+  font: 500 var(--fs-micro) / 1 var(--font-instrument);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.dash-price-card-value {
+  font: 700 var(--fs-stat) / 1.1 var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dash-price-card-change {
+  font: 600 12px/1 var(--font-instrument);
+  font-variant-numeric: tabular-nums;
+}
+
+/* -------------------------------------------------------------------- chart */
+
+/*
+ * The chart sizes itself to this box, and this box must never size itself to
+ * the chart. Left scrolling, a chart a pixel too tall grows the scroll area,
+ * the wrapper's `height: 100%` resolves against the new box, and the two chase
+ * each other until React gives up with a maximum-update-depth error. A chart
+ * gets a fixed box and fills it.
+ */
+.dash-module-body:has(.dash-chart-wrap) {
+  overflow: hidden;
+}
+
+.dash-chart-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.dash-chart {
+  width: 100%;
+  height: 100%;
+}
+
+/* Over the canvas rather than instead of it: a failed refresh must not wipe
+   candles that are already drawn and still readable. */
+.dash-chart-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 11, 17, 0.72);
+  border-radius: var(--radius-sm);
+}
+
+/* ------------------------------------------------------------------- volume */
+
+.dash-volume-bars {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.dash-volume-bars li {
+  display: grid;
+  grid-template-columns: 38px 1fr auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.dash-volume-label {
+  font: 600 var(--fs-label) / 1 var(--font-instrument);
+  color: var(--text-muted);
+}
+
+.dash-volume-track {
+  height: 6px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-full);
+}
+
+.dash-volume-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(0, 229, 255, 0.5), var(--pulse-cyan));
+  border-radius: var(--radius-full);
+}
+
+.dash-volume-value {
+  font: 600 12px/1 var(--font-instrument);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+/* ------------------------------------------------------------------ trading */
+
+.dash-trade {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dash-trade-side {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.dash-trade-label {
+  font: 600 var(--fs-label) / 1 var(--font-instrument);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.dash-trade-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dash-trade-amount {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font: 600 18px/1.2 var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+}
+
+.dash-trade-output {
+  color: var(--text-secondary);
+}
+
+/* Sits on the seam between the two sides, the way every swap panel does it. */
+.dash-trade-flip {
+  align-self: center;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin: -17px 0;
+  background: #131a26;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.dash-trade-flip:hover:not(:disabled) {
+  color: var(--pulse-cyan);
+}
+
+.dash-trade-flip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.dash-trade-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dash-trade-detail > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: var(--fs-micro);
+}
+
+.dash-trade-detail dt {
+  color: var(--text-muted);
+}
+
+.dash-trade-detail dd {
+  font-family: var(--font-instrument);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.dash-trade-error {
+  font-size: var(--fs-micro);
+  line-height: 1.5;
+  color: var(--pulse-red);
+}
+
+.dash-trade-action {
+  width: 100%;
+  height: 36px;
+}
+
+/*
+ * Not a disclaimer in small print. Swaps cannot be signed here, and a panel
+ * that quotes a trade has to say where the trade actually happens.
+ */
+.dash-trade-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 7px 8px;
+  background: rgba(251, 191, 36, 0.08);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-micro);
+  line-height: 1.5;
+  color: var(--pulse-yellow);
+}
+
+.dash-trade-note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.dash-route {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 7px 9px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-sm);
+}
+
+.dash-route-path {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.dash-route-path li {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.dash-route-node {
+  font: 600 var(--fs-micro) / 1 var(--font-instrument);
+  color: var(--text-primary);
+}
+
+.dash-route-arrow {
+  color: var(--text-muted);
+}
+
+.dash-route-venue {
+  font: 500 var(--fs-micro) / 1 var(--font-instrument);
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------- alerts */
+
+.dash-alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dash-alert-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.dash-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-left-width: 2px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+
+/*
+ * The four states the module actually reports: met, waiting, unknown, pending.
+ * Named to match `is-${rule.state}` in the module rather than invented here -
+ * a rule that has fired is the one thing on this panel that must not look like
+ * every other row.
+ */
+.dash-alert.is-met {
+  background: rgba(0, 255, 157, 0.07);
+  border-left-color: var(--pulse-green);
+}
+
+.dash-alert.is-met .dash-alert-state {
+  color: var(--pulse-green);
+}
+
+.dash-alert.is-waiting {
+  border-left-color: var(--pulse-cyan);
+}
+
+.dash-alert.is-unknown,
+.dash-alert.is-pending {
+  border-left-color: var(--text-muted);
+}
+
+.dash-alert-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text-primary);
+}
+
+.dash-alert-state {
+  font: 600 var(--fs-micro) / 1 var(--font-instrument);
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+/*
+ * A two-column grid so the Add and Cancel buttons sit side by side at the foot.
+ * The form has no wrapper around them to hook onto, and stacking two full-width
+ * buttons reads as two separate decisions rather than one either/or.
+ */
+.dash-alert-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  padding: 9px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.dash-alert-form > * {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.dash-alert-form > .dash-btn {
+  grid-column: auto;
+}
+
+.dash-alert-form .dash-token-select {
+  display: flex;
+}
+
+.dash-alert-form .dash-token-trigger {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+/* ---------------------------------------------------------------- watchlist */
+
+.dash-watchlist {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dash-watchlist-add {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+/* ----------------------------------------------------------------- overview */
+
+.dash-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+}
+
+/*
+ * Fitted rather than fixed at four. The overview reports five figures, and a
+ * four-column grid drops the fifth onto a row of its own with three empty
+ * cells beside it.
+ */
+.dash-overview .dash-stat-row {
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+}
+
+/* --------------------------------------------------------------- responsive */
+
+/*
+ * Below the grid's stacking breakpoint the configurator stops being a column
+ * beside the canvas - there is no room for one - and becomes a sheet over it.
+ */
+@media (max-width: 900px) {
+  .dash-canvas {
+    flex-direction: column;
+    /*
+     * Stretch, not flex-start. Stacked, flex-start becomes a cross-axis rule,
+     * and the canvas measures its own content to nothing - every grid child is
+     * absolutely positioned - so the whole board collapses to zero width.
+     */
+    align-items: stretch;
+  }
+
+  .dash-config {
+    position: fixed;
+    inset: auto 0 0 0;
+    top: auto;
+    z-index: 900;
+    flex: none;
+    width: 100%;
+    max-height: 72vh;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    box-shadow: 0 -18px 48px rgba(0, 0, 0, 0.5);
+  }
+
+  .dash-context-note {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .dash-toolbar {
+    position: static;
+  }
+}
+
+@media (max-width: 560px) {
+  .dash-library {
+    width: 100%;
+  }
+
+  .dash-library-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dash-toolbar-right {
+    width: 100%;
+  }
+
+  .dash-toolbar-right .dash-btn {
+    flex: 1 1 auto;
+  }
+}

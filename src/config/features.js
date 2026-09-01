@@ -38,6 +38,7 @@ export const FEATURES = {
 /** Tabs shown in the main nav, in order. */
 export const VISIBLE_TABS = [
   'home',
+  'dashboard',
   'screener',
   'trenches',
   'dex',

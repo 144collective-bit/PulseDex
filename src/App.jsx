@@ -7,6 +7,7 @@ import { getPulsePair, getTopPulsePairs } from './services/dexscreener'
 import { TrendingUp, Zap, Layers, Flame } from 'lucide-react'
 
 import HomeView from './components/HomeView'
+import Dashboard from './dashboard/components/Dashboard'
 import TokenPage from './components/TokenPage'
 import { useTokenRoute } from './hooks/useTokenRoute'
 import { usePlsPrice } from './hooks/usePumpTires'
@@ -31,7 +32,7 @@ import { UserProfileProvider } from './context/UserProfileContext'
 import { FEATURES } from './config/features'
 
 import './App.css'
-import { readScoped, writeScoped } from './utils/profileStorage'
+import { readScoped, subscribeScoped, writeScoped } from './utils/profileStorage'
 
 const queryClient = new QueryClient()
 
@@ -111,11 +112,21 @@ function MainApp() {
     return () => clearInterval(interval)
   }, [])
 
-  // Toggle pair in watchlist
-  // Swap to this account's own watchlist when the signed-in address changes.
+  /*
+   * Track this account's watchlist, and follow it when anything else changes it.
+   *
+   * The address change is the obvious case. The subscription is the important
+   * one: the dashboard's watchlist module writes the same record, and holding a
+   * stale copy here meant the next star toggled on the screener wrote that
+   * stale list back and dropped whatever the dashboard had added.
+   */
   useEffect(() => {
-    const saved = readScoped('watchlist', account, null)
-    setWatchlist(Array.isArray(saved) ? saved : [])
+    const load = () => {
+      const saved = readScoped('watchlist', account, null)
+      setWatchlist(Array.isArray(saved) ? saved : [])
+    }
+    load()
+    return subscribeScoped('watchlist', load)
   }, [account])
 
   const handleToggleWatchlist = (pairAddress) => {
@@ -263,6 +274,11 @@ function MainApp() {
         {activeTab === 'home' && (
           <HomeView onSelectPairForChart={handleSelectPair} />
         )}
+
+        {/* The dashboard owns its own state and data. It is mounted only while
+            its tab is active so a canvas of modules is not polling in the
+            background behind every other page. */}
+        {activeTab === 'dashboard' && <Dashboard />}
 
         {activeTab === 'trenches' && (
           <TrenchesView onSelectPairForChart={handleSelectPair} onOpenTokenPage={openToken} />

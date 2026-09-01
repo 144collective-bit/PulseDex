@@ -45,6 +45,35 @@ export function readScoped(name, address, fallback) {
 }
 
 /**
+ * Who to tell when a scoped key changes, keyed by name.
+ *
+ * Several surfaces read the same record - the watchlist is on the screener, the
+ * sidebar, the portfolio page and a dashboard module - and each used to load it
+ * once and hold it in component state. Two of them open at the same time then
+ * disagree, and the damage is not only a stale star: a surface that writes its
+ * whole list back from a stale copy silently drops whatever the other one
+ * added. Writers announce here, readers re-read.
+ *
+ * Deliberately not the `storage` event, which fires in *other* tabs only and so
+ * misses the case that actually loses data.
+ *
+ * @type {Map<string, Set<(value: unknown) => void>>}
+ */
+const listeners = new Map()
+
+/**
+ * Listen for writes to one scoped record. Returns the unsubscribe function.
+ *
+ * @param {string} name
+ * @param {(value: unknown) => void} fn
+ */
+export function subscribeScoped(name, fn) {
+  if (!listeners.has(name)) listeners.set(name, new Set())
+  listeners.get(name).add(fn)
+  return () => listeners.get(name)?.delete(fn)
+}
+
+/**
  * Write, tolerating a full or unavailable store.
  *
  * localStorage throws on quota in every browser and is absent entirely in
@@ -54,11 +83,26 @@ export function readScoped(name, address, fallback) {
 export function writeScoped(name, address, value) {
   try {
     localStorage.setItem(storageKey(name, address), JSON.stringify(value))
-    return true
   } catch (err) {
     console.warn(`Could not persist ${name}:`, err?.message)
     return false
   }
+
+  // Announced after the write, so a listener that re-reads storage sees the new
+  // value rather than the one it is replacing. A throwing listener must not
+  // make the write look like it failed.
+  const subs = listeners.get(name)
+  if (subs) {
+    for (const fn of subs) {
+      try {
+        fn(value)
+      } catch (err) {
+        console.warn(`A ${name} listener threw:`, err?.message)
+      }
+    }
+  }
+
+  return true
 }
 
 /**

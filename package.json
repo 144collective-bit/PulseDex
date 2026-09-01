@@ -17,6 +17,7 @@
     "lucide-react": "^1.33.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-grid-layout": "^2.2.4",
     "react-router-dom": "^7.18.2",
     "viem": "^2.55.19",
     "wagmi": "^3.7.6"
