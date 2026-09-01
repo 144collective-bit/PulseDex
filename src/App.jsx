@@ -34,7 +34,60 @@ import { FEATURES } from './config/features'
 import './App.css'
 import { readScoped, subscribeScoped, writeScoped } from './utils/profileStorage'
 
-const queryClient = new QueryClient()
+/**
+ * Query defaults, set once.
+ *
+ * This was a bare `new QueryClient()`, which meant every hook in the app
+ * improvised its own policy and the ones that forgot inherited React Query's
+ * defaults - three retries with backoff on every failure, including the ones
+ * that will never succeed. Against public APIs that rate-limit bursts, retrying
+ * a 429 three times is how a brief limit becomes a sustained one.
+ */
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      /*
+       * Retry once, and not at all for answers that are final.
+       *
+       * A 404 and a 400 are the server's settled opinion; asking again wastes a
+       * request and delays the error the reader needs to see. A timeout or a
+       * 5xx is worth one more try, because those genuinely do pass.
+       */
+      retry: (failureCount, error) => {
+        const status = error?.status
+        if (status >= 400 && status < 500 && status !== 429) return false
+        return failureCount < 1
+      },
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+
+      // Data that is one poll old is still worth showing while the next one is
+      // in flight. Hooks that need fresher than this say so themselves.
+      staleTime: 15_000,
+      gcTime: 5 * 60_000,
+
+      /*
+       * No refetch on focus. Every tab switch and every return to the window
+       * would otherwise refire every visible query at once - a burst that these
+       * APIs answer with a rate limit, on the one interaction where the user is
+       * most likely to be looking at the result.
+       */
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
+
+      /*
+       * `placeholderData` is deliberately not set here.
+       *
+       * Keeping the previous response on screen is right for a poll of the same
+       * thing and wrong for a change of subject: as a global default it would
+       * show one token's price under the next token's name for as long as the
+       * new request took. The hooks that poll one subject opt into it
+       * individually, where the previous value really is an older answer to the
+       * same question.
+       */
+    },
+    mutations: { retry: false },
+  },
+})
 
 function MainApp() {
   // Storage below is scoped to the signed-in account.

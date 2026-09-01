@@ -1,5 +1,5 @@
-import { createPublicClient, http, parseAbi, formatUnits } from 'viem'
-import { pulsechain } from '../config/pulsechain'
+import { parseAbi, formatUnits } from 'viem'
+import { publicClient as client } from './rpc'
 import { CORE_ASSETS, BURN_ADDRESSES, WPLS_ADDRESS } from '../config/coreAssets'
 import { getPairsByTokens, getPulsePair } from './dexscreener'
 
@@ -10,11 +10,6 @@ import { getPairsByTokens, getPulsePair } from './dexscreener'
  * DexScreener. Supply and burned come from the chain itself, because no market
  * API reports them - they're read in a single multicall against the ERC20s.
  */
-
-const client = createPublicClient({
-  chain: pulsechain,
-  transport: http('https://rpc.pulsechain.com'),
-})
 
 const ERC20_ABI = parseAbi([
   'function totalSupply() view returns (uint256)',

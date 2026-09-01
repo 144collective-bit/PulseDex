@@ -1,5 +1,5 @@
-import { createPublicClient, http, parseUnits, formatUnits } from 'viem'
-import { pulsechain } from '../config/pulsechain'
+import { parseUnits, formatUnits } from 'viem'
+import { publicClient as client } from './rpc'
 import {
   PULSEX_ROUTER_V2,
   PULSEX_ROUTER_V1,
@@ -17,11 +17,6 @@ import {
  * Read-only. Nothing here signs or sends a transaction - getAmountsOut is a
  * view call, so a quote can never move funds.
  */
-
-const client = createPublicClient({
-  chain: pulsechain,
-  transport: http('https://rpc.pulsechain.com'),
-})
 
 /** Minimal ERC20 surface: just what's needed to price a token safely. */
 const ERC20_ABI = [

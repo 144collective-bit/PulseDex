@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import { useAccount, useConnect, useSignMessage, useConfig } from 'wagmi'
 import { getAccount } from 'wagmi/actions'
 import { buildSiweMessage } from '../utils/siwe'
+import { fetchWithTimeout } from '../utils/http'
 
 const SiweAuthContext = createContext(null)
 
@@ -61,7 +62,7 @@ export function SiweAuthProvider({ children }) {
     let cancelled = false
 
     const sync = ({ initial = false } = {}) => {
-      fetch('/api/auth/me', { credentials: 'same-origin' })
+      fetchWithTimeout('/api/auth/me', { credentials: 'same-origin' })
         .then((res) => (res.ok ? res.json() : { address: null }))
         .then((data) => {
           if (cancelled) return
@@ -154,7 +155,7 @@ export function SiweAuthProvider({ children }) {
 
       setStatus(AUTH_STATUS.signing)
 
-      const res = await fetch('/api/auth/nonce', { credentials: 'same-origin' })
+      const res = await fetchWithTimeout('/api/auth/nonce', { credentials: 'same-origin' })
       if (!res.ok) throw new Error('Could not start sign-in.')
       const { nonce } = await res.json()
 
@@ -172,7 +173,7 @@ export function SiweAuthProvider({ children }) {
 
       setStatus(AUTH_STATUS.verifying)
 
-      const verified = await fetch('/api/auth/verify', {
+      const verified = await fetchWithTimeout('/api/auth/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
@@ -195,7 +196,7 @@ export function SiweAuthProvider({ children }) {
   }, [address, config, connectAsync, connectors, signMessageAsync])
 
   const signOut = useCallback(async () => {
-    await fetch('/api/auth/logout', {
+    await fetchWithTimeout('/api/auth/logout', {
       method: 'POST',
       credentials: 'same-origin',
     }).catch(() => {})

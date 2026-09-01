@@ -5,6 +5,7 @@ import {
   COLUMN_PAGE_SIZE,
 } from '../config/pumptires'
 import { isValidCid } from '../utils/tokenImage'
+import { fetchWithTimeout } from '../utils/http'
 
 /**
  * Data layer for the pump.tires bonding-curve launchpad.
@@ -27,7 +28,7 @@ async function fetchWithCache(url, { ttl = CACHE_TTL } = {}) {
   }
 
   try {
-    const res = await fetch(url)
+    const res = await fetchWithTimeout(url)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     cache.set(url, { timestamp: now, data })

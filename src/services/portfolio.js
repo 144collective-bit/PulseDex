@@ -1,14 +1,10 @@
-import { createPublicClient, http, parseAbi, formatUnits } from 'viem'
-import { pulsechain, KNOWN_PULSE_TOKENS, DEFAULT_PAIR_ADDRESS } from '../config/pulsechain'
+import { parseAbi, formatUnits } from 'viem'
+import { KNOWN_PULSE_TOKENS, DEFAULT_PAIR_ADDRESS } from '../config/pulsechain'
+import { publicClient as client } from './rpc'
 import { getPairsByTokens, getNativePlsPrice, getPulsePair } from './dexscreener'
 import { fetchWithRetry } from './pulsescan'
 
 const PULSESCAN_BASE_URL = 'https://api.scan.pulsechain.com/api/v2'
-
-const client = createPublicClient({
-  chain: pulsechain,
-  transport: http('https://rpc.pulsechain.com'),
-})
 
 const ERC20_ABI = parseAbi([
   'function balanceOf(address owner) view returns (uint256)',

@@ -6,6 +6,8 @@
  * global token search, and holder distribution analysis for PulseChain PRC-20s.
  */
 
+import { fetchWithTimeout } from '../utils/http'
+
 const PULSESCAN_BASE_URL = 'https://api.scan.pulsechain.com/api/v2'
 
 /**
@@ -98,7 +100,7 @@ export async function fetchWithRetry(url, options = {}, maxRetries = 4, baseDela
   
   while (attempt <= maxRetries) {
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         ...options,
         headers: {
           Accept: 'application/json',

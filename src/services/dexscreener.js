@@ -1,5 +1,6 @@
 import { KNOWN_PULSE_TOKENS, DEFAULT_PAIR_ADDRESS } from '../config/pulsechain'
 import { calculateTokenMarketScore } from '../utils/formatters'
+import { fetchWithTimeout } from '../utils/http'
 
 const DEXSCREENER_BASE = 'https://api.dexscreener.com/latest/dex'
 
@@ -51,7 +52,7 @@ async function fetchWithCache(url) {
   }
 
   try {
-    const res = await fetch(url)
+    const res = await fetchWithTimeout(url)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     cache.set(url, { timestamp: now, data })
@@ -346,7 +347,7 @@ export async function getNativePlsPrice() {
  */
 export async function getPulseGasPrice() {
   try {
-    const res = await fetch('https://rpc.pulsechain.com', {
+    const res = await fetchWithTimeout('https://rpc.pulsechain.com', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

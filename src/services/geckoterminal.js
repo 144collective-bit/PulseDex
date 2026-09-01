@@ -12,6 +12,8 @@
  * address, which is exactly the identifier the screener already carries.
  */
 
+import { fetchWithTimeout, isTimeout } from '../utils/http'
+
 const BASE = 'https://api.geckoterminal.com/api/v2/networks/pulsechain'
 
 /**
@@ -35,6 +37,68 @@ export const CHART_INTERVALS = [
 ]
 
 export const DEFAULT_INTERVAL = '1h'
+
+/**
+ * The raw OHLCV tuples, from our proxy or - failing that - from the source.
+ *
+ * The fallback is deliberately narrow. It runs when the proxy itself is
+ * unreachable or answers 5xx, which means "this deployment cannot serve
+ * candles"; it does not run on a 429, because the upstream refusing our server
+ * will refuse the browser too, and asking twice only spends the limit faster.
+ */
+async function readCandleRows(proxyUrl, directUrl) {
+  try {
+    const res = await fetchWithTimeout(proxyUrl)
+
+    if (res.ok) {
+      const json = await res.json()
+      if (Array.isArray(json?.ohlcv)) return json.ohlcv
+      throw new Error('Chart data unavailable (unexpected response)')
+    }
+
+    if (res.status === 429) {
+      throw new Error('Chart data is rate limited right now. Try again in a moment.')
+    }
+    if (res.status === 400) {
+      throw new Error('Chart data unavailable (bad request)')
+    }
+    // 404 (no such function), 502, 504: the proxy cannot help. Fall through.
+  } catch (err) {
+    // A message we already composed is a real answer, not a reason to retry.
+    if (err?.message?.startsWith('Chart data')) throw err
+    if (isTimeout(err)) throw new Error('Chart data took too long to answer. Try again.')
+  }
+
+  return readDirect(directUrl)
+}
+
+/** The original path: straight to the provider, CORS and all. */
+async function readDirect(url) {
+  let res
+  try {
+    res = await fetchWithTimeout(url)
+  } catch (err) {
+    if (isTimeout(err)) throw new Error('Chart data took too long to answer. Try again.')
+
+    /*
+     * A rejected connection rather than a status.
+     *
+     * The limiter does not answer with 429 - it stops sending the
+     * `Access-Control-Allow-Origin` header, so the browser rejects the
+     * response before any code reaches us. This is the failure the proxy above
+     * exists to avoid, and reaching it means the proxy was unavailable too.
+     */
+    throw new Error('Chart data is rate limited right now. Try again in a moment.')
+  }
+
+  if (res.status === 429) {
+    throw new Error('Chart data is rate limited right now. Try again in a moment.')
+  }
+  if (!res.ok) throw new Error(`Chart data unavailable (${res.status})`)
+
+  const json = await res.json()
+  return json?.data?.attributes?.ohlcv_list
+}
 
 /**
  * Candles for one pool, oldest first.
@@ -61,36 +125,25 @@ export async function getPoolCandles(poolAddress, intervalId = DEFAULT_INTERVAL,
    */
   const token = options.tokenAddress ? `&token=${options.tokenAddress}` : ''
 
-  const url =
+  /*
+   * Asked for through our own origin.
+   *
+   * `/api/candles` fetches the same data server-side, where there is no CORS
+   * to lose and where one response is cached at the edge for every visitor
+   * rather than each of them spending a request from the shared free-tier
+   * budget. Going direct is kept as a fallback below, so a deployment without
+   * the function - or a broken one - degrades to how this worked before rather
+   * than taking every chart down.
+   */
+  const proxyUrl = `/api/candles?pool=${poolAddress}&interval=${interval.id}${token}`
+  const directUrl =
     `${BASE}/pools/${poolAddress}/ohlcv/${interval.timeframe}` +
     `?aggregate=${interval.aggregate}&limit=${interval.limit}${token}`
 
-  const cached = cache.get(url)
+  const cached = cache.get(proxyUrl)
   if (cached && Date.now() - cached.at < CACHE_TTL) return cached.candles
 
-  let res
-  try {
-    res = await fetch(url)
-  } catch {
-    /*
-     * A rejected connection rather than a status.
-     *
-     * The limiter does not answer with 429 - it stops sending the
-     * `Access-Control-Allow-Origin` header, so the browser rejects the
-     * response before any code reaches us. Every caller sharing this API goes
-     * dark at once when it happens, which is why the callers are deliberately
-     * unhurried about how often they ask.
-     */
-    throw new Error('Chart data is rate limited right now. Try again in a moment.')
-  }
-
-  if (res.status === 429) {
-    throw new Error('Chart data is rate limited right now. Try again in a moment.')
-  }
-  if (!res.ok) throw new Error(`Chart data unavailable (${res.status})`)
-
-  const json = await res.json()
-  const rows = json?.data?.attributes?.ohlcv_list
+  const rows = await readCandleRows(proxyUrl, directUrl)
 
   /*
    * A response we cannot read is a failure, not an empty pool.
@@ -130,7 +183,7 @@ export async function getPoolCandles(poolAddress, intervalId = DEFAULT_INTERVAL,
     candles.push(c)
   }
 
-  cache.set(url, { at: Date.now(), candles })
+  cache.set(proxyUrl, { at: Date.now(), candles })
   // Bounded so a long session cannot grow it without limit.
   if (cache.size > 60) cache.delete(cache.keys().next().value)
 
