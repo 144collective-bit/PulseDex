@@ -38,6 +38,54 @@ export const AUTH_STATUS = {
  * The session itself lives in an httpOnly cookie the server sets, so no script
  * on the page - ours or anyone else's - can read it.
  */
+/**
+ * Is this a phone browser, where no extension can exist?
+ *
+ * Coarse pointer and a narrow viewport, rather than a user agent string: a
+ * touch laptop is a desktop and should keep the desktop advice.
+ */
+function isMobileBrowser() {
+  if (typeof window === 'undefined') return false
+  return Boolean(window.matchMedia?.('(pointer: coarse)')?.matches) && window.innerWidth < 1024
+}
+
+/**
+ * How long to wait for a wallet to answer before giving up.
+ *
+ * Extensions answer in milliseconds; a phone has to switch apps, show the
+ * request and switch back, so the ceiling is generous. It exists because a
+ * bridged connector that reaches an app nobody has installed never settles at
+ * all - the button sat on "Connecting…" for the rest of the session with no
+ * error, no cancel and no way back. A wrong answer after a minute beats no
+ * answer forever.
+ */
+const CONNECT_DEADLINE_MS = 60_000
+
+function connectWithDeadline(connectAsync, connector) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      const err = new Error(
+        isMobileBrowser()
+          ? 'No answer from your wallet app. If it is installed, open pulsedex.net inside its own browser; otherwise install it first.'
+          : 'No answer from your wallet. Unlock it and try again.'
+      )
+      err.name = 'ConnectTimeout'
+      reject(err)
+    }, CONNECT_DEADLINE_MS)
+
+    connectAsync({ connector }).then(
+      (result) => {
+        clearTimeout(timer)
+        resolve(result)
+      },
+      (err) => {
+        clearTimeout(timer)
+        reject(err)
+      },
+    )
+  })
+}
+
 export function SiweAuthProvider({ children }) {
   const { address } = useAccount()
   const { connectAsync, connectors } = useConnect()
@@ -127,19 +175,24 @@ export function SiweAuthProvider({ children }) {
 
         if (!available.length) {
           throw new Error(
-            'No wallet extension detected. Install Rabby, MetaMask, Internet Money or ZKX, then try again.'
+            isMobileBrowser()
+              ? 'No wallet found. Open pulsedex.net inside your wallet app’s browser, then try again.'
+              : 'No wallet extension detected. Install Rabby, MetaMask, Internet Money or ZKX, then try again.'
           )
         }
 
         for (const connector of available) {
           try {
-            const result = await connectAsync({ connector })
+            const result = await connectWithDeadline(connectAsync, connector)
             active = result?.accounts?.[0]
             if (active) break
           } catch (err) {
             // Declining is an answer. Trying the next connector would prompt
             // again, up to once per installed wallet.
             if (isRejection(err)) throw err
+            // So is running out of patience: the timeout message names what to
+            // do next, and the loop's generic ending would throw that away.
+            if (err?.name === 'ConnectTimeout') throw err
             if (isAlreadyConnected(err)) {
               active = getAccount(config)?.address
               if (active) break

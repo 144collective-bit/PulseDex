@@ -1,7 +1,37 @@
 import { http, createConfig, fallback } from 'wagmi'
-import { injected } from 'wagmi/connectors'
+import { injected, metaMask, walletConnect } from 'wagmi/connectors'
 import { mainnet, base, bsc, polygon, arbitrum } from 'viem/chains'
 import { pulsechain } from './pulsechain'
+
+/**
+ * How a phone connects at all.
+ *
+ * Every connector here used to be `injected`, which means a provider the page
+ * can already see on `window`. A browser extension puts one there; a phone
+ * browser does not. So on any normal mobile browser the wallet modal listed
+ * four extensions, detected none of them, and offered to install browser
+ * add-ons that cannot exist on a phone - there was no path to connect at all.
+ *
+ * Two are added, and they cover different ground:
+ *
+ * - `metaMask` speaks to the MetaMask app directly, deep-linking out and back.
+ *   It needs no account or key of ours, so it works the moment this ships.
+ * - `walletConnect` is the universal one - Trust, Rainbow, Rabby mobile and
+ *   the rest all speak it - but it needs a free project id from reown.com.
+ *   Until that exists it is left out entirely rather than added broken, since
+ *   a connector with no id fails at the moment someone taps it.
+ *
+ * Both SDKs are loaded lazily by the connector, so a visitor who never opens
+ * the wallet modal never downloads them.
+ */
+const walletConnectProjectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID
+
+const dappMetadata = {
+  name: 'PulseDEX',
+  url: typeof window !== 'undefined' ? window.location.origin : 'https://pulsedex.net',
+}
+
+export const hasWalletConnect = Boolean(walletConnectProjectId)
 
 export const wagmiConfig = createConfig({
   chains: [pulsechain, mainnet, base, bsc, arbitrum, polygon],
@@ -62,6 +92,31 @@ export const wagmiConfig = createConfig({
     injected({
       shimDisconnect: true,
     }),
+
+    /*
+     * 6. MetaMask, over its own SDK rather than through the window.
+     *
+     * On a desktop with the extension this behaves like the injected entry
+     * above. On a phone it opens the MetaMask app, asks there, and returns -
+     * the only route that needs nothing from us to start working.
+     */
+    metaMask({ dappMetadata }),
+
+    // 7. WalletConnect, when a project id has been configured. Reaches every
+    //    other mobile wallet: a QR on desktop, a deep link on a phone.
+    ...(walletConnectProjectId
+      ? [
+          walletConnect({
+            projectId: walletConnectProjectId,
+            showQrModal: true,
+            metadata: {
+              ...dappMetadata,
+              description: 'PulseChain DEX screener and portfolio tracker',
+              icons: [`${dappMetadata.url}/favicon.ico`],
+            },
+          }),
+        ]
+      : []),
   ],
   transports: {
     /*

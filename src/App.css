@@ -14754,3 +14754,24 @@
   white-space: nowrap;
   cursor: help;
 }
+
+/*
+ * The mobile wallet hand-off list.
+ *
+ * Separates "connect from here" from "open this page in the wallet's own
+ * browser" - two different actions that would otherwise read as one list of
+ * equivalent choices.
+ */
+.wallet-handoff-label {
+  margin: 14px 0 2px;
+  font-family: var(--font-instrument);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+a.wallet-option-item {
+  text-decoration: none;
+}

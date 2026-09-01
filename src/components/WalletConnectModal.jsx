@@ -12,6 +12,7 @@ import {
   Lock,
 } from 'lucide-react'
 import { pulsechain } from '../config/pulsechain'
+import { hasWalletConnect } from '../config/wagmi'
 import { useEscapeKey } from '../hooks/useEscapeKey'
 
 // Curated supported wallet definitions with detection checks, official download links & SVGs
@@ -118,6 +119,56 @@ const SUPPORTED_WALLETS = [
   },
 ]
 
+/**
+ * Is this a phone or tablet browser rather than a desktop one?
+ *
+ * Asked because the entire wallet list above is browser extensions, and a
+ * phone browser cannot run any of them. Coarse pointer plus a narrow viewport
+ * catches touch laptops correctly (they are desktops and keep the desktop
+ * list) and does not depend on parsing a user agent string.
+ */
+function isMobileBrowser() {
+  if (typeof window === 'undefined') return false
+  const coarse = window.matchMedia?.('(pointer: coarse)')?.matches
+  return Boolean(coarse) && window.innerWidth < 1024
+}
+
+/** Has some wallet already put a provider on the page? */
+function hasInjectedProvider() {
+  return typeof window !== 'undefined' && Boolean(window.ethereum)
+}
+
+/**
+ * Wallets that can open this page inside their own browser.
+ *
+ * The last resort, and the only one that needs nothing installed and no
+ * account of ours: a universal link that hands the current URL to the wallet
+ * app, which opens it in its in-app browser - where a provider does exist and
+ * the ordinary injected connector works. Every one of these is the wallet's
+ * own documented link format.
+ */
+const MOBILE_HANDOFF = [
+  {
+    id: 'metamask-app',
+    name: 'MetaMask',
+    desc: 'Opens this page inside the MetaMask app.',
+    link: () => `https://metamask.app.link/dapp/${window.location.host}${window.location.pathname}`,
+  },
+  {
+    id: 'trust-app',
+    name: 'Trust Wallet',
+    desc: 'Opens this page inside Trust Wallet.',
+    link: () =>
+      `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(window.location.href)}`,
+  },
+  {
+    id: 'coinbase-app',
+    name: 'Coinbase Wallet',
+    desc: 'Opens this page inside Coinbase Wallet.',
+    link: () => `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(window.location.href)}`,
+  },
+]
+
 // Matches a wagmi connector (manually configured or EIP-6963 auto-discovered)
 // against one of our curated wallet definitions by id/name substring.
 function matchesWallet(connector, walletId) {
@@ -125,6 +176,7 @@ function matchesWallet(connector, walletId) {
   const name = connector.name?.toLowerCase() || ''
 
   if (walletId === 'metamask') return id.includes('metamask') || name.includes('metamask')
+  if (walletId === 'walletconnect') return id === 'walletConnect' || name.includes('walletconnect')
   if (walletId === 'rabby') return id.includes('rabby') || name.includes('rabby')
   if (walletId === 'internetmoney') return id.includes('internet') || name.includes('internet')
   if (walletId === 'zkxwallet') return id.includes('zkx') || name.includes('zkx')
@@ -144,11 +196,20 @@ export default function WalletConnectModal({ isOpen, onClose }) {
   const [copiedAddr, setCopiedAddr] = useState(false)
   const [connectError, setConnectError] = useState('')
 
+  /*
+   * Measured on open rather than at module load, so a rotated tablet or a
+   * resized window is judged as it is now.
+   */
+  const [isMobile, setIsMobile] = useState(false)
+  const [injectedPresent, setInjectedPresent] = useState(true)
+
   // Reset states when opened
   useEffect(() => {
     if (isOpen) {
       setConnectError('')
       setConnectingWalletId(null)
+      setIsMobile(isMobileBrowser())
+      setInjectedPresent(hasInjectedProvider())
     }
   }, [isOpen])
 
@@ -205,6 +266,30 @@ export default function WalletConnectModal({ isOpen, onClose }) {
     } catch (err) {
       console.error('Wallet connection error:', err)
       setConnectError(err?.message || 'Failed to establish connection. Please check your wallet extension.')
+      setConnectingWalletId(null)
+    }
+  }
+
+  /**
+   * Connect through a named connector rather than by sniffing the window.
+   *
+   * The mobile routes have no injected provider to find - that is the whole
+   * reason they exist - so the detection dance above does not apply to them.
+   */
+  const connectVia = async (connectorId, label) => {
+    setConnectError('')
+    setConnectingWalletId(connectorId)
+    try {
+      const connector = connectors.find((c) => c.id === connectorId)
+      if (!connector) {
+        setConnectError(`${label} is not available on this deployment.`)
+        setConnectingWalletId(null)
+        return
+      }
+      await connect({ connector })
+    } catch (err) {
+      console.error('Wallet connection error:', err)
+      setConnectError(err?.shortMessage || err?.message || `Could not reach ${label}.`)
       setConnectingWalletId(null)
     }
   }
@@ -319,6 +404,99 @@ export default function WalletConnectModal({ isOpen, onClose }) {
               </div>
             )}
 
+            {/*
+              On a phone the extension list below is unreachable by definition,
+              so it is replaced rather than added to. Offering "Get Rabby" on a
+              phone is offering a browser add-on to a browser that has none.
+            */}
+            {isMobile && !injectedPresent ? (
+              <div className="wallet-options-list">
+                <button
+                  type="button"
+                  className={`wallet-option-item ${connectingWalletId === 'metaMaskSDK' ? 'is-connecting' : ''}`}
+                  onClick={() => connectVia('metaMaskSDK', 'MetaMask')}
+                  disabled={connectingWalletId === 'metaMaskSDK'}
+                >
+                  <div className="wallet-option-left">
+                    <div className="wallet-option-icon">{SUPPORTED_WALLETS[1].icon}</div>
+                    <div className="wallet-option-meta">
+                      <div className="wallet-option-name-row">
+                        <span className="wallet-option-name">MetaMask</span>
+                        <span className="wallet-badge badge-amber">Mobile app</span>
+                      </div>
+                      <span className="wallet-option-desc">
+                        Opens the MetaMask app to approve, then comes back here.
+                      </span>
+                    </div>
+                  </div>
+                  <div className="wallet-option-right">
+                    {connectingWalletId === 'metaMaskSDK' ? (
+                      <div className="wallet-spin-loader"></div>
+                    ) : (
+                      <span className="wallet-connect-cta-btn">Connect</span>
+                    )}
+                  </div>
+                </button>
+
+                {hasWalletConnect && (
+                  <button
+                    type="button"
+                    className={`wallet-option-item ${connectingWalletId === 'walletConnect' ? 'is-connecting' : ''}`}
+                    onClick={() => connectVia('walletConnect', 'WalletConnect')}
+                    disabled={connectingWalletId === 'walletConnect'}
+                  >
+                    <div className="wallet-option-left">
+                      <div className="wallet-option-icon">
+                        <Zap size={22} className="text-pulse-cyan" />
+                      </div>
+                      <div className="wallet-option-meta">
+                        <div className="wallet-option-name-row">
+                          <span className="wallet-option-name">Any other wallet</span>
+                          <span className="wallet-badge badge-blue">WalletConnect</span>
+                        </div>
+                        <span className="wallet-option-desc">
+                          Trust, Rainbow, Rabby and most other mobile wallets.
+                        </span>
+                      </div>
+                    </div>
+                    <div className="wallet-option-right">
+                      {connectingWalletId === 'walletConnect' ? (
+                        <div className="wallet-spin-loader"></div>
+                      ) : (
+                        <span className="wallet-connect-cta-btn">Connect</span>
+                      )}
+                    </div>
+                  </button>
+                )}
+
+                <p className="wallet-handoff-label">Or open this page in your wallet</p>
+
+                {MOBILE_HANDOFF.map((w) => (
+                  <a
+                    key={w.id}
+                    className="wallet-option-item"
+                    href={w.link()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <div className="wallet-option-left">
+                      <div className="wallet-option-meta">
+                        <div className="wallet-option-name-row">
+                          <span className="wallet-option-name">{w.name}</span>
+                        </div>
+                        <span className="wallet-option-desc">{w.desc}</span>
+                      </div>
+                    </div>
+                    <div className="wallet-option-right">
+                      <div className="wallet-install-link">
+                        <span>Open</span>
+                        <ExternalLink size={13} />
+                      </div>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            ) : (
             <div className="wallet-options-list">
               {SUPPORTED_WALLETS.map((w) => {
                 // `w.detect()` only sees whichever wallet currently owns
@@ -381,6 +559,7 @@ export default function WalletConnectModal({ isOpen, onClose }) {
                 )
               })}
             </div>
+            )}
 
             {/* Security Guarantee Footnote */}
             <div className="wallet-security-footnote">
