@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { WagmiProvider } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { wagmiConfig } from './config/wagmi'
@@ -7,8 +7,6 @@ import { getPulsePair, getTopPulsePairs } from './services/dexscreener'
 import { TrendingUp, Zap, Layers, Flame } from 'lucide-react'
 
 import HomeView from './components/HomeView'
-import Dashboard from './dashboard/components/Dashboard'
-import TokenPage from './components/TokenPage'
 import { useTokenRoute } from './hooks/useTokenRoute'
 import { usePlsPrice } from './hooks/usePumpTires'
 import Navbar from './components/Navbar'
@@ -16,19 +14,44 @@ import MobileBottomNav from './components/MobileBottomNav'
 import TickerMarquee from './components/TickerMarquee'
 import SidebarPairs from './components/SidebarPairs'
 import PairHeader from './components/PairHeader'
-import TradingChart from './components/TradingChart'
-import TradeHistory from './components/TradeHistory'
 import TokenDetails from './components/TokenDetails'
-import MarketOverview from './components/MarketOverview'
-import PortfolioSection from './components/PortfolioSection'
-import TrenchesView from './components/TrenchesView'
-import DexTerminal from './components/DexTerminal'
-import DexComingSoon from './components/DexComingSoon'
-import WalletConnectModal from './components/WalletConnectModal'
-import UserProfileModal from './components/UserProfileModal'
-import ProfileView from './components/ProfileView'
 import { SiweAuthProvider, useSiweAuth } from './context/SiweAuthContext'
-import { UserProfileProvider } from './context/UserProfileContext'
+
+/*
+ * Tabs are fetched when they are first opened, not before.
+ *
+ * Only one of these is ever on screen, and the shell already mounts them that
+ * way - but importing them statically still put every one into the first
+ * download. Someone arriving to look at a price was paying for the dashboard,
+ * the charting library, the grid engine and the trenches board before anything
+ * appeared.
+ *
+ * Home is deliberately not in this list. It is the landing page, so deferring
+ * it would only add a round trip to the one view everybody sees.
+ */
+const Dashboard = lazy(() => import('./dashboard/components/Dashboard'))
+const TokenPage = lazy(() => import('./components/TokenPage'))
+const TrenchesView = lazy(() => import('./components/TrenchesView'))
+const DexTerminal = lazy(() => import('./components/DexTerminal'))
+const DexComingSoon = lazy(() => import('./components/DexComingSoon'))
+const MarketOverview = lazy(() => import('./components/MarketOverview'))
+const PortfolioSection = lazy(() => import('./components/PortfolioSection'))
+const ProfileView = lazy(() => import('./components/ProfileView'))
+
+/*
+ * The screener's two heavy panels, split from the tab around them.
+ *
+ * The chart carries lightweight-charts and the drawing tools; the tape carries
+ * the swap reconstruction. Neither is needed to render the pair header and the
+ * sidebar, which is what the screener shows first.
+ */
+const TradingChart = lazy(() => import('./components/TradingChart'))
+const TradeHistory = lazy(() => import('./components/TradeHistory'))
+
+// Modals: opened by a deliberate action, so never part of a first load.
+const WalletConnectModal = lazy(() => import('./components/WalletConnectModal'))
+const UserProfileModal = lazy(() => import('./components/UserProfileModal'))
+import { UserProfileProvider, useUserProfile } from './context/UserProfileContext'
 import { FEATURES } from './config/features'
 
 import './App.css'
@@ -89,9 +112,37 @@ const queryClient = new QueryClient({
   },
 })
 
+/**
+ * What a tab shows while its code is on the way.
+ *
+ * Reserves height rather than rendering nothing: an empty main element
+ * collapses the page, the footer jumps up, and the whole layout snaps back a
+ * moment later. On a fast connection this is never seen at all.
+ */
+function PanelLoading({ label }) {
+  return (
+    <div className="panel-loading glass-panel" role="status" aria-live="polite">
+      <span className="tab-loading-dot" />
+      <span className="panel-loading-label font-mono">{label}</span>
+    </div>
+  )
+}
+
+function TabLoading() {
+  return (
+    <div className="tab-loading" role="status" aria-live="polite">
+      <span className="tab-loading-dot" />
+      <span className="sr-only">Loading</span>
+    </div>
+  )
+}
+
 function MainApp() {
   // Storage below is scoped to the signed-in account.
   const { account } = useSiweAuth()
+  // Read here so the profile modal can be mounted only while it is open, which
+  // is what keeps its code out of the first download.
+  const { isProfileModalOpen } = useUserProfile()
   const [activeTab, setActiveTab] = useState('home')
 
   // /token/<address> renders the full token page over the tab shell.
@@ -229,6 +280,7 @@ function MainApp() {
 
       {/* Main Views */}
       <main className="app-main-content">
+        <Suspense fallback={<TabLoading />}>
         {/* A direct /token/<address> link takes over the content area; the tab
             shell stays mounted underneath so Back returns to it instantly. */}
         {tokenAddress ? (
@@ -296,14 +348,25 @@ function MainApp() {
                     currentPair && handleToggleWatchlist(currentPair.pairAddress)
                   }
                 />
+                {/*
+                  A boundary each, rather than sharing the tab's.
+                  Under one boundary the whole screener - header, sidebar,
+                  token details - would wait behind the charting library, and
+                  the reader would watch a spinner instead of the parts that
+                  were ready to paint.
+                */}
                 <div className={mobileScreenerTab === 'chart' ? 'mobile-show' : 'mobile-hide-on-mobile'}>
-                  <TradingChart
-                    pair={currentPair}
-                    pairAddress={currentPair?.pairAddress || DEFAULT_PAIR_ADDRESS}
-                  />
+                  <Suspense fallback={<PanelLoading label="Loading chart" />}>
+                    <TradingChart
+                      pair={currentPair}
+                      pairAddress={currentPair?.pairAddress || DEFAULT_PAIR_ADDRESS}
+                    />
+                  </Suspense>
                 </div>
                 <div className={mobileScreenerTab === 'trades' ? 'mobile-show' : 'mobile-hide-on-mobile'}>
-                  <TradeHistory pair={currentPair} />
+                  <Suspense fallback={<PanelLoading label="Loading trades" />}>
+                    <TradeHistory pair={currentPair} />
+                  </Suspense>
                 </div>
               </div>
 
@@ -373,6 +436,7 @@ function MainApp() {
 
         </>
         )}
+        </Suspense>
       </main>
 
       {/* Mobile Native Bottom Navigation */}
@@ -382,14 +446,25 @@ function MainApp() {
         watchlistCount={watchlist.length}
       />
 
-      {/* Global Secure Wallet Connect Modal */}
-      <WalletConnectModal
-        isOpen={showWalletModal}
-        onClose={() => setShowWalletModal(false)}
-      />
+      {/*
+        Both modals are mounted only while open, which is what makes splitting
+        them worth anything: rendered unconditionally they would each return
+        null on the first paint and still have fetched their own code to do it.
+        No fallback - a modal that has not appeared yet should show nothing,
+        not a spinner over the page.
+      */}
+      {showWalletModal && (
+        <Suspense fallback={null}>
+          <WalletConnectModal isOpen onClose={() => setShowWalletModal(false)} />
+        </Suspense>
+      )}
 
       {/* Global User Profile & Settings Modal */}
-      {FEATURES.profile && <UserProfileModal />}
+      {FEATURES.profile && isProfileModalOpen && (
+        <Suspense fallback={null}>
+          <UserProfileModal />
+        </Suspense>
+      )}
 
       {/* Global Auth Sign Up / Sign In Modal */}
     </div>
