@@ -1,16 +1,20 @@
-import { useState, useEffect } from 'react'
+import { useMemo, useState } from 'react'
 import {
   ExternalLink,
   ArrowDownLeft,
   ArrowUpRight,
-  Filter,
   Download,
   ShieldCheck,
   Droplets,
-  Users,
   Copy,
   Check,
+  Loader2,
+  AlertTriangle,
+  HelpCircle,
 } from 'lucide-react'
+import { usePoolSwaps } from '../services/poolSwaps'
+import { useTokenSafety } from '../services/tokenSafety'
+import { formatAddress } from '../utils/formatters'
 import '../styles/trades.css'
 
 
@@ -20,80 +24,79 @@ import '../styles/trades.css'
  * so the two tapes stay comparable.
  */
 function washWidth(usd) {
+  if (usd === null || !isFinite(usd)) return 6
   const pct = (Math.max(0, usd) / 500) * 100
   return Math.max(6, Math.min(100, pct))
 }
 
+/**
+ * What one unit of the quote asset is worth in dollars.
+ *
+ * DexScreener prices the base asset both ways - in dollars and in the quote -
+ * so dividing one by the other gives the quote's own dollar price without a
+ * second request. Returns null rather than a guess when either side is missing,
+ * because the alternative is a dollar column full of confident nonsense.
+ */
+function quoteUsdPrice(pair) {
+  const usd = Number(pair?.priceUsd)
+  const native = Number(pair?.priceNative)
+  if (!isFinite(usd) || !isFinite(native) || native <= 0) return null
+  return usd / native
+}
+
 export default function TradeHistory({ pair }) {
-  const [activeTab, setActiveTab] = useState('trades') // 'trades' | 'traders' | 'liquidity' | 'security'
+  const [activeTab, setActiveTab] = useState('trades') // 'trades' | 'liquidity' | 'security'
   const [filter, setFilter] = useState('all') // 'all' | 'buys' | 'sells'
   const [minSize, setMinSize] = useState(0)
-  const [trades, setTrades] = useState([])
   const [copiedAddr, setCopiedAddr] = useState('')
 
   const baseSymbol = pair?.baseToken?.symbol || 'WPLS'
   const quoteSymbol = pair?.quoteToken?.symbol || 'DAI'
-  const currentPrice = parseFloat(pair?.priceUsd || '0.00001455')
 
-  // Generate initial recent trades and stream new transactions
-  useEffect(() => {
-    if (!pair) return
+  /*
+   * Real swaps, reconstructed from the pool's own token transfers.
+   *
+   * These rows used to be generated: twenty-five invented trades on mount and a
+   * new one every few seconds, with random transaction hashes linking to a
+   * block explorer that had never heard of them, random maker addresses the
+   * reader could copy, and a CSV export that wrote all of it to disk as though
+   * it were a record of the market.
+   */
+  const {
+    data: swaps,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = usePoolSwaps(pair?.pairAddress, pair?.baseToken?.address, 60)
 
-    const initial = []
-    const now = Date.now()
+  const quoteUsd = quoteUsdPrice(pair)
 
-    for (let i = 0; i < 25; i++) {
-      const isBuy = Math.random() > 0.46
-      const tokenAmount = Math.floor(Math.random() * 900000 + 40000)
-      const usdValue = tokenAmount * currentPrice
-      const variance = (Math.random() - 0.5) * 0.008 * currentPrice
-      const price = currentPrice + variance
-
-      initial.push({
-        id: `tx-${now - i * 12000}`,
-        timestamp: new Date(now - i * 12000),
-        type: isBuy ? 'buy' : 'sell',
-        usdValue,
-        tokenAmount,
-        quoteAmount: usdValue / (quoteSymbol === 'DAI' ? 1 : 0.00001455),
-        price,
-        txHash: `0x${Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}...`,
-        maker: `0x${Array.from({ length: 8 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}...`,
-      })
-    }
-
-    setTrades(initial)
-
-    // Stream new simulated live trades every 4-7 seconds
-    const interval = setInterval(() => {
-      const isBuy = Math.random() > 0.45
-      const tokenAmount = Math.floor(Math.random() * 1500000 + 30000)
-      const usdValue = tokenAmount * currentPrice
-      const variance = (Math.random() - 0.48) * 0.006 * currentPrice
-      const price = currentPrice + variance
-
-      const newTrade = {
-        id: `tx-${Date.now()}`,
-        timestamp: new Date(),
-        type: isBuy ? 'buy' : 'sell',
-        usdValue,
-        tokenAmount,
-        quoteAmount: usdValue / (quoteSymbol === 'DAI' ? 1 : 0.00001455),
-        price,
-        txHash: `0x${Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}...`,
-        maker: `0x${Array.from({ length: 8 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}...`,
-      }
-
-      setTrades((prev) => [newTrade, ...prev.slice(0, 49)])
-    }, Math.floor(Math.random() * 3000 + 4000))
-
-    return () => clearInterval(interval)
-  }, [pair, currentPrice, baseSymbol, quoteSymbol])
+  const trades = useMemo(
+    () =>
+      (swaps ?? []).map((s) => ({
+        id: `${s.hash}-${s.timestamp}`,
+        timestamp: new Date(s.timestamp),
+        type: s.side === 'sell' ? 'sell' : 'buy',
+        tokenAmount: s.baseAmount,
+        quoteAmount: s.counterAmount,
+        // The ratio is exact and historical; the dollar figure is that ratio at
+        // the quote asset's price now, which is why the column says "≈".
+        price: quoteUsd === null ? null : s.price * quoteUsd,
+        priceInQuote: s.price,
+        usdValue: quoteUsd === null ? null : s.counterAmount * quoteUsd,
+        txHash: s.hash,
+        maker: s.trader ?? null,
+      })),
+    [swaps, quoteUsd],
+  )
 
   const filteredTrades = trades.filter((t) => {
     if (filter === 'buys' && t.type !== 'buy') return false
     if (filter === 'sells' && t.type !== 'sell') return false
-    if (t.usdValue < minSize) return false
+    // A size filter cannot exclude what it cannot measure, so trades with no
+    // dollar figure stay in the tape rather than vanishing from it.
+    if (minSize > 0 && t.usdValue !== null && t.usdValue < minSize) return false
     return true
   })
 
@@ -104,11 +107,21 @@ export default function TradeHistory({ pair }) {
   }
 
   const exportCSV = () => {
-    const headers = 'Timestamp,Type,USD Value,Token Amount,Price,TxHash,Maker\n'
+    const headers = `Timestamp,Type,Approx USD,${baseSymbol} Amount,${quoteSymbol} Amount,Price (${quoteSymbol}),TxHash,Maker\n`
     const rows = filteredTrades
-      .map(
-        (t) =>
-          `"${t.timestamp.toISOString()}","${t.type}","${t.usdValue}","${t.tokenAmount}","${t.price}","${t.txHash}","${t.maker}"`
+      .map((t) =>
+        [
+          t.timestamp.toISOString(),
+          t.type,
+          t.usdValue ?? '',
+          t.tokenAmount,
+          t.quoteAmount,
+          t.priceInQuote,
+          t.txHash,
+          t.maker ?? '',
+        ]
+          .map((v) => `"${v}"`)
+          .join(',')
       )
       .join('\n')
     const blob = new Blob([headers + rows], { type: 'text/csv' })
@@ -119,21 +132,29 @@ export default function TradeHistory({ pair }) {
     a.click()
   }
 
+  // An em dash where there is no figure. "We cannot price this" and "$0.00" are
+  // different statements and must not render the same.
   const formatUsd = (num) => {
+    if (num === null || !isFinite(num)) return '—'
     if (num >= 1000) return `$${num.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
     return `$${num.toFixed(2)}`
   }
 
   const formatPrice = (val) => {
+    if (val === null || !isFinite(val)) return '—'
     if (val < 0.0001) return `$${val.toFixed(8)}`
     if (val < 1) return `$${val.toFixed(5)}`
     return `$${val.toFixed(2)}`
   }
 
   const formatToken = (num) => {
+    if (!isFinite(num)) return '—'
     if (num >= 1e6) return `${(num / 1e6).toFixed(2)}M`
     if (num >= 1e3) return `${(num / 1e3).toFixed(1)}K`
-    return num.toFixed(0)
+    if (num >= 1) return num.toFixed(2)
+    // Sub-unit amounts are ordinary for an eight-decimal token; rounding them
+    // to "0" would erase most of a HEX tape.
+    return num.toPrecision(3)
   }
 
   return (
@@ -220,23 +241,56 @@ export default function TradeHistory({ pair }) {
       {/* Tab 1: Live Swaps Table */}
       {activeTab === 'trades' && (
         <div className="trades-table-container">
+          {/* States, in the order they can happen. A tape that is loading, one
+              that failed and one that is genuinely quiet used to look
+              identical: an empty table with a header. */}
+          {isLoading && !swaps ? (
+            <div className="trades-state font-mono">
+              <Loader2 size={15} className="trades-spin" aria-hidden="true" />
+              <span>Reading swaps from PulseScan</span>
+            </div>
+          ) : null}
+
+          {isError ? (
+            <div className="trades-state is-error font-mono" role="alert">
+              <AlertTriangle size={15} aria-hidden="true" />
+              <span>Could not read this pool&rsquo;s swaps</span>
+              <p>{error?.message?.slice(0, 120)}</p>
+              <button type="button" className="size-filter-btn" onClick={() => refetch()}>
+                Retry
+              </button>
+            </div>
+          ) : null}
+
+          {!isLoading && !isError && filteredTrades.length === 0 ? (
+            <div className="trades-state font-mono">
+              <span>
+                {trades.length === 0
+                  ? 'No swaps found in this pool&rsquo;s recent transfers'
+                  : 'No swaps match these filters'}
+              </span>
+            </div>
+          ) : null}
+
           <table className="trades-table font-mono">
             <thead>
               <tr>
                 <th>Time</th>
                 <th>Type</th>
-                <th>USD Value</th>
+                <th title={`Valued at the current ${quoteSymbol} price`}>USD &asymp;</th>
                 <th>Amount ({baseSymbol})</th>
                 <th>Price</th>
-                <th>Maker</th>
+                <th title="The address that paid into the pool. A router address when the swap was routed rather than sent directly.">
+                  From
+                </th>
                 <th>Tx</th>
               </tr>
             </thead>
             <tbody>
               {filteredTrades.map((trade) => {
                 const isBuy = trade.type === 'buy'
-                const isWhale = trade.usdValue > 1000
-                const isDolphin = trade.usdValue > 200 && !isWhale
+                const isWhale = trade.usdValue !== null && trade.usdValue > 1000
+                const isDolphin = trade.usdValue !== null && trade.usdValue > 200 && !isWhale
 
                 return (
                   <tr
@@ -272,14 +326,22 @@ export default function TradeHistory({ pair }) {
                       {formatPrice(trade.price)}
                     </td>
                     <td>
-                      <span
-                        className="maker-chip"
-                        onClick={() => copyToClipboard(trade.maker)}
-                        title="Copy Maker Address"
-                      >
-                        {trade.maker.slice(0, 6)}...
-                        {copiedAddr === trade.maker ? <Check size={10} className="text-pulse-green" /> : <Copy size={10} />}
-                      </span>
+                      {trade.maker ? (
+                        <span
+                          className="maker-chip"
+                          onClick={() => copyToClipboard(trade.maker)}
+                          title={`Copy ${trade.maker}`}
+                        >
+                          {formatAddress(trade.maker)}
+                          {copiedAddr === trade.maker ? (
+                            <Check size={10} className="text-pulse-green" />
+                          ) : (
+                            <Copy size={10} />
+                          )}
+                        </span>
+                      ) : (
+                        <span className="text-muted">&mdash;</span>
+                      )}
                     </td>
                     <td>
                       <a
@@ -287,9 +349,9 @@ export default function TradeHistory({ pair }) {
                         target="_blank"
                         rel="noopener noreferrer"
                         className="tx-link"
-                        title="View on PulseScan"
+                        title={trade.txHash}
                       >
-                        {trade.txHash.slice(0, 6)}...
+                        {trade.txHash.slice(0, 8)}&hellip;
                         <ExternalLink size={10} />
                       </a>
                     </td>
@@ -325,29 +387,132 @@ export default function TradeHistory({ pair }) {
         </div>
       )}
 
-      {/* Tab 3: Security & Audit */}
+      {/* Tab 3: Contract facts, and an honest account of what is not checked. */}
       {activeTab === 'security' && (
-        <div className="security-tab-content font-mono">
-          <div className="security-checks-grid">
-            <div className="sec-check-item">
-              <span className="sec-label">Honeypot Risk</span>
-              <span className="badge badge-green">Passed (No Honeypot)</span>
-            </div>
-            <div className="sec-check-item">
-              <span className="sec-label">Buy Tax</span>
-              <span className="sec-val text-pulse-green">0%</span>
-            </div>
-            <div className="sec-check-item">
-              <span className="sec-label">Sell Tax</span>
-              <span className="sec-val text-pulse-green">0%</span>
-            </div>
-            <div className="sec-check-item">
-              <span className="sec-label">Verified PRC-20 Contract</span>
-              <span className="badge badge-pulse">Verified on PulseScan</span>
-            </div>
-          </div>
-        </div>
+        <ContractPanel pair={pair} baseSymbol={baseSymbol} />
       )}
+    </div>
+  )
+}
+
+/**
+ * What the explorer says about the token contract, and what nobody says.
+ *
+ * This replaced a panel of four hardcoded verdicts. It reported, for every
+ * token ever displayed, that the honeypot check had passed and that buy and
+ * sell tax were both zero - none of which had been checked at all. Shown
+ * against an actual honeypot it would have told the reader it was safe, which
+ * is the one thing a screener must never do.
+ *
+ * The rule now is that every claim on this panel has a source behind it, and
+ * everything without one is named as unknown rather than quietly omitted. An
+ * absent warning reads as an all-clear, so the gaps are stated as loudly as the
+ * findings.
+ */
+function ContractPanel({ pair, baseSymbol }) {
+  const address = pair?.baseToken?.address
+  const { data, isLoading, isError, refetch } = useTokenSafety(address)
+
+  const ageDays = pair?.pairCreatedAt
+    ? Math.floor((Date.now() - Number(pair.pairCreatedAt)) / 86_400_000)
+    : null
+
+  return (
+    <div className="security-tab-content font-mono">
+      {isLoading ? (
+        <div className="trades-state">
+          <Loader2 size={15} className="trades-spin" aria-hidden="true" />
+          <span>Reading the contract from PulseScan</span>
+        </div>
+      ) : null}
+
+      {isError ? (
+        <div className="trades-state is-error" role="alert">
+          <AlertTriangle size={15} aria-hidden="true" />
+          <span>Could not read this contract</span>
+          <button type="button" className="size-filter-btn" onClick={() => refetch()}>
+            Retry
+          </button>
+        </div>
+      ) : null}
+
+      {data ? (
+        <div className="security-checks-grid">
+          <div className="sec-check-item">
+            <span className="sec-label">Source code</span>
+            {data.verified === null ? (
+              <span className="badge">Unknown</span>
+            ) : data.verified ? (
+              <span className="badge badge-green">
+                Verified on PulseScan{data.fullyVerified ? '' : ' (partial match)'}
+              </span>
+            ) : (
+              <span className="badge badge-red">Not published</span>
+            )}
+          </div>
+
+          <div className="sec-check-item">
+            <span className="sec-label">Token standard</span>
+            <span className="sec-val">{data.standard || <span className="text-muted">&mdash;</span>}</span>
+          </div>
+
+          <div className="sec-check-item">
+            <span className="sec-label">Holders</span>
+            <span className="sec-val">
+              {data.holders === null ? (
+                <span className="text-muted">&mdash;</span>
+              ) : (
+                data.holders.toLocaleString()
+              )}
+            </span>
+          </div>
+
+          <div className="sec-check-item">
+            <span className="sec-label">Pair age</span>
+            <span className="sec-val">
+              {ageDays === null ? <span className="text-muted">&mdash;</span> : `${ageDays}d`}
+            </span>
+          </div>
+
+          {data.selfDestructed ? (
+            <div className="sec-check-item">
+              <span className="sec-label">Contract</span>
+              <span className="badge badge-red">Self-destructed</span>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/*
+        Stated, not omitted. A panel headed "Security" that simply leaves these
+        out reads as though they were checked and found clean.
+      */}
+      <div className="sec-unknown">
+        <p className="sec-unknown-head">
+          <HelpCircle size={13} aria-hidden="true" />
+          <span>Not checked by PulseDEX</span>
+        </p>
+        <ul>
+          <li>
+            <strong>Honeypot behaviour.</strong> Establishing whether {baseSymbol} can be sold means
+            simulating a buy and a sell against a forked node. PulseDEX does not do this, so it
+            cannot tell you either way.
+          </li>
+          <li>
+            <strong>Buy and sell tax.</strong> Transfer fees are set inside the contract and only
+            show up when a trade executes. Not measured here.
+          </li>
+          <li>
+            <strong>Liquidity locks and ownership.</strong> Whether the pool is locked, and who can
+            still mint or change the contract, is not read.
+          </li>
+        </ul>
+        <p className="sec-unknown-foot">
+          Verified source means the published code matches what is deployed. It does not mean the
+          code is safe, and it says nothing about the intentions of whoever wrote it. Check a
+          dedicated contract scanner before trading anything unfamiliar.
+        </p>
+      </div>
     </div>
   )
 }

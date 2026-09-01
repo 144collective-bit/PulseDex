@@ -91,7 +91,19 @@ export async function getPoolCandles(poolAddress, intervalId = DEFAULT_INTERVAL,
 
   const json = await res.json()
   const rows = json?.data?.attributes?.ohlcv_list
-  if (!Array.isArray(rows)) return []
+
+  /*
+   * A response we cannot read is a failure, not an empty pool.
+   *
+   * Returning [] for both meant a provider hiccup surfaced as "no price history
+   * for this pool" - a confident claim about the market, made from an answer we
+   * had not understood, and with no retry offered because nothing had gone
+   * wrong as far as the caller could tell. An empty list is still an empty
+   * list; a missing one is now an error.
+   */
+  if (!Array.isArray(rows)) {
+    throw new Error('Chart data unavailable (unexpected response)')
+  }
 
   const seen = new Set()
   const candles = []

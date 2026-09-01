@@ -121,11 +121,25 @@ export async function fetchWithRetry(url, options = {}, maxRetries = 4, baseDela
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => '')
-        throw new Error(`HTTP ${response.status} (${response.statusText}): ${errorText.slice(0, 200)}`)
+        const error = new Error(
+          `HTTP ${response.status} (${response.statusText}): ${errorText.slice(0, 200)}`,
+        )
+        // Carried so callers can tell "this does not exist" from "this failed".
+        // An unverified contract answers 404, which is an answer.
+        error.status = response.status
+        throw error
       }
 
       return await response.json()
     } catch (err) {
+      /*
+       * A 4xx other than 429 is the server's final answer, so asking again four
+       * more times only delays it. Unverified contracts answer 404 and are the
+       * commonest case there is: retrying cost five requests and about fifteen
+       * seconds of backoff to arrive at the same reply.
+       */
+      if (err?.status >= 400 && err.status < 500 && err.status !== 429) throw err
+
       if (attempt >= maxRetries) {
         console.error(`[PulseScan API] Fatal request failure after ${maxRetries} retries:`, err)
         throw err
