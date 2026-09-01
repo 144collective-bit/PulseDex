@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { sma, ema, bollinger, rsi, macd } from './indicators'
+import { candleSeries } from '../test/fixtures'
 
 /*
  * Indicator maths, checked against values worked out by hand.
@@ -10,16 +11,7 @@ import { sma, ema, bollinger, rsi, macd } from './indicators'
  * textbook definition rather than from running the code.
  */
 
-/** Candles from a list of closes, one per hour. */
-const series = (closes) =>
-  closes.map((close, i) => ({
-    time: 1_780_000_000 + i * 3600,
-    open: close,
-    high: close,
-    low: close,
-    close,
-    volume: 100,
-  }))
+const series = candleSeries
 
 describe('sma', () => {
   it('averages the last n closes', () => {

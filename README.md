@@ -10,8 +10,10 @@ Currently, two official plugins are available:
 ## Tests
 
 ```
-npm test          # once
-npm run test:watch
+npm test              # once
+npm run test:watch    # re-runs only what a change affects
+npm run test:changed  # only the tests covering the files you touched
+npm run test:coverage # writes coverage/ and prints a summary
 ```
 
 Vitest, sharing `vite.config.js` so tests resolve modules exactly as the app
@@ -29,6 +31,20 @@ guard that fails if the wallet connectors ever go back to being extension-only.
 
 Everything runs in Node with no DOM. Anything needing a browser is verified by
 driving the real app instead.
+
+Shared fakes live in `src/test/fixtures.js` - responses, a memory
+`localStorage`, a `window` complete enough for wallet discovery, candle
+builders. They are there because the same three fakes were being rewritten in
+every file that needed them, each slightly differently, which is how a test
+starts passing for the wrong reason.
+
+Coverage is measured only over the logic these tests aim at - services, utils,
+the dashboard reducer, the connector config. Counting components would report a
+number near zero and mean nothing, since they are checked by driving the app.
+
+Almost all of the wall-clock time is importing wagmi and viem for the two
+connector-config tests; the assertions themselves take under a third of a
+second in total.
 
 ## React Compiler
 

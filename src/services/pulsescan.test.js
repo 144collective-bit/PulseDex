@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { jsonResponse, errorResponse } from '../test/fixtures'
 
 /*
  * The retry policy in front of the block explorer.
@@ -17,19 +18,23 @@ vi.mock('../utils/http', () => ({
 const { fetchWithTimeout } = await import('../utils/http')
 const { fetchWithRetry } = await import('./pulsescan')
 
-const ok = (body) => ({ ok: true, status: 200, json: async () => body })
-const fail = (status) => ({
-  ok: false,
-  status,
-  statusText: 'x',
-  text: async () => '',
-  headers: { get: () => null },
-})
+const ok = jsonResponse
+const fail = errorResponse
 
 beforeEach(() => {
   fetchWithTimeout.mockReset()
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'error').mockImplementation(() => {})
+
+  /*
+   * No jitter while testing.
+   *
+   * The backoff adds up to half a second of randomness per attempt, which is
+   * there to keep many clients from retrying in lockstep - a property of the
+   * fleet, not of this function. Left in, it made two retry tests the slowest
+   * things in the suite and gave a different answer every run.
+   */
+  vi.spyOn(Math, 'random').mockReturnValue(0)
 })
 
 afterEach(() => {

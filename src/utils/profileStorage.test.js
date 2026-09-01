@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { readScoped, writeScoped, subscribeScoped, storageKey, scopeFor } from './profileStorage'
+import { memoryStorage } from '../test/fixtures'
 
 /*
  * Per-account storage, and the notification that stops surfaces overwriting
@@ -12,19 +13,8 @@ import { readScoped, writeScoped, subscribeScoped, storageKey, scopeFor } from '
  * readers re-read.
  */
 
-/** A localStorage that behaves like the real one, including throwing on quota. */
-function makeStorage() {
-  const map = new Map()
-  return {
-    getItem: (k) => (map.has(k) ? map.get(k) : null),
-    setItem: (k, v) => map.set(k, String(v)),
-    removeItem: (k) => map.delete(k),
-    _map: map,
-  }
-}
-
 beforeEach(() => {
-  globalThis.localStorage = makeStorage()
+  globalThis.localStorage = memoryStorage()
 })
 
 describe('scoping', () => {
@@ -108,13 +98,7 @@ describe('subscribeScoped', () => {
   })
 
   it('reports a refused write instead of pretending it succeeded', () => {
-    globalThis.localStorage = {
-      getItem: () => null,
-      setItem: () => {
-        throw new Error('QuotaExceededError')
-      },
-      removeItem: () => {},
-    }
+    globalThis.localStorage = memoryStorage({ full: true })
 
     expect(writeScoped('watchlist', null, ['a'])).toBe(false)
   })

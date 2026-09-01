@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { ohlcvTuples } from '../test/fixtures'
 
 /*
  * Candles, and the difference between "this pool is quiet" and "we did not
@@ -25,10 +26,7 @@ const nextPool = () => `0x${String(poolCounter++).padStart(40, '0')}`
 const proxyOk = (rows) => ({ ok: true, status: 200, json: async () => ({ ohlcv: rows }) })
 const proxyStatus = (status) => ({ ok: false, status, json: async () => ({}) })
 
-/** [timestamp, open, high, low, close, volume], newest first, as the API sends. */
-function rows(count, startTs = 1_780_000_000) {
-  return Array.from({ length: count }, (_, i) => [startTs - i * 3600, 1, 2, 0.5, 1.5, 100])
-}
+const rows = ohlcvTuples
 
 beforeEach(() => {
   fetchWithTimeout.mockReset()

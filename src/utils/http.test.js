@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { fetchWithTimeout, isTimeout, DEFAULT_TIMEOUT_MS } from './http'
+import { hangingFetch as hanging } from '../test/fixtures'
 
 /*
  * The deadline on every network call.
@@ -22,15 +23,8 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-/** A fetch that never settles until its signal aborts. */
-function hangingFetch() {
-  return vi.fn(
-    (_url, options) =>
-      new Promise((_resolve, reject) => {
-        options?.signal?.addEventListener('abort', () => reject(options.signal.reason))
-      }),
-  )
-}
+/** Counted, so the forwarding assertions can read the call. */
+const hangingFetch = () => vi.fn(hanging())
 
 describe('fetchWithTimeout', () => {
   it('passes a successful response straight through', async () => {
@@ -59,11 +53,15 @@ describe('fetchWithTimeout', () => {
   })
 
   it('says how long it waited, because "Timeout" alone is useless on screen', async () => {
+    // On a fake clock: the point is the wording, and waiting three real
+    // seconds to read a string is three seconds every run pays for nothing.
+    vi.useFakeTimers()
     globalThis.fetch = hangingFetch()
 
-    const err = await fetchWithTimeout('https://example.test/hang', { timeout: 1000 }).catch((e) => e)
+    const pending = fetchWithTimeout('https://example.test/hang', { timeout: 3000 }).catch((e) => e)
+    await vi.advanceTimersByTimeAsync(3000)
 
-    expect(err.message).toContain('1s')
+    expect((await pending).message).toContain('3s')
   })
 
   it("honours the caller's own abort signal", async () => {

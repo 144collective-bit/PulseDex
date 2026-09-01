@@ -86,7 +86,36 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: 'node',
       include: ['src/**/*.test.js'],
+
+      // Every spy and stub is undone between tests, so one file cannot leave a
+      // mocked Math.random or a fake clock behind for the next.
       restoreMocks: true,
+      unstubEnvs: true,
+      unstubGlobals: true,
+
+      deps: { optimizer: { ssr: { enabled: true, include: ['wagmi', 'viem'] } } },
+
+      coverage: {
+        provider: 'v8',
+        reporter: ['text-summary', 'html'],
+        reportsDirectory: './coverage',
+
+        /*
+         * Only what the tests are actually aimed at.
+         *
+         * Counting components would report a number near zero and say nothing
+         * useful: they are verified by driving the real app, not from Node.
+         * The logic below is what these tests exist for, so this is the figure
+         * worth watching.
+         */
+        include: [
+          'src/services/**/*.js',
+          'src/utils/**/*.js',
+          'src/dashboard/state/**/*.js',
+          'src/config/wagmi.js',
+        ],
+        exclude: ['**/*.test.js', 'src/test/**'],
+      },
     },
   }
 })
