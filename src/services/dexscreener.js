@@ -6,6 +6,25 @@ const DEXSCREENER_BASE = 'https://api.dexscreener.com/latest/dex'
 
 // Known stablecoins to exclude from being displayed as the primary / base coin
 export const STABLECOIN_SYMBOLS = new Set([
+  /*
+   * The plain names first, because those are the ones that actually occur.
+   *
+   * This list held only the dotted forms - DAI.E, USDC.E, USDT.E - which is
+   * how the bridged tokens are written on some other chains. On PulseChain
+   * DexScreener returns them as plain DAI, USDC and USDT: across the board
+   * PulseDEX tracks, that is 43, 23 and 12 pairs against zero for the dotted
+   * spellings. So the check recognised names that never appear and missed the
+   * three commonest stablecoins on the chain.
+   *
+   * It matters because this is what stops a stablecoin-based pool being chosen
+   * as a token's reference market. Quoted from the wrong side, a pair prices
+   * the dollar in tokens rather than the token in dollars - the same fault
+   * that once drew DAI at $1.00 under a PLS label.
+   */
+  'DAI',
+  'USDC',
+  'USDT',
+
   'DAI.E',
   'USDC.E',
   'USDT.E',
