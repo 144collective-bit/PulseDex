@@ -94,13 +94,23 @@ export const wagmiConfig = createConfig({
     }),
 
     /*
-     * 6. MetaMask, over its own SDK rather than through the window.
+     * 6. MetaMask, over its own SDK rather than through the window - but only
+     *    where the window has nothing to offer.
      *
-     * On a desktop with the extension this behaves like the injected entry
-     * above. On a phone it opens the MetaMask app, asks there, and returns -
-     * the only route that needs nothing from us to start working.
+     * On a phone it opens the MetaMask app, asks there, and returns: the only
+     * route that needs nothing from us to start working. Behind an installed
+     * extension it is redundant, because the injected entries above already
+     * reach that same wallet.
+     *
+     * The gate is about weight, not tidiness. wagmi reconnects on mount by
+     * asking every connector for its provider, and this connector answers by
+     * loading its SDK - so merely listing it costs every visitor 106 kB of
+     * JavaScript before they have expressed any interest in a wallet at all.
+     * Skipping it where an extension exists keeps that off the majority of
+     * desktop visits. A late-announcing extension is still found: the injected
+     * connectors remain, and this one was never how it would have been reached.
      */
-    metaMask({ dappMetadata }),
+    ...(typeof window !== 'undefined' && !window.ethereum ? [metaMask({ dappMetadata })] : []),
 
     // 7. WalletConnect, when a project id has been configured. Reaches every
     //    other mobile wallet: a QR on desktop, a deep link on a phone.
