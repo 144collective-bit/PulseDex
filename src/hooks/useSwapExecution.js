@@ -3,6 +3,7 @@ import { useAccount, useWaitForTransactionReceipt, useWriteContract } from 'wagm
 import { pulsechain } from '../config/pulsechain'
 import { FEATURES } from '../config/features'
 import { buildApproveCall, buildSwapCall } from '../services/swap'
+import { quoteSwap } from '../services/dex'
 import { NATIVE_PLS } from '../config/dex'
 import {
   APPROVAL,
@@ -21,7 +22,9 @@ import {
   isSwapInFlight,
   maxSpendable,
   needsAllowanceReset,
+  needsRequoteConfirmation,
   nextAllowancePollMs,
+  quoteDrift,
   parseAmountRaw,
   receiptOutcome,
   shouldLockInputs,
@@ -68,6 +71,17 @@ export function useSwapExecution({
   const [approveError, setApproveError] = useState(null)
   const [swapError, setSwapError] = useState(null)
   const [refetchesSinceConfirm, setRefetchesSinceConfirm] = useState(0)
+
+  /*
+   * The output the user has actually looked at, and whether it has since moved
+   * out from under them. `shownRaw` starts as whatever the panel is displaying
+   * and is replaced each time they are shown a new price, so a second press
+   * compares against what they just saw rather than against a figure from
+   * several moves ago.
+   */
+  const [priceMoved, setPriceMoved] = useState(null)
+  const [acceptedRaw, setAcceptedRaw] = useState(null)
+  const [requoting, setRequoting] = useState(false)
 
   const amountInRaw = parseAmountRaw(amount, from?.decimals)
   const spender = quote?.router ?? null
@@ -201,6 +215,7 @@ export function useSwapExecution({
       error: swapError,
     },
     approvalSettling,
+    priceMoved: Boolean(priceMoved),
     isRejection,
   })
 
@@ -212,6 +227,8 @@ export function useSwapExecution({
     setApproveError(null)
     setSwapError(null)
     setRefetchesSinceConfirm(0)
+    setPriceMoved(null)
+    setAcceptedRaw(null)
     approveWrite.reset?.()
     swapWrite.reset?.()
   }, [approveWrite, swapWrite])
@@ -306,8 +323,54 @@ export function useSwapExecution({
     setSwapError(null)
     if (!address) return
 
+    /*
+     * Price the trade again, now, and sign that.
+     *
+     * The displayed quote refreshes on a twelve-second cycle, so the floor
+     * derived from it can be that far behind the pool. A stale floor does not
+     * lose anyone money - it is a floor - but it reverts, and a revert is paid
+     * for in gas. Asking once more costs a round trip and removes the whole
+     * class of failure.
+     */
+    setRequoting(true)
+    let fresh
+    try {
+      fresh = await quoteSwap({ from, to, amount })
+    } catch (err) {
+      setRequoting(false)
+      setSwapError(err)
+      return
+    }
+    setRequoting(false)
+
+    if (!fresh) {
+      // Refusing beats signing against a price we could not confirm: the
+      // trade would revert and the gas would be spent finding that out.
+      setSwapError(new Error('Could not price this trade just now. Try again.'))
+      return
+    }
+
+    /*
+     * A move beyond their own tolerance is shown rather than signed. The floor
+     * is rebuilt from the fresh quote either way, so nobody is unprotected -
+     * what is missing is consent to a number they have not seen.
+     */
+    const shownRaw = acceptedRaw ?? quote?.amountOutRaw
+    if (needsRequoteConfirmation({ shownRaw, freshRaw: fresh.amountOutRaw, slippagePct })) {
+      setPriceMoved({
+        drift: quoteDrift(shownRaw, fresh.amountOutRaw),
+        amountOut: fresh.amountOut,
+        quote: fresh,
+      })
+      setAcceptedRaw(fresh.amountOutRaw)
+      return
+    }
+
+    setPriceMoved(null)
+    setAcceptedRaw(fresh.amountOutRaw)
+
     const call = buildSwapCall({
-      quote,
+      quote: fresh,
       from,
       to,
       amount,
@@ -342,6 +405,7 @@ export function useSwapExecution({
   }, [
     address,
     quote,
+    acceptedRaw,
     from,
     to,
     amount,
@@ -363,6 +427,9 @@ export function useSwapExecution({
       case SWAP_INTENT.approve:
         return approve
       case SWAP_INTENT.swap:
+      // Accepting re-prices once more before signing, which is the point: the
+      // number just shown could itself have moved while it was being read.
+      case SWAP_INTENT.acceptPrice:
         return swap
       case SWAP_INTENT.reset:
         return reset
@@ -385,7 +452,7 @@ export function useSwapExecution({
     failedStep,
     action: {
       ...base,
-      busy: base.busy || guard.isSwitching,
+      busy: base.busy || guard.isSwitching || requoting,
       onClick,
       // A connect intent has no handler here - the host owns the wallet modal.
       needsConnect: base.intent === SWAP_INTENT.connect,
@@ -393,6 +460,8 @@ export function useSwapExecution({
     isInFlight: inFlight,
     inputsLocked: shouldLockInputs(phase),
     balance,
+    priceMoved,
+    isRequoting: requoting,
     balanceRaw: fromBalance.data,
     /*
      * The largest amount that can actually be sent - the whole balance for a

@@ -14,6 +14,8 @@ import {
   blockingReason,
   approvalState,
   needsAllowanceReset,
+  needsRequoteConfirmation,
+  quoteDrift,
   receiptOutcome,
   isApprovalSettling,
   nextAllowancePollMs,
@@ -446,6 +448,16 @@ describe('derivePhase', () => {
     expect(phase.phase).toBe(SWAP_PHASE.approveConfirming)
   })
 
+  it('shows a moved price only while there is still a decision to make', () => {
+    const base = { block: SWAP_BLOCK.none, approval: APPROVAL.satisfied, priceMoved: true, isRejection }
+
+    expect(derivePhase(base).phase).toBe(SWAP_PHASE.priceMoved)
+
+    // A transaction already signed has passed the point of deciding.
+    expect(derivePhase({ ...base, swap: { pending: true } }).phase).toBe(SWAP_PHASE.swapping)
+    expect(derivePhase({ ...base, swap: { hash: '0xabc' } }).phase).toBe(SWAP_PHASE.swapConfirming)
+  })
+
   it('reports idle when something is blocking', () => {
     expect(
       derivePhase({ block: SWAP_BLOCK.wrongChain, approval: APPROVAL.satisfied, isRejection }).phase
@@ -636,6 +648,14 @@ describe('swapAction', () => {
     ).toBe(SWAP_INTENT.swap)
   })
 
+  it('asks for consent by name when the price has moved', () => {
+    const action = swapAction({ phase: SWAP_PHASE.priceMoved, block: SWAP_BLOCK.none })
+
+    expect(action.label).toBe('Accept new price')
+    expect(action.intent).toBe(SWAP_INTENT.acceptPrice)
+    expect(action.disabled).toBe(false)
+  })
+
   it('lets a finished swap start another', () => {
     const action = swapAction({ phase: SWAP_PHASE.success, block: SWAP_BLOCK.none })
 
@@ -802,5 +822,71 @@ describe('balanceState', () => {
     expect(
       balanceState({ isNative: false, balanceRaw: amountInRaw, amountInRaw, isError: true })
     ).toBe(BALANCE.unknown)
+  })
+})
+
+describe('quoteDrift', () => {
+  const shown = parseUnits('100', 18)
+
+  it('reports how much worse a fresh quote is, in percent', () => {
+    expect(quoteDrift(shown, parseUnits('99', 18))).toBeCloseTo(1, 6)
+    expect(quoteDrift(shown, parseUnits('95', 18))).toBeCloseTo(5, 6)
+  })
+
+  it('reports a move in the user favour as negative', () => {
+    // An improvement needs no permission, so it must not read as a loss.
+    expect(quoteDrift(shown, parseUnits('101', 18))).toBeCloseTo(-1, 6)
+  })
+
+  it('is zero when nothing moved', () => {
+    expect(quoteDrift(shown, shown)).toBe(0)
+  })
+
+  it('resolves moves smaller than a percent', () => {
+    // Computed in basis points first: doing it in percent over bigints would
+    // truncate every sub-one-percent move to zero.
+    expect(quoteDrift(shown, parseUnits('99.5', 18))).toBeCloseTo(0.5, 6)
+    expect(quoteDrift(shown, parseUnits('99.9', 18))).toBeCloseTo(0.1, 6)
+  })
+
+  it('has no answer without two figures to compare', () => {
+    expect(quoteDrift(undefined, shown)).toBeNull()
+    expect(quoteDrift(shown, undefined)).toBeNull()
+    expect(quoteDrift(0n, shown)).toBeNull()
+  })
+})
+
+describe('needsRequoteConfirmation', () => {
+  const shownRaw = parseUnits('100', 18)
+
+  it('asks when the price fell further than the tolerance they set', () => {
+    expect(
+      needsRequoteConfirmation({ shownRaw, freshRaw: parseUnits('98', 18), slippagePct: 0.5 })
+    ).toBe(true)
+  })
+
+  it('does not ask for a move inside their own tolerance', () => {
+    // They have already said how much worse than the quote they will accept.
+    expect(
+      needsRequoteConfirmation({ shownRaw, freshRaw: parseUnits('99.7', 18), slippagePct: 0.5 })
+    ).toBe(false)
+  })
+
+  it('never asks when the price improved', () => {
+    expect(
+      needsRequoteConfirmation({ shownRaw, freshRaw: parseUnits('105', 18), slippagePct: 0.5 })
+    ).toBe(false)
+  })
+
+  it('does not ask at exactly the tolerance', () => {
+    expect(
+      needsRequoteConfirmation({ shownRaw, freshRaw: parseUnits('99.5', 18), slippagePct: 0.5 })
+    ).toBe(false)
+  })
+
+  it('cannot ask when there is nothing to compare', () => {
+    expect(
+      needsRequoteConfirmation({ shownRaw: undefined, freshRaw: shownRaw, slippagePct: 0.5 })
+    ).toBe(false)
   })
 })

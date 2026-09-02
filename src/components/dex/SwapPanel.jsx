@@ -468,6 +468,17 @@ export default function SwapPanel({
         </div>
       )}
 
+      {exec.priceMoved && (
+        <div className="swap-warning">
+          <AlertTriangle size={14} />
+          <span>
+            The price moved while you were deciding — {toToken.symbol} out is now{' '}
+            {fmtAmount(exec.priceMoved.amountOut)}, {exec.priceMoved.drift.toFixed(2)}% below what
+            you were quoted. Press again to trade at the new price.
+          </span>
+        </div>
+      )}
+
       {exec.errorMessage && (
         <div className="swap-warning is-danger">
           <AlertTriangle size={14} />

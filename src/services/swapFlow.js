@@ -23,6 +23,7 @@ export const SWAP_PHASE = {
   needsApproval: 'needsApproval',
   approving: 'approving',
   approveConfirming: 'approveConfirming',
+  priceMoved: 'priceMoved',
   ready: 'ready',
   swapping: 'swapping',
   swapConfirming: 'swapConfirming',
@@ -53,6 +54,7 @@ export const SWAP_INTENT = {
   switchChain: 'switchChain',
   approve: 'approve',
   swap: 'swap',
+  acceptPrice: 'acceptPrice',
   reset: 'reset',
 }
 
@@ -302,6 +304,51 @@ export function nextAllowancePollMs(attempt, { base = 1500, max = 3 } = {}) {
 }
 
 /**
+ * How much worse a fresh quote is than the one the user was looking at.
+ *
+ * Positive means the output fell - the trade got worse for them. Negative
+ * means it improved, which needs no permission. Measured in percent against
+ * what was shown, in integer arithmetic scaled by a hundred so a float cannot
+ * round a move into or out of the threshold.
+ *
+ * @param {bigint} shownRaw The output the user last saw.
+ * @param {bigint} freshRaw The output as it is now.
+ * @returns {number|null} Percent worse, or null when it cannot be compared.
+ */
+export function quoteDrift(shownRaw, freshRaw) {
+  if (typeof shownRaw !== 'bigint' || typeof freshRaw !== 'bigint') return null
+  if (shownRaw <= 0n) return null
+
+  // Scaled to basis points first: bigint division truncates, and doing it in
+  // percent directly would report every move under one percent as zero.
+  const bps = ((shownRaw - freshRaw) * 10_000n) / shownRaw
+  return Number(bps) / 100
+}
+
+/**
+ * Whether a moved price needs looking at before it is signed.
+ *
+ * The floor is always rebuilt from the fresh quote, so a user is never
+ * unprotected by a move - what is at stake is consent. They pressed a button
+ * next to a number, and if that number has since fallen by more than the
+ * tolerance they themselves set, signing it anyway trades something they did
+ * not agree to.
+ *
+ * Tying the threshold to their own slippage setting is what makes it defensible
+ * rather than arbitrary: they have already said how much worse than the quote
+ * they will accept.
+ */
+export function needsRequoteConfirmation({ shownRaw, freshRaw, slippagePct }) {
+  const drift = quoteDrift(shownRaw, freshRaw)
+  if (drift === null) return false
+
+  const tolerance = Number(slippagePct)
+  if (!Number.isFinite(tolerance)) return false
+
+  return drift > tolerance
+}
+
+/**
  * The phase, from everything known at once.
  *
  * First match wins, and the order carries two rules worth stating. The swap
@@ -312,7 +359,15 @@ export function nextAllowancePollMs(attempt, { base = 1500, max = 3 } = {}) {
  * `approve` and `swap` are plain records - { pending, hash, outcome, error } -
  * rather than wagmi objects, so the whole table is drivable from a test.
  */
-export function derivePhase({ block, approval, approve = {}, swap = {}, approvalSettling = false, isRejection }) {
+export function derivePhase({
+  block,
+  approval,
+  approve = {},
+  swap = {},
+  approvalSettling = false,
+  priceMoved = false,
+  isRejection,
+}) {
   const rejected = typeof isRejection === 'function' ? isRejection : () => false
 
   if (swap.outcome === 'success') return { phase: SWAP_PHASE.success, failedStep: null }
@@ -335,6 +390,13 @@ export function derivePhase({ block, approval, approve = {}, swap = {}, approval
   if (approve.pending) return { phase: SWAP_PHASE.approving, failedStep: null }
 
   if (approvalSettling) return { phase: SWAP_PHASE.approveConfirming, failedStep: null }
+
+  /*
+   * Below everything in flight, above everything at rest: a price that moved
+   * matters only while there is still a decision to make about it, and a
+   * transaction already signed has passed that point.
+   */
+  if (priceMoved) return { phase: SWAP_PHASE.priceMoved, failedStep: null }
 
   if (block && block !== SWAP_BLOCK.none) return { phase: SWAP_PHASE.idle, failedStep: null }
 
@@ -448,6 +510,10 @@ export function swapAction({ phase, block, fromSymbol = 'token', failedStep = nu
         failedStep === 'approve' ? SWAP_INTENT.approve : SWAP_INTENT.swap,
         { tone: 'danger' }
       )
+    case SWAP_PHASE.priceMoved:
+      // Their own press is the consent, so the label has to say what it is
+      // consenting to rather than repeating "Swap".
+      return idle('Accept new price', SWAP_INTENT.acceptPrice, { tone: 'warn' })
     case SWAP_PHASE.ready:
       return idle('Swap', SWAP_INTENT.swap)
     default:
