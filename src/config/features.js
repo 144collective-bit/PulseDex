@@ -23,11 +23,24 @@ export const FEATURES = {
   markets: false,
 
   /** The DEX terminal. When false the DEX tab shows the launch notice instead.
-   *  The terminal reads live quotes from the PulseX router, but there is no
-   *  signing path anywhere in the app - no wallet client, no approvals, no
-   *  swap call - so nothing here can execute a trade. Wiring that up waits on
-   *  an explicit go-ahead. */
+   *  The terminal reads live quotes from the PulseX router. Whether it can also
+   *  execute a trade is a separate flag - see `dexSwapLive`. */
   dexLive: true,
+
+  /** Signing in the swap panel: approvals and the swap call itself.
+   *
+   *  The whole path is built and the decision layer is tested, but it stays
+   *  dark until three things land that a trader would otherwise pay for: a
+   *  balance check with gas headroom, so selling every last PLS cannot produce
+   *  a transaction that has nothing left to pay for itself; a re-quote
+   *  immediately before signing, since a floor derived from a twelve-second-old
+   *  quote reverts against a pool that has moved; and handling for tokens that
+   *  tax transfers, which `getAmountsOut` over-quotes, putting the floor above
+   *  what can actually arrive.
+   *
+   *  With this false the panel quotes exactly as before and the button reads
+   *  "Trading not enabled". Nothing can be signed. */
+  dexSwapLive: false,
 
   /** The Trenches tab shows the live pump.tires bonding-curve board. When
    *  false it falls back to the curated ecosystem link directory, which is

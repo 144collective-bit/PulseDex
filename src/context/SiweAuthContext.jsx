@@ -1,16 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { useAccount, useConnect, useSignMessage, useConfig } from 'wagmi'
+// Shared with the swap flow, which has to draw the same line between a
+// declined prompt and a genuine failure.
+import { isRejection } from '../utils/walletErrors'
 import { getAccount } from 'wagmi/actions'
 import { buildSiweMessage } from '../utils/siwe'
 import { fetchWithTimeout } from '../utils/http'
 
 const SiweAuthContext = createContext(null)
-
-/** The wallet prompt was dismissed, rather than anything going wrong. */
-const isRejection = (err) =>
-  err?.code === 4001 ||
-  err?.cause?.code === 4001 ||
-  /user rejected|user denied|rejected the request|cancell?ed/i.test(err?.message || '')
 
 /** wagmi refuses a connect call when that connector already holds a session. */
 const isAlreadyConnected = (err) =>

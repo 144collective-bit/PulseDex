@@ -1,10 +1,22 @@
-import { useState } from 'react'
-import { ArrowDown, Settings2, ChevronDown, Info, AlertTriangle, Loader2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import {
+  ArrowDown,
+  Settings2,
+  ChevronDown,
+  Info,
+  AlertTriangle,
+  CheckCircle2,
+  ExternalLink,
+  Loader2,
+} from 'lucide-react'
 import TokenLogo from '../TokenLogo'
 import TokenSelectModal from './TokenSelectModal'
 import { useSwapQuote } from '../../hooks/useSwapQuote'
 import { useTokenUsdPrice } from '../../hooks/useTokenUsdPrice'
 import { useResolvedToken } from '../../hooks/useResolvedToken'
+import { useSwapExecution } from '../../hooks/useSwapExecution'
+import { SWAP_PHASE } from '../../services/swapFlow'
+import { EXPLORER_NAME } from '../../utils/explorer'
 import { minimumReceived } from '../../services/dex'
 import {
   CURATED_TOKENS,
@@ -102,11 +114,38 @@ export default function SwapPanel({
   const { data: fromPrice } = useTokenUsdPrice(fromToken)
   const { data: toPrice } = useTokenUsdPrice(toToken)
 
+  /*
+   * Quotes stop refreshing while a transaction is outstanding.
+   *
+   * Routed through state rather than read straight from the execution hook,
+   * because that hook needs the quote and the quote needs to know the phase -
+   * a cycle within one render. Crossing a render breaks it, and the frame of
+   * lag costs nothing: the call that gets signed is built from a snapshot
+   * taken when the button is pressed, not from whatever is on screen.
+   */
+  const [txLock, setTxLock] = useState(false)
+
   const { data: quote, isFetching, isError } = useSwapQuote({
     from: fromToken,
     to: toToken,
     amount,
+    enabled: !txLock,
   })
+
+  const exec = useSwapExecution({
+    from: fromToken,
+    to: toToken,
+    amount,
+    quote,
+    slippagePct: slippage,
+    deadlineMinutes: deadline,
+    isQuoteFetching: isFetching,
+    isQuoteError: isError,
+  })
+
+  useEffect(() => {
+    setTxLock(exec.isInFlight)
+  }, [exec.isInFlight])
 
   const flip = () => {
     setFromPick(toToken)
@@ -235,6 +274,7 @@ export default function SwapPanel({
           <input
             type="text"
             inputMode="decimal"
+            readOnly={exec.inputsLocked}
             className="swap-amount"
             placeholder="0.0"
             value={amount}
@@ -243,7 +283,12 @@ export default function SwapPanel({
               if (v === '' || /^\d*\.?\d*$/.test(v)) setAmount(v)
             }}
           />
-          <button type="button" className="swap-token-btn" onClick={() => setPicking('from')}>
+          <button
+            type="button"
+            className="swap-token-btn"
+            disabled={exec.inputsLocked}
+            onClick={() => setPicking('from')}
+          >
             <TokenLogo
               symbol={fromToken.symbol}
               address={fromToken.isNative ? undefined : fromToken.address}
@@ -257,7 +302,13 @@ export default function SwapPanel({
         {payUsd && <span className="swap-usd">{payUsd}</span>}
       </div>
 
-      <button type="button" className="swap-flip" onClick={flip} aria-label="Swap direction">
+      <button
+        type="button"
+        className="swap-flip"
+        disabled={exec.inputsLocked}
+        onClick={flip}
+        aria-label="Swap direction"
+      >
         <ArrowDown size={15} />
       </button>
 
@@ -276,7 +327,12 @@ export default function SwapPanel({
           >
             {quote ? fmtAmount(quote.amountOut) : '0.0'}
           </span>
-          <button type="button" className="swap-token-btn" onClick={() => setPicking('to')}>
+          <button
+            type="button"
+            className="swap-token-btn"
+            disabled={exec.inputsLocked}
+            onClick={() => setPicking('to')}
+          >
             <TokenLogo
               symbol={toToken.symbol}
               address={toToken.isNative ? undefined : toToken.address}
@@ -336,18 +392,86 @@ export default function SwapPanel({
         </div>
       )}
 
-      {/*
-        Deliberately inert. The panel quotes live prices but cannot sign
-        anything - enabling the swap means approvals, transaction handling and a
-        signing flow, none of which should ship untested behind a mockup.
-      */}
-      <button type="button" className="swap-action" disabled>
-        Swap coming soon
+      {exec.block === 'wrongChain' && (
+        <div className="swap-warning">
+          <AlertTriangle size={14} />
+          <span>Your wallet is on another network. Switch to PulseChain to trade.</span>
+        </div>
+      )}
+
+      <button
+        type="button"
+        className={`swap-action ${exec.action.busy ? 'is-busy' : ''} ${
+          exec.action.tone === 'warn' ? 'is-secondary' : ''
+        }`}
+        disabled={exec.action.disabled}
+        onClick={exec.action.onClick}
+      >
+        {exec.action.busy && <Loader2 size={15} className="dex-spin" />}
+        <span>{exec.action.label}</span>
       </button>
 
+      {(exec.approveHash || exec.swapHash) && (
+        <div className="swap-tx">
+          {exec.approveHash && (
+            <div className="swap-tx-row">
+              <span>Approval</span>
+              <span className="swap-tx-state">
+                {exec.phase === SWAP_PHASE.approveConfirming ? 'Confirming…' : 'Confirmed'}
+              </span>
+              <a
+                className="swap-tx-link"
+                href={exec.explorer.approve}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {EXPLORER_NAME}
+                <ExternalLink size={11} />
+              </a>
+            </div>
+          )}
+          {exec.swapHash && (
+            <div className="swap-tx-row">
+              <span>Swap</span>
+              <span className="swap-tx-state">
+                {exec.phase === SWAP_PHASE.swapConfirming ? 'Confirming…' : 'Settled'}
+              </span>
+              <a
+                className="swap-tx-link"
+                href={exec.explorer.swap}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {EXPLORER_NAME}
+                <ExternalLink size={11} />
+              </a>
+            </div>
+          )}
+        </div>
+      )}
+
+      {exec.errorMessage && (
+        <div className="swap-warning is-danger">
+          <AlertTriangle size={14} />
+          <span>{exec.errorMessage}</span>
+        </div>
+      )}
+
+      {exec.phase === SWAP_PHASE.success && (
+        <div className="swap-warning is-success">
+          <CheckCircle2 size={14} />
+          {/* No amount is quoted here on purpose: the fee-on-transfer router
+              methods return nothing, so a receipt proves the trade cleared its
+              floor, not what actually arrived. */}
+          <span>Swap confirmed. Check your wallet balance.</span>
+        </div>
+      )}
+
       <p className="swap-disclaimer">
-        Quotes are live from the PulseX router. Trading is not enabled yet — this
-        panel cannot sign or send a transaction.
+        Quotes are live from the PulseX router.{' '}
+        {exec.block === 'disabled'
+          ? 'Trading is not enabled yet — this panel cannot sign or send a transaction.'
+          : 'Trades are signed in your own wallet and settle on PulseChain.'}
       </p>
 
       <TokenSelectModal

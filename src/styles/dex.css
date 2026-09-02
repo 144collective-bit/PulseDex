@@ -807,6 +807,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .swap-amount.is-output { animation: none; }
+  /* The spinner is now the main signal that a signature is outstanding, so it
+     has to stop too rather than being the one thing left moving. */
+  .dex-spin { animation: none; }
 }
 
 /* --------------------------------------------------------------------------
@@ -947,6 +950,11 @@
 .swap-panel.is-compact .swap-detail { padding: 11px 12px; gap: 6px; }
 .swap-panel.is-compact .swap-detail-row { font-size: 11px; }
 .swap-panel.is-compact .swap-action { padding: 12px; font-size: 13.5px; }
+.swap-panel.is-compact .swap-tx { padding: 8px 10px; gap: 5px; }
+.swap-panel.is-compact .swap-tx-row { font-size: 10.5px; }
+/* Also tightens the price-impact and no-route notices, which until now
+   rendered at full desktop padding inside a sidebar. */
+.swap-panel.is-compact .swap-warning { padding: 9px 11px; font-size: 11px; gap: 7px; }
 .swap-panel.is-compact .swap-disclaimer { font-size: 10px; }
 .swap-panel.is-compact .swap-flip { width: 30px; height: 30px; margin: -12px auto; }
 
@@ -2047,3 +2055,91 @@
   background: var(--pulse-cyan);
   border-radius: var(--radius-full);
 }
+
+/* ------------------------------------------------------- swap execution */
+
+/*
+ * A pending state needs a tone of its own.
+ *
+ * The panel had two: yellow for a caution and red for a failure. Neither says
+ * "this is happening" - showing a signature in progress in yellow reads as a
+ * problem. Cyan is what the app already uses for something live, and it is what
+ * the spinner is.
+ */
+.swap-warning.is-info {
+  color: var(--pulse-cyan);
+  background: var(--pulse-cyan-bg);
+  border-color: rgba(0, 229, 255, 0.28);
+}
+
+.swap-warning.is-success {
+  color: var(--pulse-green);
+  background: var(--pulse-green-bg);
+  border-color: rgba(0, 229, 255, 0.28);
+}
+
+/* The action button had no display of its own, so a spinner beside a label had
+   nothing to align against. */
+.swap-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* .dex-spin is cyan, which is invisible on the cyan-to-green gradient this
+   button is painted with. */
+.swap-action .dex-spin {
+  color: currentColor;
+}
+
+.swap-action.is-busy {
+  opacity: 0.75;
+  cursor: progress;
+}
+
+/* Switching network is not the trade, and should not wear the trade's colour. */
+.swap-action.is-secondary {
+  color: #04070d;
+  background: var(--pulse-yellow);
+}
+
+/* Submitted transactions. The only proof a user has that anything happened. */
+.swap-tx {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.26);
+  border: 1px solid var(--dx-hairline);
+  border-radius: var(--radius-md);
+}
+
+.swap-tx-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: var(--font-instrument);
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.swap-tx-state {
+  margin-left: auto;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.swap-tx-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--pulse-cyan);
+  text-decoration: none;
+}
+
+.swap-tx-link:hover {
+  text-decoration: underline;
+}
+
