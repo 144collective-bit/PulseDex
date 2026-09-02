@@ -35,6 +35,10 @@ export const config = {
    * anyone reconstruct the site without ever seeing the form.
    */
   matcher: ['/((?!_vercel|_next/static).*)'],
+
+  // The edge runtime is deprecated for middleware; Vercel warns about it at
+  // build time and points here.
+  runtime: 'nodejs',
 }
 
 const COOKIE_BASE = `Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${GATE_TTL_SECONDS}`
