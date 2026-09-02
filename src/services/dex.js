@@ -195,6 +195,17 @@ export async function quoteSwap({ from, to, amount }) {
   return {
     amountIn: parsed,
     amountOut: outAmount,
+    /*
+     * The output before it was turned into a float, because the slippage floor
+     * has to be derived from this rather than from `amountOut`.
+     *
+     * formatUnits then parseFloat is lossy: a float carries about seventeen
+     * significant digits and an 18-decimal balance can need more, so the
+     * round trip quietly drops the low end. That is invisible in a display
+     * figure and unacceptable in a number that gets signed, so the raw value
+     * is carried through and the floor is computed in integers.
+     */
+    amountOutRaw: best.raw,
     rate,
     impact,
     path: best.path,

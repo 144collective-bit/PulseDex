@@ -70,6 +70,85 @@ export const ROUTER_ABI = [
   },
 ]
 
+/*
+ * The write half, kept in its own ABI on purpose.
+ *
+ * Quoting uses ROUTER_ABI above, which holds one view function and therefore
+ * cannot express a state-changing call at all. Keeping these separate means
+ * the quoting path is structurally incapable of moving funds, rather than
+ * merely not doing so today.
+ *
+ * All three are the SupportingFeeOnTransferTokens variants. Taxed tokens are
+ * routine on PulseChain and the plain methods revert against them, because the
+ * amount the pool receives is less than the amount sent. The trade-off is that
+ * these return nothing rather than the amounts, so a filled trade is confirmed
+ * by the balance that arrived, not by a return value.
+ */
+export const ROUTER_SWAP_ABI = [
+  {
+    name: 'swapExactETHForTokensSupportingFeeOnTransferTokens',
+    type: 'function',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'amountOutMin', type: 'uint256' },
+      { name: 'path', type: 'address[]' },
+      { name: 'to', type: 'address' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    name: 'swapExactTokensForETHSupportingFeeOnTransferTokens',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'amountIn', type: 'uint256' },
+      { name: 'amountOutMin', type: 'uint256' },
+      { name: 'path', type: 'address[]' },
+      { name: 'to', type: 'address' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    name: 'swapExactTokensForTokensSupportingFeeOnTransferTokens',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'amountIn', type: 'uint256' },
+      { name: 'amountOutMin', type: 'uint256' },
+      { name: 'path', type: 'address[]' },
+      { name: 'to', type: 'address' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+]
+
+/** Just the allowance surface - reading what is approved, and changing it. */
+export const ERC20_ALLOWANCE_ABI = [
+  {
+    name: 'allowance',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' },
+    ],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    name: 'approve',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'spender', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [{ type: 'bool' }],
+  },
+]
+
 /**
  * Curated tokens, shown first in the picker. Anything else can still be traded
  * by pasting an address, but it is flagged as unverified - three separate
