@@ -2,7 +2,7 @@ import { parseUnits } from 'viem'
 import {
   ERC20_ALLOWANCE_ABI,
   ROUTER_SWAP_ABI,
-  NATIVE_PLS,
+  NATIVE_PLS, DEFAULT_DEADLINE
 } from '../config/dex'
 
 /**
@@ -75,7 +75,32 @@ export function needsApproval(from) {
 export function minimumReceivedRaw(amountOutRaw, slippagePct) {
   if (typeof amountOutRaw !== 'bigint' || amountOutRaw <= 0n) return 0n
 
-  const bps = BigInt(Math.round(Number(slippagePct) * 100))
+  /*
+   * Checked before the conversion, because BigInt(NaN) throws rather than
+   * returning anything. `buildSwapCall` calls this outside any try/catch, so a
+   * throw here leaves the click handler as an unhandled rejection and the swap
+   * button silently stops responding.
+   *
+   * The panel clamps its slippage input, so nothing reaches this today. But the
+   * clamp lives in a component this project cannot render in a test, while the
+   * arithmetic it guards is the part that decides what a trade is worth - which
+   * is the wrong way round to rely on.
+   */
+  /*
+   * Finite before anything else, because BigInt(NaN) and BigInt(Infinity) throw
+   * rather than returning a value - and `buildSwapCall` calls this outside any
+   * try/catch, so the throw escapes the click handler as an unhandled rejection
+   * and the swap button quietly stops working.
+   *
+   * Nothing reaches it today: the panel clamps its slippage input to
+   * [0.01, 50]. But that clamp lives in a component this project has no way to
+   * render in a test, while the arithmetic it protects is the tested layer,
+   * and a money function should not depend on a guard it cannot see.
+   */
+  const pct = Number(slippagePct)
+  if (!Number.isFinite(pct)) return 0n
+
+  const bps = BigInt(Math.round(pct * 100))
   // A tolerance at or beyond 100% would floor at zero, which is a swap with no
   // protection at all; a negative one would demand more than the quote.
   if (bps < 0n || bps >= 10_000n) return 0n
@@ -93,8 +118,25 @@ export function minimumReceivedRaw(amountOutRaw, slippagePct) {
  * @param {number} nowMs   Milliseconds, as Date.now() gives them.
  * @param {number} minutes Minutes of validity.
  */
+/** The panel's own lower bound, kept here so the arithmetic enforces it too. */
+const MIN_DEADLINE_MINUTES = 1
+
 export function deadlineFrom(nowMs, minutes) {
-  return BigInt(Math.floor(nowMs / 1000) + Math.round(minutes * 60))
+  /*
+   * A deadline the router has already passed is a guaranteed revert with the
+   * gas spent finding out, and a window of zero expires in the same block it
+   * is mined in. Neither is reachable from the panel, which clamps to 1-120
+   * minutes - this is here because the two ways to get it wrong both cost the
+   * user real money, and because BigInt(NaN) throws out of a click handler
+   * that has nothing to catch it.
+   */
+  const mins = Number(minutes)
+  const window = Number.isFinite(mins) && mins >= MIN_DEADLINE_MINUTES ? mins : DEFAULT_DEADLINE
+
+  const now = Number(nowMs)
+  const seconds = Number.isFinite(now) ? Math.floor(now / 1000) : Math.floor(Date.now() / 1000)
+
+  return BigInt(seconds + Math.round(window * 60))
 }
 
 /**
