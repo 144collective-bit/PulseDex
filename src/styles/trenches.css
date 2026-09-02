@@ -1364,23 +1364,31 @@
   .trenches-live-page .trench-ticker { display: none; }
 
   /*
-   * Three columns in portrait, with the two live rails stacked beneath them.
+   * Two columns in portrait, with graduations across the full width beneath.
    *
-   * The board used to collapse behind a switcher that showed one panel at a
-   * time, which hid the comparison the board exists to make - new launches
-   * against King of the Hill against graduations, side by side. Three columns
-   * survive a portrait phone because the row folds into a stack at this same
-   * width (see "Narrow row" further down), so nothing has to fit sideways into
-   * a 112px track.
+   * The board must not collapse behind a switcher that shows one panel at a
+   * time - that hides the comparison the board exists to make. But three
+   * abreast on a phone left each track near 112px, which is under the width a
+   * token name needs: rows read "Biscu...", "INJEC...", "JABRO...", and a
+   * board of truncated names is not a board anyone can scan.
+   *
+   * Two keeps the comparison that matters most - what is launching against
+   * what is about to graduate - at a width where the names survive. The
+   * outcome column goes underneath at full width, which suits it: a graduated
+   * row carries the most to say, with its badges and its market cap.
+   *
+   * The cost is a taller page. That is the right way round - scrolling is
+   * cheap, and guessing at a name that has been cut in half is not.
    */
   .trenches-board {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    grid-template-rows: auto auto auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: auto auto auto auto;
     grid-template-areas:
-      'new koth grad'
-      'activity activity activity'
-      'movers movers movers';
+      'new koth'
+      'grad grad'
+      'activity activity'
+      'movers movers';
     gap: 8px;
     /* The board grows with the page rather than being pinned to one screen. */
     height: auto;
@@ -1388,7 +1396,15 @@
   }
 
   .trenches-slot { display: flex; min-height: 0; }
-  .slot-new, .slot-koth, .slot-grad { grid-row: 1; }
+  .slot-new, .slot-koth { grid-row: 1; }
+  .slot-grad { grid-row: 2; }
+
+  /*
+   * Graduations has the whole width, so it can afford its real name. The two
+   * above it are still narrow enough to need the short one.
+   */
+  .slot-grad .tph-title-full { display: inline; }
+  .slot-grad .tph-title-short { display: none; }
 
   /*
    * Each panel gets a fixed height and scrolls its own list, the same as on a
