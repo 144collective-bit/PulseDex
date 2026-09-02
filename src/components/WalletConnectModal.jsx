@@ -14,6 +14,7 @@ import {
 import { pulsechain } from '../config/pulsechain'
 import { hasWalletConnect } from '../config/wagmi'
 import { useEscapeKey } from '../hooks/useEscapeKey'
+import { matchesWallet, detectWallet, walletHandoffLink } from '../utils/walletTargets'
 
 // Curated supported wallet definitions with detection checks, official download links & SVGs
 const SUPPORTED_WALLETS = [
@@ -24,9 +25,7 @@ const SUPPORTED_WALLETS = [
     badgeColor: 'blue',
     desc: 'Game-changing DeFi wallet with built-in multi-chain routing & security audit checks.',
     downloadUrl: 'https://rabby.io',
-    detect: () =>
-      typeof window !== 'undefined' &&
-      Boolean(window.rabby || window.ethereum?.isRabby),
+    detect: () => detectWallet('rabby'),
     icon: (
       <svg width="28" height="28" viewBox="0 0 40 40" fill="none">
         <rect width="40" height="40" rx="10" fill="#8697FF" fillOpacity="0.15" />
@@ -48,9 +47,7 @@ const SUPPORTED_WALLETS = [
     badgeColor: 'amber',
     desc: 'The classic Web3 wallet extension and mobile app for PulseChain & EVM.',
     downloadUrl: 'https://metamask.io/download/',
-    detect: () =>
-      typeof window !== 'undefined' &&
-      Boolean(window.ethereum?.isMetaMask && !window.ethereum?.isRabby && !window.ethereum?.isInternetMoney),
+    detect: () => detectWallet('metamask'),
     icon: (
       <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
         <rect width="32" height="32" rx="8" fill="#F6851B" fillOpacity="0.15" />
@@ -76,9 +73,7 @@ const SUPPORTED_WALLETS = [
     badgeColor: 'green',
     desc: 'Built specifically for PulseChain by the community. Native multi-chain DEX swaps and accounts.',
     downloadUrl: 'https://internetmoney.io',
-    detect: () =>
-      typeof window !== 'undefined' &&
-      Boolean(window.internetmoney || window.ethereum?.isInternetMoney),
+    detect: () => detectWallet('internetmoney'),
     icon: (
       <svg width="28" height="28" viewBox="0 0 40 40" fill="none">
         <rect width="40" height="40" rx="10" fill="#00FF9D" fillOpacity="0.15" />
@@ -93,15 +88,34 @@ const SUPPORTED_WALLETS = [
     ),
   },
   {
+    id: 'okx',
+    name: 'OKX Wallet',
+    badge: 'Multi-chain',
+    badgeColor: 'blue',
+    desc: 'Exchange-backed wallet with its own in-app browser on phones.',
+    downloadUrl: 'https://web3.okx.com/download',
+    detect: () => detectWallet('okx'),
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 40 40" fill="none">
+        <rect width="40" height="40" rx="10" fill="#FFFFFF" fillOpacity="0.08" />
+        <g fill="#FFFFFF">
+          <rect x="9" y="9" width="6.5" height="6.5" rx="1" />
+          <rect x="24.5" y="9" width="6.5" height="6.5" rx="1" />
+          <rect x="16.75" y="16.75" width="6.5" height="6.5" rx="1" />
+          <rect x="9" y="24.5" width="6.5" height="6.5" rx="1" />
+          <rect x="24.5" y="24.5" width="6.5" height="6.5" rx="1" />
+        </g>
+      </svg>
+    ),
+  },
+  {
     id: 'zkxwallet',
     name: 'ZKX Wallet',
     badge: 'Account Abstraction',
     badgeColor: 'purple',
     desc: 'Next-generation Web3 smart account wallet with native PulseChain support.',
     downloadUrl: 'https://zkxwallet.com',
-    detect: () =>
-      typeof window !== 'undefined' &&
-      Boolean(window.zkx || window.ethereum?.isZKX),
+    detect: () => detectWallet('zkxwallet'),
     icon: (
       <div className="zkx-logo-img-wrapper">
         <img
@@ -152,36 +166,33 @@ const MOBILE_HANDOFF = [
     id: 'metamask-app',
     name: 'MetaMask',
     desc: 'Opens this page inside the MetaMask app.',
-    link: () => `https://metamask.app.link/dapp/${window.location.host}${window.location.pathname}`,
+    link: () => walletHandoffLink('metamask-app', window.location.href),
   },
   {
     id: 'trust-app',
     name: 'Trust Wallet',
     desc: 'Opens this page inside Trust Wallet.',
-    link: () =>
-      `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(window.location.href)}`,
+    link: () => walletHandoffLink('trust-app', window.location.href),
+  },
+  {
+    id: 'okx-app',
+    name: 'OKX Wallet',
+    desc: 'Opens this page inside the OKX app.',
+    /*
+     * Two encodings, and both are needed. The inner one protects the page URL
+     * as a parameter of the okx:// link; the outer protects that whole link as
+     * a parameter of the https one. Skipping either truncates the address at
+     * its first query separator and the wallet opens on its home screen.
+     */
+    link: () => walletHandoffLink('okx-app', window.location.href),
   },
   {
     id: 'coinbase-app',
     name: 'Coinbase Wallet',
     desc: 'Opens this page inside Coinbase Wallet.',
-    link: () => `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(window.location.href)}`,
+    link: () => walletHandoffLink('coinbase-app', window.location.href),
   },
 ]
-
-// Matches a wagmi connector (manually configured or EIP-6963 auto-discovered)
-// against one of our curated wallet definitions by id/name substring.
-function matchesWallet(connector, walletId) {
-  const id = connector.id?.toLowerCase() || ''
-  const name = connector.name?.toLowerCase() || ''
-
-  if (walletId === 'metamask') return id.includes('metamask') || name.includes('metamask')
-  if (walletId === 'walletconnect') return id === 'walletConnect' || name.includes('walletconnect')
-  if (walletId === 'rabby') return id.includes('rabby') || name.includes('rabby')
-  if (walletId === 'internetmoney') return id.includes('internet') || name.includes('internet')
-  if (walletId === 'zkxwallet') return id.includes('zkx') || name.includes('zkx')
-  return false
-}
 
 export default function WalletConnectModal({ isOpen, onClose }) {
   useEscapeKey(isOpen, onClose)
@@ -455,7 +466,7 @@ export default function WalletConnectModal({ isOpen, onClose }) {
                           <span className="wallet-badge badge-blue">WalletConnect</span>
                         </div>
                         <span className="wallet-option-desc">
-                          Trust, Rainbow, Rabby and most other mobile wallets.
+                          Rabby, Internet Money, Trust, Rainbow and most other mobile wallets.
                         </span>
                       </div>
                     </div>

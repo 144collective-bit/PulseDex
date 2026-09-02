@@ -88,13 +88,39 @@ export const wagmiConfig = createConfig({
       shimDisconnect: true,
     }),
 
-    // 5. Standard Injected & EIP-6963 Multi-Injected Discovery
+    /*
+     * 5. OKX Wallet.
+     *
+     * Reached through its own namespace first. OKX publishes `window.okxwallet`
+     * and only takes `window.ethereum` when it is the sole extension installed,
+     * so keying off the shared object alone would miss it on any machine that
+     * also has MetaMask - which is most of them.
+     *
+     * Both spellings of the flag are checked because the extension and OKX's
+     * own documentation do not agree on the casing.
+     */
+    injected({
+      target() {
+        const eth = typeof window !== 'undefined' ? window.ethereum : undefined
+        return {
+          id: 'okxWallet',
+          name: 'OKX Wallet',
+          provider:
+            typeof window !== 'undefined'
+              ? window.okxwallet || (eth?.isOKXWallet || eth?.isOkxWallet ? eth : undefined)
+              : undefined,
+        }
+      },
+      shimDisconnect: true,
+    }),
+
+    // 6. Standard Injected & EIP-6963 Multi-Injected Discovery
     injected({
       shimDisconnect: true,
     }),
 
     /*
-     * 6. MetaMask, over its own SDK rather than through the window - but only
+     * 7. MetaMask, over its own SDK rather than through the window - but only
      *    where the window has nothing to offer.
      *
      * On a phone it opens the MetaMask app, asks there, and returns: the only
@@ -112,7 +138,7 @@ export const wagmiConfig = createConfig({
      */
     ...(typeof window !== 'undefined' && !window.ethereum ? [metaMask({ dappMetadata })] : []),
 
-    // 7. WalletConnect, when a project id has been configured. Reaches every
+    // 8. WalletConnect, when a project id has been configured. Reaches every
     //    other mobile wallet: a QR on desktop, a deep link on a phone.
     ...(walletConnectProjectId
       ? [
