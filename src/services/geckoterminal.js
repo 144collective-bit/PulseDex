@@ -29,6 +29,14 @@ const CACHE_TTL = 30_000
 
 /** Chart intervals, mapped to the timeframe and aggregate the API expects. */
 export const CHART_INTERVALS = [
+  /*
+   * One minute is the finest the source offers and it is verified against the
+   * live API, not assumed. A weekly candle is deliberately absent: the same
+   * check returns 400 for a seven-day aggregate and `week` is not one of the
+   * timeframes this endpoint takes, so offering it would only produce a button
+   * that fails.
+   */
+  { id: '1m', label: '1M', timeframe: 'minute', aggregate: 1, limit: 300 },
   { id: '5m', label: '5M', timeframe: 'minute', aggregate: 5, limit: 288 },
   { id: '15m', label: '15M', timeframe: 'minute', aggregate: 15, limit: 288 },
   { id: '1h', label: '1H', timeframe: 'hour', aggregate: 1, limit: 240 },

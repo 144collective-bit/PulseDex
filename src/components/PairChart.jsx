@@ -11,6 +11,7 @@ import {
 } from 'lightweight-charts'
 import { Loader2, AlertTriangle, RefreshCw } from 'lucide-react'
 import { getPoolCandles, CHART_INTERVALS, DEFAULT_INTERVAL } from '../services/geckoterminal'
+import { legendForCandle, activeCandle, DIRECTION } from '../utils/chartLegend'
 import { EMA_PERIODS, SMA_PERIODS, RSI_BANDS, PANES } from '../config/chartTools'
 import { sma, ema, bollinger, rsi, macd } from '../utils/indicators'
 import ChartToolbar from './ChartToolbar'
@@ -105,6 +106,9 @@ export default function PairChart({
   const disposedRef = useRef(false)
 
   const [interval, setInterval] = useState(DEFAULT_INTERVAL)
+  // The candle under the crosshair. Null means the pointer is off the chart,
+  // which the readout treats as "the latest" rather than as nothing.
+  const [hoveredTime, setHoveredTime] = useState(null)
   const { settings, update, toggleMa, togglePane, setRsiPeriod, reset } = useChartSettings()
   const draw = useChartDrawings(pairAddress)
 
@@ -279,15 +283,35 @@ export default function PairChart({
     })
 
     chartRef.current = chart
+
+    /*
+     * Track which candle the pointer is over, for the readout.
+     *
+     * `param.time` is absent whenever the crosshair leaves the data - off the
+     * plot, or past the last bar - and that is reported as null rather than
+     * held at the last value, so the readout falls back to the latest candle
+     * instead of freezing on whatever was under the cursor when it left.
+     */
+    const onCrosshair = (param) => {
+      if (disposedRef.current) return
+      setHoveredTime(param?.time ?? null)
+    }
+    chart.subscribeCrosshairMove(onCrosshair)
+
     return () => {
       // Flagged before the removal, not after, so nothing can reach a chart
       // that is mid-teardown.
       disposedRef.current = true
+      chart.unsubscribeCrosshairMove(onCrosshair)
       chart.remove()
       chartRef.current = null
       seriesRef.current = { price: null, overlays: [], panes: [] }
     }
   }, [measured])
+
+  // Derived rather than stored: the readout is a view of the candles, and
+  // keeping a second copy in state is how the two drift apart.
+  const legend = legendForCandle(activeCandle(candles, hoveredTime))
 
   /*
    * Own the set of series.
@@ -634,6 +658,55 @@ export default function PairChart({
         </ChartDrawingTools>
 
         <div ref={containerRef} className="pair-chart-canvas" />
+
+        {/* The OHLC readout.
+            Sits over the plot rather than in the bar above it, because it
+            describes whatever the pointer is on and belongs next to it. Pointer
+            events pass straight through - a readout that swallowed the
+            crosshair would blank itself wherever it sat. */}
+        {legend && (
+          <div className="pair-chart-legend" aria-live="off">
+            <span className="pcl-pair">
+              {baseSymbol}/{quoteSymbol}
+            </span>
+            <span className="pcl-tf">{interval.toUpperCase()}</span>
+            <span className="pcl-cell">
+              <em>O</em>
+              {legend.open}
+            </span>
+            <span className="pcl-cell">
+              <em>H</em>
+              {legend.high}
+            </span>
+            <span className="pcl-cell">
+              <em>L</em>
+              {legend.low}
+            </span>
+            <span className="pcl-cell">
+              <em>C</em>
+              {legend.close}
+            </span>
+            {legend.changeLabel && (
+              <span
+                className={`pcl-change ${
+                  legend.direction === DIRECTION.up
+                    ? 'is-up'
+                    : legend.direction === DIRECTION.down
+                      ? 'is-down'
+                      : ''
+                }`}
+              >
+                {legend.changeLabel}
+              </span>
+            )}
+            {legend.volume && (
+              <span className="pcl-cell pcl-vol">
+                <em>Vol</em>
+                {legend.volume}
+              </span>
+            )}
+          </div>
+        )}
 
         {isLoading && (
           <div className="pair-chart-state">

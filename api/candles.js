@@ -22,8 +22,14 @@ const UPSTREAM = 'https://api.geckoterminal.com/api/v2/networks/pulsechain'
  * An allowlist rather than passthrough: `timeframe` and `aggregate` land in an
  * upstream URL, and a handler that forwards whatever it is given is an open
  * proxy for anyone who finds it.
+ *
+ * Exported so a test can hold it against the client's own list. The two have to
+ * agree and live in different files: adding an interval to the picker without
+ * adding it here produces a button that returns 400, which is exactly what
+ * happened when 1m was added.
  */
-const INTERVALS = {
+export const INTERVALS = {
+  '1m': { timeframe: 'minute', aggregate: 1, limit: 300 },
   '5m': { timeframe: 'minute', aggregate: 5, limit: 288 },
   '15m': { timeframe: 'minute', aggregate: 15, limit: 288 },
   '1h': { timeframe: 'hour', aggregate: 1, limit: 240 },

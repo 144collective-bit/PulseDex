@@ -2284,3 +2284,93 @@
   color: var(--text-muted, #64748b);
   opacity: 0.8;
 }
+
+/*
+ * The OHLC readout, over the top-left of the plot.
+ *
+ * Every serious chart has one and this one had none, which left the chart
+ * legible only as a shape - there was no way to get a candle's actual numbers
+ * out of it short of reading them off the price axis.
+ *
+ * Placed over the plot rather than in the toolbar because it describes what the
+ * pointer is on. Pointer events pass through: a readout that captured the mouse
+ * would blank itself wherever it sat.
+ */
+.pair-chart-legend {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  max-width: calc(100% - 20px);
+  padding: 5px 9px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: var(--text-secondary, #94a3b8);
+  background: rgba(8, 11, 17, 0.72);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.pair-chart-legend .pcl-pair {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-primary, #f8fafc);
+}
+
+.pair-chart-legend .pcl-tf {
+  padding: 1px 5px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--pulse-cyan, #00e5ff);
+  background: rgba(0, 229, 255, 0.1);
+  border-radius: 4px;
+}
+
+/* The letter is the label; the number is the thing being read. */
+.pair-chart-legend .pcl-cell em {
+  margin-right: 4px;
+  font-style: normal;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #64748b);
+}
+
+.pair-chart-legend .pcl-cell {
+  color: var(--text-primary, #f8fafc);
+  white-space: nowrap;
+}
+
+.pair-chart-legend .pcl-change {
+  font-weight: 700;
+}
+
+.pair-chart-legend .pcl-change.is-up { color: var(--pulse-green, #00ff9d); }
+.pair-chart-legend .pcl-change.is-down { color: var(--pulse-red, #f43f5e); }
+
+.pair-chart-legend .pcl-vol {
+  color: var(--text-secondary, #94a3b8);
+}
+
+/* On a phone the four prices wrap; volume is the first thing to go. */
+@media (max-width: 560px) {
+  .pair-chart-legend {
+    font-size: 9.5px;
+    gap: 3px 8px;
+    padding: 4px 7px;
+  }
+
+  .pair-chart-legend .pcl-vol {
+    display: none;
+  }
+}
