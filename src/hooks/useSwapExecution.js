@@ -12,6 +12,7 @@ import {
 import { probeDeliverable } from '../services/swapProbe'
 import {
   clearPendingSwap,
+  markPendingSwapSettled,
   readPendingSwap,
   recordPendingSwap,
   subscribePendingSwap,
@@ -199,6 +200,17 @@ export function useSwapExecution({
 
   const approveOutcome = receiptOutcome(approveReceipt.data)
   const swapOutcome = receiptOutcome(swapReceipt.data)
+
+  /*
+   * A transaction with a result is no longer in flight, and the store is only
+   * for what is. Left as an in-flight record, a settled swap comes back on the
+   * next visit for as long as the store holds it - the panel reads "Swap again"
+   * and that press only clears it, so the next trade looks like a dead button
+   * with no wallet prompt. It stays readable briefly, then stops.
+   */
+  useEffect(() => {
+    if (swapOutcome || approveOutcome) markPendingSwapSettled(address, chainId)
+  }, [swapOutcome, approveOutcome, address, chainId])
 
   const approval = approvalState({
     from,

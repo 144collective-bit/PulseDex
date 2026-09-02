@@ -34,6 +34,19 @@ const listeners = new Set()
  */
 export const PENDING_TTL_MS = 2 * 60 * 60 * 1000
 
+/**
+ * How long a finished transaction stays readable after its outcome is known.
+ *
+ * The store exists so a transaction still in the air survives the panel being
+ * unmounted. A finished one does not need that, and keeping it for the whole
+ * window above was a mistake with a sharp edge: a swap that succeeded left the
+ * panel reading "Swap again" for two hours, across reloads, and that press only
+ * clears it - so the next trade looked like a dead button and no wallet prompt.
+ *
+ * Long enough to read a confirmation and follow the explorer link, then gone.
+ */
+export const SETTLED_GRACE_MS = 90 * 1000
+
 const idOf = (address, chainId) =>
   address && chainId ? `${String(address).toLowerCase()}|${chainId}` : null
 
@@ -61,6 +74,13 @@ export function readPendingSwap(address, chainId, nowMs = Date.now()) {
   const record = records.get(id)
   if (!record) return null
   if (nowMs - record.startedAt > PENDING_TTL_MS) return null
+  /*
+   * Finished, and past the window where its result is still worth showing.
+   * Compared against null rather than tested for truth: a settledAt of 0 is a
+   * real timestamp and a falsy one, and reading it as "never settled" would
+   * quietly restore the behaviour this exists to remove.
+   */
+  if (record.settledAt != null && nowMs - record.settledAt > SETTLED_GRACE_MS) return null
 
   return record
 }
@@ -90,6 +110,8 @@ export function recordPendingSwap({
     swapHash: swapHash ?? prev?.swapHash ?? null,
     pair: pair ?? prev?.pair ?? null,
     startedAt: prev?.startedAt ?? nowMs,
+    // A new hash means something is outstanding again.
+    settledAt: null,
   }
 
   records.set(id, next)
@@ -123,4 +145,22 @@ export function clearAllPendingSwaps() {
 export function tradeLabel(from, to, amount) {
   if (!from?.symbol || !to?.symbol) return null
   return { from: from.symbol, to: to.symbol, amount: String(amount ?? '') }
+}
+
+/**
+ * Note that the transaction has an outcome, so it stops counting as in flight.
+ *
+ * Kept briefly rather than deleted outright: the panel still has a confirmation
+ * to show and an explorer link to offer. What it must not do is greet the next
+ * visitor with the last trade's result and a button that only clears it.
+ */
+export function markPendingSwapSettled(address, chainId, nowMs = Date.now()) {
+  const id = idOf(address, chainId)
+  if (!id) return
+
+  const record = records.get(id)
+  if (!record || record.settledAt != null) return
+
+  records.set(id, { ...record, settledAt: nowMs })
+  emit()
 }

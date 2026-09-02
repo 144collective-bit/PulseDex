@@ -7,6 +7,8 @@ import {
   subscribePendingSwap,
   tradeLabel,
   PENDING_TTL_MS,
+  SETTLED_GRACE_MS,
+  markPendingSwapSettled,
 } from './pendingSwap'
 
 /*
@@ -165,5 +167,64 @@ describe('tradeLabel', () => {
   it('has nothing to say without both symbols', () => {
     expect(tradeLabel({ symbol: 'PLS' }, null, '1')).toBeNull()
     expect(tradeLabel(null, { symbol: 'PLSX' }, '1')).toBeNull()
+  })
+})
+
+describe('once a transaction has a result', () => {
+  it('stops being offered after a short grace, not after the full window', () => {
+    /*
+     * The regression this fixes, reported from the live site: a swap succeeded,
+     * and on the next visit the panel still showed it. The button then reads
+     * "Swap again", whose press only clears state - so the next trade looked
+     * like a dead button with no wallet prompt and no transaction.
+     *
+     * In flight, a record has to outlive an unmount. Settled, it must not
+     * outlive the confirmation it is there to show.
+     */
+    recordPendingSwap({ address: A, chainId: 369, swapHash: HASH, nowMs: 0 })
+    markPendingSwapSettled(A, 369, 0)
+
+    expect(readPendingSwap(A, 369, SETTLED_GRACE_MS - 1)?.swapHash).toBe(HASH)
+    expect(readPendingSwap(A, 369, SETTLED_GRACE_MS + 1)).toBeNull()
+  })
+
+  it('leaves an unsettled record alone for the full window', () => {
+    // A transaction still in the air is exactly what the store is for.
+    recordPendingSwap({ address: A, chainId: 369, swapHash: HASH, nowMs: 0 })
+    expect(readPendingSwap(A, 369, SETTLED_GRACE_MS + 1)?.swapHash).toBe(HASH)
+    expect(readPendingSwap(A, 369, PENDING_TTL_MS - 1)?.swapHash).toBe(HASH)
+  })
+
+  it('starts the grace at the outcome, not at the send', () => {
+    // A slow transaction must not have its confirmation cut short.
+    recordPendingSwap({ address: A, chainId: 369, swapHash: HASH, nowMs: 0 })
+    markPendingSwapSettled(A, 369, 60_000)
+    expect(readPendingSwap(A, 369, 60_000 + SETTLED_GRACE_MS - 1)?.swapHash).toBe(HASH)
+    expect(readPendingSwap(A, 369, 60_000 + SETTLED_GRACE_MS + 1)).toBeNull()
+  })
+
+  it('does not restart the grace once it has been set', () => {
+    recordPendingSwap({ address: A, chainId: 369, swapHash: HASH, nowMs: 0 })
+    markPendingSwapSettled(A, 369, 0)
+    markPendingSwapSettled(A, 369, 80_000)
+    expect(readPendingSwap(A, 369, SETTLED_GRACE_MS + 1)).toBeNull()
+  })
+
+  it('counts as in flight again when a new hash arrives', () => {
+    // The approval that follows a settled swap is a live transaction, and the
+    // record has to go back to protecting it.
+    recordPendingSwap({ address: A, chainId: 369, swapHash: HASH, nowMs: 0 })
+    markPendingSwapSettled(A, 369, 0)
+    recordPendingSwap({ address: A, chainId: 369, approveHash: '0xnew', nowMs: 10 })
+    expect(readPendingSwap(A, 369, SETTLED_GRACE_MS + 1000)?.approveHash).toBe('0xnew')
+  })
+
+  it('does nothing for an account with no record', () => {
+    markPendingSwapSettled(B, 369, 0)
+    expect(readPendingSwap(B, 369, 0)).toBeNull()
+  })
+
+  it('keeps the grace shorter than the in-flight window', () => {
+    expect(SETTLED_GRACE_MS).toBeLessThan(PENDING_TTL_MS)
   })
 })
