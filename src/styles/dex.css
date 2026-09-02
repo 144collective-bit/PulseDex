@@ -951,7 +951,15 @@
 .swap-panel.is-compact .swap-detail-row { font-size: 11px; }
 .swap-panel.is-compact .swap-action { padding: 12px; font-size: 13.5px; }
 .swap-panel.is-compact .swap-tx { padding: 8px 10px; gap: 5px; }
-.swap-panel.is-compact .swap-tx-row { font-size: 10.5px; }
+.swap-panel.is-compact .swap-tx-for {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dex-text-dim, #7c8b9a);
+  padding-bottom: 2px;
+}
+
+.swap-tx-row { font-size: 10.5px; }
 /* Also tightens the price-impact and no-route notices, which until now
    rendered at full desktop padding inside a sidebar. */
 .swap-panel.is-compact .swap-warning { padding: 9px 11px; font-size: 11px; gap: 7px; }

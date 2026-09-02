@@ -431,6 +431,14 @@ export default function SwapPanel({
 
       {(exec.approveHash || exec.swapHash) && (
         <div className="swap-tx">
+          {/* A sent transaction outlives the panel, so it can be read back
+              beside a pair it has nothing to do with - naming it is what stops
+              the rows describing the wrong trade. */}
+          {exec.pendingPair && (
+            <div className="swap-tx-for">
+              {exec.pendingPair.amount} {exec.pendingPair.from} → {exec.pendingPair.to}
+            </div>
+          )}
           {exec.approveHash && (
             <div className="swap-tx-row">
               <span>Approval</span>

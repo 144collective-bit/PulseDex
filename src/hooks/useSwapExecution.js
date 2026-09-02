@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useAccount, useWaitForTransactionReceipt, useWriteContract } from 'wagmi'
 import { pulsechain } from '../config/pulsechain'
 import { FEATURES } from '../config/features'
@@ -10,6 +10,13 @@ import {
   withFloor,
 } from '../services/swap'
 import { probeDeliverable } from '../services/swapProbe'
+import {
+  clearPendingSwap,
+  readPendingSwap,
+  recordPendingSwap,
+  subscribePendingSwap,
+  tradeLabel,
+} from '../services/pendingSwap'
 import { quoteSwap } from '../services/dex'
 import { NATIVE_PLS } from '../config/dex'
 import {
@@ -75,9 +82,27 @@ export function useSwapExecution({
 }) {
   const guard = usePulsechainGuard()
   const { address } = useAccount()
+  // Pinned: `guard` is a fresh object each render, so reading through it inside
+  // a dependency array defeats the memoisation it is meant to key.
+  const chainId = guard.chainId
 
-  const [approveHash, setApproveHash] = useState(null)
-  const [swapHash, setSwapHash] = useState(null)
+  /*
+   * Sent transactions are read from a store outside React, not held here.
+   *
+   * The compact panel on the token page is keyed on the token being viewed, so
+   * opening a different token unmounts it - and anything in this hook's own
+   * state goes with it, including the hash of a swap still in the mempool. The
+   * trade settled anyway; the user just lost every trace of it. Out there, a
+   * remount picks the record back up.
+   */
+  const pending = useSyncExternalStore(
+    subscribePendingSwap,
+    () => readPendingSwap(address, chainId),
+    () => null,
+  )
+  const approveHash = pending?.approveHash ?? null
+  const swapHash = pending?.swapHash ?? null
+
   const [approveError, setApproveError] = useState(null)
   const [swapError, setSwapError] = useState(null)
   const [refetchesSinceConfirm, setRefetchesSinceConfirm] = useState(0)
@@ -211,7 +236,7 @@ export function useSwapExecution({
   const block = blockingReason({
     enabled,
     isConnected: guard.isConnected,
-    chainId: guard.chainId,
+    chainId,
     expectedChainId: pulsechain.id,
     from,
     to,
@@ -247,8 +272,7 @@ export function useSwapExecution({
   const inFlight = isSwapInFlight(phase)
 
   const reset = useCallback(() => {
-    setApproveHash(null)
-    setSwapHash(null)
+    clearPendingSwap(address, chainId)
     setApproveError(null)
     setSwapError(null)
     setRefetchesSinceConfirm(0)
@@ -260,7 +284,7 @@ export function useSwapExecution({
     setFeeAcknowledgedPct(null)
     approveWrite.reset?.()
     swapWrite.reset?.()
-  }, [approveWrite, swapWrite])
+  }, [address, chainId, approveWrite, swapWrite])
 
   /*
    * Look again after an approval lands.
@@ -296,7 +320,7 @@ export function useSwapExecution({
     amount,
     slippagePct,
     recipient: address,
-    chainId: guard.chainId,
+    chainId,
     router: quotedRouter,
   })
   const lastKey = useRef(key)
@@ -342,11 +366,11 @@ export function useSwapExecution({
       if (!call) return
 
       const hash = await approveWrite.writeContractAsync(call)
-      setApproveHash(hash)
+      recordPendingSwap({ address, chainId, approveHash: hash, pair: tradeLabel(from, to, amount) })
     } catch (err) {
       setApproveError(err)
     }
-  }, [from, spender, amountInRaw, allowanceRaw, approveWrite])
+  }, [address, chainId, from, to, amount, spender, amountInRaw, allowanceRaw, approveWrite])
 
   const swap = useCallback(async () => {
     setSwapError(null)
@@ -507,7 +531,7 @@ export function useSwapExecution({
 
     try {
       const hash = await swapWrite.writeContractAsync(finalCall)
-      setSwapHash(hash)
+      recordPendingSwap({ address, chainId, swapHash: hash, pair: tradeLabel(from, to, amount) })
     } catch (err) {
       setSwapError(err)
     }
@@ -526,6 +550,7 @@ export function useSwapExecution({
     amountInRaw,
     feeAcknowledgedPct,
     swapWrite,
+    chainId,
   ])
 
   const base = swapAction({ phase, block, fromSymbol: from?.symbol ?? 'token', failedStep })
@@ -590,6 +615,7 @@ export function useSwapExecution({
     }),
     approveHash,
     swapHash,
+    pendingPair: pending?.pair ?? null,
     explorer: {
       approve: explorerTxUrl(approveHash),
       swap: explorerTxUrl(swapHash),
