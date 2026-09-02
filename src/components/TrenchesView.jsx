@@ -11,6 +11,7 @@ import EcosystemDirectory from './EcosystemDirectory'
 import { usePlsPrice, useTokenColumn, useProtocolStats } from '../hooks/usePumpTires'
 import { useTrenchBoardView } from '../hooks/useTrenchBoardView'
 import { useTrenchWatchlist } from '../hooks/useTrenchWatchlist'
+import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useBoardAlerts } from '../hooks/useBoardAlerts'
 import { useBoardKeyboard } from '../hooks/useBoardKeyboard'
 import { TRENCH_COLUMNS } from '../config/pumptires'
@@ -32,6 +33,19 @@ import '../styles/trenches-controls.css'
  */
 export default function TrenchesView({ onOpenTokenPage }) {
   const [search, setSearch] = useState('')
+
+  /*
+   * The header is desktop-only.
+   *
+   * Identity, the launchpad totals and a full-width search field cost about a
+   * third of a phone screen before the board begins - and the board is the
+   * reason anyone opened this page. The totals are context rather than
+   * something to act on, the title repeats the tab that was just tapped, and
+   * the search survives as a magnifier in the filter row, which is already the
+   * one compact strip of controls. On a wide screen there is room for all of
+   * it, so nothing changes there.
+   */
+  const narrow = useMediaQuery('(max-width: 900px)')
   const [selectedToken, setSelectedToken] = useState(null)
 
   const { data: plsPrice } = usePlsPrice()
@@ -118,7 +132,8 @@ export default function TrenchesView({ onOpenTokenPage }) {
 
   return (
     <div className="trenches-live-page">
-      {/* Header: identity, launchpad totals, search */}
+      {/* Header: identity, launchpad totals, search. Desktop only - see above. */}
+      {!narrow && (
       <header className="trenches-live-head">
         <div className="tlh-brand">
           <div className="trenches-badge">
@@ -178,6 +193,7 @@ export default function TrenchesView({ onOpenTokenPage }) {
           )}
         </div>
       </header>
+      )}
 
       {/* King-of-the-hill ticker */}
       <TrenchTicker
@@ -201,6 +217,8 @@ export default function TrenchesView({ onOpenTokenPage }) {
         shown={totals.shown}
         loaded={totals.loaded}
         watchlistCount={watchlistCount}
+        search={search}
+        onSearchChange={setSearch}
       />
 
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions --

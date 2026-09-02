@@ -713,6 +713,79 @@
   /* The two that stay out while collapsed sit at the end of the same line. */
   .trench-filter-bar.is-collapsible .tfb-star { margin-left: auto; }
 
+  /* ---- Search, which the removed header used to hold -------------------- */
+
+  .tfb-search-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 30px;
+    height: 26px;
+    border: 1px solid var(--tr-hairline);
+    border-radius: var(--radius-sm, 6px);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+
+  .tfb-search-btn:hover { border-color: var(--border-active); }
+
+  /* A query still filtering while the field is shut has to say so, or the
+     board looks short of rows for no reason anyone can see. */
+  .tfb-search-btn.is-on {
+    color: var(--pulse-cyan);
+    border-color: rgba(0, 229, 255, 0.45);
+    background: rgba(0, 229, 255, 0.08);
+  }
+
+  /* Its own line: an address is longer than anything else in this row. */
+  .tfb-search {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex: 1 0 100%;
+    padding: 5px 9px;
+    border: 1px solid var(--tr-hairline);
+    border-radius: var(--radius-sm, 6px);
+    background: var(--bg-input, rgba(0, 0, 0, 0.25));
+  }
+
+  .tfb-search:focus-within { border-color: var(--border-active); }
+
+  .tfb-search-icon { color: var(--text-muted); flex: 0 0 auto; }
+
+  .tfb-search-input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: none;
+    outline: none;
+    color: var(--text-primary);
+    font-size: 12px;
+  }
+
+  .tfb-search-input::placeholder { color: var(--text-muted); }
+
+  .tfb-search-clear {
+    display: inline-flex;
+    flex: 0 0 auto;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px;
+  }
+
+  .tfb-search-clear:hover { color: var(--pulse-red); }
+
+  /*
+   * "45 / 45" rather than "45 / 45 loaded". The word costs 40px and this row
+   * is eleven short of fitting on one line with it - and the ratio carries the
+   * meaning on its own. The title attribute still spells it out.
+   */
+  .tfb-showing-word { display: none; }
+
   /*
    * Chips still refuse to shrink - a compressed chip draws its label over its
    * neighbour - but the groups may now wrap instead, which is what they do

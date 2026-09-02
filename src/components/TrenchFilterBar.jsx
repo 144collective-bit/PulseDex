@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, SlidersHorizontal, Star, RotateCcw, X } from 'lucide-react'
+import { ChevronDown, Search, SlidersHorizontal, Star, RotateCcw, X } from 'lucide-react'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { DEFAULT_FILTERS, activeFilterCount } from '../utils/trenchBoard'
 
@@ -49,6 +49,8 @@ export default function TrenchFilterBar({
   shown,
   loaded,
   watchlistCount,
+  search = '',
+  onSearchChange,
 }) {
   const count = activeFilterCount(filters)
   const set = (patch) => onChange({ ...filters, ...patch })
@@ -63,12 +65,34 @@ export default function TrenchFilterBar({
   const [open, setOpen] = useState(false)
   const showGroups = !narrow || open
 
+  /*
+   * Search lives here on a phone, because the header that used to hold it is
+   * gone at this width. Collapsed to a magnifier until it is wanted - a field
+   * wide enough to type an address into is most of a phone's width, and this
+   * row has to stay one line.
+   */
+  const [searchOpen, setSearchOpen] = useState(false)
+  const showSearch = narrow && Boolean(onSearchChange)
+
   const bondingActive = BONDING_PRESETS.findIndex(
     (p) => p.min === filters.bondingMin && p.max === filters.bondingMax
   )
 
   return (
     <div className={`trench-filter-bar ${narrow ? 'is-collapsible' : ''} ${open ? 'is-open' : ''}`}>
+      {showSearch && (
+        <button
+          type="button"
+          className={`tfb-search-btn ${search ? 'is-on' : ''}`}
+          onClick={() => setSearchOpen((v) => !v)}
+          aria-expanded={searchOpen}
+          aria-label={search ? `Search: ${search}` : 'Search tokens'}
+          title="Search name, symbol or address"
+        >
+          <Search size={13} />
+        </button>
+      )}
+
       {narrow ? (
         <button
           type="button"
@@ -162,10 +186,35 @@ export default function TrenchFilterBar({
         {watchlistCount > 0 && <span className="tfb-star-count">{watchlistCount}</span>}
       </button>
 
+      {showSearch && searchOpen && (
+        <div className="tfb-search">
+          <Search size={13} className="tfb-search-icon" aria-hidden="true" />
+          <input
+            type="text"
+            className="tfb-search-input font-mono"
+            placeholder="Search name, symbol or address…"
+            value={search}
+            onChange={(e) => onSearchChange(e.target.value)}
+            aria-label="Search launchpad tokens"
+            autoFocus
+          />
+          {search && (
+            <button
+              type="button"
+              className="tfb-search-clear"
+              onClick={() => onSearchChange('')}
+              aria-label="Clear search"
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="tfb-tail font-mono">
         {/* Says "of what is loaded", because that is all it can honestly be. */}
         <span className="tfb-showing" title="Filters apply to the rows each column has loaded">
-          {shown} / {loaded} loaded
+          {shown} / {loaded} <span className="tfb-showing-word">loaded</span>
         </span>
         {count > 0 && (
           <button type="button" className="tfb-reset" onClick={onReset} title="Clear filters">
