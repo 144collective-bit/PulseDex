@@ -1,4 +1,6 @@
-import { SlidersHorizontal, Star, RotateCcw, X } from 'lucide-react'
+import { useState } from 'react'
+import { ChevronDown, SlidersHorizontal, Star, RotateCcw, X } from 'lucide-react'
+import { useMediaQuery } from '../hooks/useMediaQuery'
 import { DEFAULT_FILTERS, activeFilterCount } from '../utils/trenchBoard'
 
 /** Market-cap floors, in USD. Chosen to straddle where a curve starts to matter. */
@@ -31,6 +33,14 @@ function presetLabel(value) {
  * Every filter applies to the rows a column has already loaded - the launchpad
  * offers no server-side filtering - so the bar reports what it is showing out
  * of what it has rather than implying it searched the whole launchpad.
+ *
+ * Narrow screens collapse the groups behind the FILTERS control. They used to
+ * stay on one line that scrolled sideways with the scrollbar hidden, which
+ * meant five of the fourteen controls - the whole curve group, and Starred -
+ * were off the right edge with nothing to say so. A filter nobody can find is
+ * not a filter. Collapsed is honest about there being more, costs one line
+ * instead of four, and keeps the count badge visible so active filters still
+ * announce themselves.
  */
 export default function TrenchFilterBar({
   filters,
@@ -43,18 +53,45 @@ export default function TrenchFilterBar({
   const count = activeFilterCount(filters)
   const set = (patch) => onChange({ ...filters, ...patch })
 
+  /*
+   * Matches the breakpoint the stylesheet uses for this bar. The groups are
+   * unmounted rather than hidden with CSS, so a collapsed bar does not leave
+   * fourteen controls in the tab order for a keyboard to walk through and a
+   * screen reader to read out.
+   */
+  const narrow = useMediaQuery('(max-width: 900px)')
+  const [open, setOpen] = useState(false)
+  const showGroups = !narrow || open
+
   const bondingActive = BONDING_PRESETS.findIndex(
     (p) => p.min === filters.bondingMin && p.max === filters.bondingMax
   )
 
   return (
-    <div className="trench-filter-bar">
-      <div className="tfb-lead font-mono">
-        <SlidersHorizontal size={12} />
-        <span>FILTERS</span>
-        {count > 0 && <span className="tfb-count">{count}</span>}
-      </div>
+    <div className={`trench-filter-bar ${narrow ? 'is-collapsible' : ''} ${open ? 'is-open' : ''}`}>
+      {narrow ? (
+        <button
+          type="button"
+          className="tfb-lead tfb-lead-btn font-mono"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          title={open ? 'Hide filters' : 'Show filters'}
+        >
+          <SlidersHorizontal size={12} />
+          <span>FILTERS</span>
+          {count > 0 && <span className="tfb-count">{count}</span>}
+          <ChevronDown size={12} className="tfb-lead-caret" />
+        </button>
+      ) : (
+        <div className="tfb-lead font-mono">
+          <SlidersHorizontal size={12} />
+          <span>FILTERS</span>
+          {count > 0 && <span className="tfb-count">{count}</span>}
+        </div>
+      )}
 
+      {showGroups && (
+      <>
       <div className="tfb-group">
         <span className="tfb-label font-mono">MIN MC</span>
         <div className="tfb-chips">
@@ -106,6 +143,8 @@ export default function TrenchFilterBar({
           ))}
         </div>
       </div>
+      </>
+      )}
 
       <button
         type="button"

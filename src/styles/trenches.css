@@ -2971,3 +2971,21 @@
 
   .trenches-board { gap: 4px; }
 }
+
+/* --------------------------------------------------------------------------
+   Column headings at narrow widths
+   -------------------------------------------------------------------------- */
+
+/*
+ * Wide screens show the real title; the short one is only painted where the
+ * full one would be cut mid-word. Both are hidden from assistive technology -
+ * the h2 carries the full title as its accessible name either way - so the
+ * heading a screen reader announces does not change with the viewport.
+ */
+.tph-title-short { display: none; }
+
+@media (max-width: 900px) {
+  .tph-title-full { display: none; }
+  .tph-title-short { display: inline; }
+}
+

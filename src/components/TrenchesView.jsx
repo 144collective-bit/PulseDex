@@ -214,6 +214,7 @@ export default function TrenchesView({ onOpenTokenPage }) {
           <div key={col.id} className={`trenches-slot slot-${col.id}`}>
             <TrenchColumn
               title={col.title}
+              shortTitle={col.shortTitle}
               filter={orders[col.id].feed}
               feeds={col.feeds}
               accent={col.accent}

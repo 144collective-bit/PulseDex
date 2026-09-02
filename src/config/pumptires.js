@@ -34,6 +34,17 @@ export const TRENCH_COLUMNS = [
   {
     id: 'new',
     title: 'New Launches',
+    /*
+     * What the heading says when the column is too narrow for the real title.
+     *
+     * Three columns are kept side by side even on a phone, because the
+     * comparison between them is the point of the board - which leaves each
+     * heading about 190px. At that width the full titles were being cut to
+     * "NEW LAUNCH..." and "KING OF THE HI...", and a title truncated mid-word
+     * tells a reader less than a short one chosen on purpose. These are the
+     * names this audience already uses.
+     */
+    shortTitle: 'New',
     filter: 'created_timestamp',
     /*
      * Orderings this column can ask the feed for.
@@ -50,6 +61,7 @@ export const TRENCH_COLUMNS = [
   {
     id: 'koth',
     title: 'King of the Hill',
+    shortTitle: 'KOTH',
     filter: 'top_bonding',
     feeds: ['top_bonding'],
     accent: 'yellow',
@@ -57,6 +69,7 @@ export const TRENCH_COLUMNS = [
   {
     id: 'grad',
     title: 'Graduations',
+    shortTitle: 'Grads',
     filter: 'launch_timestamp',
     feeds: ['launch_timestamp'],
     accent: 'green',

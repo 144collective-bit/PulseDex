@@ -53,6 +53,7 @@ function RowSkeleton() {
  */
 export default function TrenchColumn({
   title,
+  shortTitle,
   filter,
   feeds = [],
   accent = 'cyan',
@@ -189,7 +190,14 @@ export default function TrenchColumn({
         <header className="trench-panel-head">
           <div className="tph-title-group">
             <span className={`tph-dot accent-dot-${accent}`} aria-hidden="true" />
-            <h2 className="tph-title font-mono">{title}</h2>
+            {/* The full title is the accessible name at every width; only
+                which of the two spans is painted changes. */}
+            <h2 className="tph-title font-mono" aria-label={title}>
+              <span className="tph-title-full" aria-hidden="true">{title}</span>
+              <span className="tph-title-short" aria-hidden="true">
+                {shortTitle || title}
+              </span>
+            </h2>
             {isFetching && !isLoading && (
               <span className="tph-live" title="Refreshing" aria-hidden="true" />
             )}

@@ -667,32 +667,58 @@
   /* Clear of the app's fixed bottom nav. */
   .trench-alerts { bottom: calc(74px + env(safe-area-inset-bottom, 0px)); }
 
-  /* One line that scrolls sideways, rather than a four-line wrapped block that
-     pushes the board off the screen before it starts. */
+  /*
+   * Collapsed to one line, rather than a four-line wrapped block that pushes
+   * the board off the screen before it starts.
+   *
+   * This used to be that one line scrolling sideways with the scrollbar
+   * hidden, which put five of the fourteen controls past the right edge with
+   * nothing to indicate they were there. The groups are unmounted instead and
+   * the FILTERS control opens them, so the line stays short and nothing is
+   * merely out of sight.
+   */
   .trench-filter-bar {
-    flex-wrap: nowrap;
-    gap: 12px;
-    overflow-x: auto;
+    flex-wrap: wrap;
+    gap: 8px 12px;
     padding: 7px 9px;
-    scrollbar-width: none;
   }
 
-  .trench-filter-bar::-webkit-scrollbar { display: none; }
+  /* Open: the groups wrap onto as many lines as they need, and the board
+     gives up the space for as long as the bar is open. */
+  .trench-filter-bar.is-open .tfb-group,
+  .trench-filter-bar.is-open .tfb-chips { flex-wrap: wrap; }
 
-  .tfb-group,
-  .tfb-chips { flex-wrap: nowrap; }
+  .tfb-lead-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--tr-hairline);
+    border-radius: var(--radius-sm, 6px);
+    padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.03);
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .tfb-lead-btn:hover { border-color: var(--border-active); }
+
+  .tfb-lead-caret {
+    transition: transform 140ms ease;
+    opacity: 0.7;
+  }
+
+  .trench-filter-bar.is-open .tfb-lead-caret { transform: rotate(180deg); }
+
+  /* The two that stay out while collapsed sit at the end of the same line. */
+  .trench-filter-bar.is-collapsible .tfb-star { margin-left: auto; }
 
   /*
-   * Nothing in the bar may shrink.
-   *
-   * A flex item shrinks before its container overflows, so `overflow-x: auto`
-   * on its own bought nothing: the row compressed every chip until the labels
-   * drew over each other and there was no overflow left to scroll. Refusing to
-   * shrink is what turns it into a scrolling strip.
+   * Chips still refuse to shrink - a compressed chip draws its label over its
+   * neighbour - but the groups may now wrap instead, which is what they do
+   * with the sideways scroller gone.
    */
   .tfb-lead,
-  .tfb-group,
-  .tfb-chips,
   .tfb-chip,
   .tfb-label,
   .tfb-tail { flex-shrink: 0; }
