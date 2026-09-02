@@ -1,10 +1,12 @@
 import { Flame } from 'lucide-react'
 import TokenLogo from './TokenLogo'
+import { selectTickerItems } from '../utils/tickerItems'
 
 export default function TickerMarquee({ pairs = [], onSelectPair }) {
-  if (!pairs || pairs.length === 0) return null
-
-  const tickerItems = pairs.slice(0, 14)
+  // One entry per token rather than per pool, and what each is called. See
+  // `selectTickerItems` - the choice is tested there, not here.
+  const tickerItems = selectTickerItems(pairs)
+  if (tickerItems.length === 0) return null
 
   const formatPrice = (val) => {
     const num = parseFloat(val || '0')
@@ -21,28 +23,25 @@ export default function TickerMarquee({ pairs = [], onSelectPair }) {
       </div>
       <div className="ticker-marquee-track">
         <div className="ticker-marquee-items">
-          {tickerItems.map((p, idx) => {
-            const base = p.baseToken?.symbol || 'TOKEN'
-            const quote = p.quoteToken?.symbol || 'PLS'
-            const baseAddr = p.baseToken?.address || ''
-            const change = p.priceChange?.h24 || 0
+          {tickerItems.map(({ pair, key, symbol, quote, address, label }) => {
+            const change = pair.priceChange?.h24 || 0
             const isPos = change >= 0
 
             return (
               <div
-                key={`${p.pairAddress}-${idx}`}
+                key={key}
                 className="ticker-item font-mono"
-                onClick={() => onSelectPair(p)}
-                title={`Click to view ${base}/${quote} chart`}
+                onClick={() => onSelectPair(pair)}
+                title={`Click to view ${symbol}/${quote} chart`}
               >
                 <TokenLogo
-                  symbol={base}
-                  address={baseAddr}
-                  customUrl={p.info?.imageUrl}
+                  symbol={symbol}
+                  address={address}
+                  customUrl={pair.info?.imageUrl}
                   size={16}
                 />
-                <span className="ticker-pair-name">{base}</span>
-                <span className="ticker-price">{formatPrice(p.priceUsd)}</span>
+                <span className="ticker-pair-name">{label}</span>
+                <span className="ticker-price">{formatPrice(pair.priceUsd)}</span>
                 <span className={`ticker-change ${isPos ? 'text-pulse-green' : 'text-pulse-red'}`}>
                   {isPos ? '+' : ''}{change}%
                 </span>
