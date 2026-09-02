@@ -2143,3 +2143,22 @@
   text-decoration: underline;
 }
 
+/* Fills in the largest amount that can actually be sent - which for native PLS
+   is not the whole balance. */
+.swap-max {
+  margin-left: auto;
+  padding: 2px 7px;
+  font-family: var(--font-instrument);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pulse-cyan);
+  background: var(--pulse-cyan-bg);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.swap-max:hover { border-color: var(--pulse-cyan); }
+

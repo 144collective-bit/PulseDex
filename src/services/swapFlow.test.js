@@ -5,6 +5,10 @@ import {
   SWAP_BLOCK,
   SWAP_INTENT,
   APPROVAL,
+  BALANCE,
+  balanceState,
+  estimateGasReserve,
+  maxSpendable,
   chainGate,
   parseAmountRaw,
   blockingReason,
@@ -154,6 +158,29 @@ describe('blockingReason precedence', () => {
   it('the wrong chain outranks a missing amount', () => {
     // "Enter an amount" is unhelpful advice to someone on the wrong network.
     expect(blockingReason({ ...passing, chainId: 1, amountRaw: null })).toBe(SWAP_BLOCK.wrongChain)
+  })
+
+  it('a short balance outranks a missing route', () => {
+    // No point pricing a route for an amount that cannot be sent.
+    expect(
+      blockingReason({ ...passing, balance: BALANCE.insufficient, isQuoteError: true })
+    ).toBe(SWAP_BLOCK.insufficientBalance)
+  })
+
+  it('reports missing gas separately from a missing balance', () => {
+    expect(blockingReason({ ...passing, balance: BALANCE.insufficientGas })).toBe(
+      SWAP_BLOCK.insufficientGas
+    )
+  })
+
+  it('a missing amount outranks a short balance', () => {
+    expect(blockingReason({ ...passing, amountRaw: null, balance: BALANCE.insufficient })).toBe(
+      SWAP_BLOCK.noAmount
+    )
+  })
+
+  it('does not block on a balance it has not read', () => {
+    expect(blockingReason({ ...passing, balance: BALANCE.unknown })).toBe(SWAP_BLOCK.none)
   })
 
   it('a missing amount outranks a missing route', () => {
@@ -657,5 +684,123 @@ describe('executionKey', () => {
 
   it('ignores address casing, which wallets disagree about', () => {
     expect(executionKey({ ...base, recipient: RECIPIENT.toUpperCase() })).toBe(executionKey(base))
+  })
+})
+
+describe('estimateGasReserve', () => {
+  it('scales with the gas price rather than guessing a round number of PLS', () => {
+    // Gas here is quoted in enormous numbers of wei and moves, so a fixed
+    // reserve is either too small to cover a fee or eats a small wallet.
+    const cheap = estimateGasReserve(1_000_000_000n)
+    const dear = estimateGasReserve(10_000_000_000n)
+
+    expect(dear).toBe(cheap * 10n)
+  })
+
+  it('carries a margin over a single swap, for a price that moves', () => {
+    const reserve = estimateGasReserve(1_000_000_000n, { gasUnits: 400_000n, buffer: 2n })
+
+    expect(reserve).toBe(1_000_000_000n * 400_000n * 2n)
+  })
+
+  it('reserves nothing when the price is unknown, rather than blocking', () => {
+    // An unread gas price must not make every native trade look unaffordable.
+    expect(estimateGasReserve(undefined)).toBe(0n)
+    expect(estimateGasReserve(0n)).toBe(0n)
+  })
+})
+
+describe('maxSpendable', () => {
+  const balance = parseUnits('100', 18)
+  const reserve = parseUnits('1', 18)
+
+  it('offers the whole balance for a token', () => {
+    expect(maxSpendable({ balanceRaw: balance, isNative: false, gasReserveRaw: reserve })).toBe(balance)
+  })
+
+  it('holds back the fee for native PLS', () => {
+    // Filling in the whole balance is the commonest way a first native swap
+    // fails: the transaction has nothing left to pay for itself.
+    expect(maxSpendable({ balanceRaw: balance, isNative: true, gasReserveRaw: reserve })).toBe(
+      balance - reserve
+    )
+  })
+
+  it('offers nothing rather than a negative when the balance is under the reserve', () => {
+    expect(maxSpendable({ balanceRaw: reserve / 2n, isNative: true, gasReserveRaw: reserve })).toBe(0n)
+  })
+
+  it('offers nothing for an empty or unknown balance', () => {
+    expect(maxSpendable({ balanceRaw: 0n, isNative: false })).toBe(0n)
+    expect(maxSpendable({ balanceRaw: undefined, isNative: false })).toBe(0n)
+  })
+})
+
+describe('balanceState', () => {
+  const amountInRaw = parseUnits('10', 18)
+  const reserve = parseUnits('1', 18)
+
+  it('passes when the wallet covers the trade and the fee', () => {
+    expect(
+      balanceState({
+        isNative: false,
+        balanceRaw: amountInRaw,
+        nativeBalanceRaw: reserve,
+        amountInRaw,
+        gasReserveRaw: reserve,
+      })
+    ).toBe(BALANCE.ok)
+  })
+
+  it('catches a token balance that is short', () => {
+    expect(
+      balanceState({
+        isNative: false,
+        balanceRaw: amountInRaw - 1n,
+        nativeBalanceRaw: reserve,
+        amountInRaw,
+        gasReserveRaw: reserve,
+      })
+    ).toBe(BALANCE.insufficient)
+  })
+
+  it('catches a token trade with no PLS to pay the fee', () => {
+    // Holding the token is not enough - the fee is paid in something else.
+    expect(
+      balanceState({
+        isNative: false,
+        balanceRaw: amountInRaw,
+        nativeBalanceRaw: reserve - 1n,
+        amountInRaw,
+        gasReserveRaw: reserve,
+      })
+    ).toBe(BALANCE.insufficientGas)
+  })
+
+  it('takes the fee out of the same balance for a native trade', () => {
+    // Exactly the amount is affordable only if nothing is needed for gas.
+    expect(
+      balanceState({ isNative: true, balanceRaw: amountInRaw, amountInRaw, gasReserveRaw: reserve })
+    ).toBe(BALANCE.insufficientGas)
+
+    expect(
+      balanceState({
+        isNative: true,
+        balanceRaw: amountInRaw + reserve,
+        amountInRaw,
+        gasReserveRaw: reserve,
+      })
+    ).toBe(BALANCE.ok)
+  })
+
+  it('does not block on a balance it has not read yet', () => {
+    // A read in flight is not evidence of an empty wallet.
+    expect(balanceState({ isNative: false, balanceRaw: undefined, amountInRaw })).toBe(BALANCE.unknown)
+    expect(
+      balanceState({ isNative: false, balanceRaw: amountInRaw, amountInRaw, isLoading: true })
+    ).toBe(BALANCE.unknown)
+    expect(
+      balanceState({ isNative: false, balanceRaw: amountInRaw, amountInRaw, isError: true })
+    ).toBe(BALANCE.unknown)
   })
 })

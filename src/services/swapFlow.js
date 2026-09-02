@@ -39,6 +39,8 @@ export const SWAP_BLOCK = {
   chainUnknown: 'chainUnknown',
   wrongChain: 'wrongChain',
   noAmount: 'noAmount',
+  insufficientBalance: 'insufficientBalance',
+  insufficientGas: 'insufficientGas',
   noRoute: 'noRoute',
   quoting: 'quoting',
   unbuildable: 'unbuildable',
@@ -107,6 +109,83 @@ export function parseAmountRaw(amount, decimals) {
   }
 }
 
+/** Whether the wallet actually holds what the trade would spend. */
+export const BALANCE = {
+  unknown: 'unknown',
+  ok: 'ok',
+  insufficient: 'insufficient',
+  insufficientGas: 'insufficientGas',
+}
+
+/**
+ * What to hold back from a native balance so the transaction can pay for itself.
+ *
+ * Gas on PulseChain is quoted in enormous numbers of wei and the token is
+ * cheap, so a reserve guessed as a round number of PLS is either uselessly
+ * small or eats a meaningful part of a small wallet. Derived from the live gas
+ * price instead, with a limit generous enough for a two-hop swap through the
+ * router and a multiplier so a price that rises between quoting and signing
+ * does not strand the trade.
+ *
+ * @param {bigint} gasPriceWei
+ * @param {{gasUnits?: bigint, buffer?: bigint}} [options]
+ */
+export function estimateGasReserve(gasPriceWei, { gasUnits = 400_000n, buffer = 2n } = {}) {
+  if (typeof gasPriceWei !== 'bigint' || gasPriceWei <= 0n) return 0n
+  return gasPriceWei * gasUnits * buffer
+}
+
+/**
+ * The largest amount that can actually be traded.
+ *
+ * For a token, all of it. For native PLS, everything except the reserve - a
+ * Max button that fills in the whole balance produces a transaction with
+ * nothing left to pay for itself, which is the single most common way a first
+ * native swap fails.
+ */
+export function maxSpendable({ balanceRaw, isNative, gasReserveRaw = 0n }) {
+  if (typeof balanceRaw !== 'bigint' || balanceRaw <= 0n) return 0n
+  if (!isNative) return balanceRaw
+
+  const reserve = typeof gasReserveRaw === 'bigint' ? gasReserveRaw : 0n
+  return balanceRaw > reserve ? balanceRaw - reserve : 0n
+}
+
+/**
+ * Whether the wallet holds enough for this trade, and enough to pay for it.
+ *
+ * Two separate questions, and both can fail on their own. Selling a token needs
+ * that token *and* some PLS for the fee; selling PLS needs the amount and the
+ * fee to fit inside one balance. An unknown balance does not block - a read
+ * still in flight is not evidence of an empty wallet, and the wallet itself
+ * will refuse anything genuinely unaffordable.
+ */
+export function balanceState({
+  isNative,
+  balanceRaw,
+  nativeBalanceRaw,
+  amountInRaw,
+  gasReserveRaw = 0n,
+  isLoading,
+  isError,
+}) {
+  if (isLoading || isError) return BALANCE.unknown
+  if (typeof amountInRaw !== 'bigint' || amountInRaw <= 0n) return BALANCE.unknown
+  if (typeof balanceRaw !== 'bigint') return BALANCE.unknown
+
+  const reserve = typeof gasReserveRaw === 'bigint' ? gasReserveRaw : 0n
+
+  if (isNative) {
+    if (balanceRaw < amountInRaw) return BALANCE.insufficient
+    // The fee comes out of the same balance the trade is spending.
+    return balanceRaw - amountInRaw >= reserve ? BALANCE.ok : BALANCE.insufficientGas
+  }
+
+  if (balanceRaw < amountInRaw) return BALANCE.insufficient
+  if (typeof nativeBalanceRaw !== 'bigint') return BALANCE.unknown
+  return nativeBalanceRaw >= reserve ? BALANCE.ok : BALANCE.insufficientGas
+}
+
 /**
  * The first reason this trade cannot go ahead.
  *
@@ -127,6 +206,7 @@ export function blockingReason({
   isQuoteFetching,
   isQuoteError,
   canBuild,
+  balance = BALANCE.unknown,
 }) {
   if (!enabled) return SWAP_BLOCK.disabled
 
@@ -137,6 +217,14 @@ export function blockingReason({
 
   if (!from || !to) return SWAP_BLOCK.noAmount
   if (!amountRaw || amountRaw <= 0n) return SWAP_BLOCK.noAmount
+
+  /*
+   * What the wallet holds outranks what the pool offers. There is no point
+   * quoting a route for an amount that cannot be sent, and "you do not have
+   * that much" is the answer a user can act on.
+   */
+  if (balance === BALANCE.insufficient) return SWAP_BLOCK.insufficientBalance
+  if (balance === BALANCE.insufficientGas) return SWAP_BLOCK.insufficientGas
 
   // A failed route is a fact about the pair; a pending one is temporary. The
   // fact is the more useful thing to say, so it goes first.
@@ -319,6 +407,12 @@ export function swapAction({ phase, block, fromSymbol = 'token', failedStep = nu
     return { label: 'Switch to PulseChain', intent: SWAP_INTENT.switchChain, disabled: false, busy: false, tone: 'warn' }
   }
   if (block === SWAP_BLOCK.noAmount) return idle('Enter an amount', SWAP_INTENT.none)
+  if (block === SWAP_BLOCK.insufficientBalance) {
+    return idle(`Not enough ${fromSymbol}`, SWAP_INTENT.none, { tone: 'warn' })
+  }
+  if (block === SWAP_BLOCK.insufficientGas) {
+    return idle('Not enough PLS for gas', SWAP_INTENT.none, { tone: 'warn' })
+  }
   if (block === SWAP_BLOCK.noRoute) return idle('No route for this pair', SWAP_INTENT.none, { tone: 'danger' })
   if (block === SWAP_BLOCK.quoting) {
     return { label: 'Fetching quote…', intent: SWAP_INTENT.none, disabled: true, busy: true, tone: null }

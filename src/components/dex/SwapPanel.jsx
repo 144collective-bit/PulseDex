@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import TokenLogo from '../TokenLogo'
 import TokenSelectModal from './TokenSelectModal'
+import { formatUnits } from 'viem'
 import { useSwapQuote } from '../../hooks/useSwapQuote'
 import { useTokenUsdPrice } from '../../hooks/useTokenUsdPrice'
 import { useResolvedToken } from '../../hooks/useResolvedToken'
@@ -269,6 +270,23 @@ export default function SwapPanel({
       <div className="swap-field">
         <div className="swap-field-top">
           <span className="swap-field-label">You pay</span>
+          {exec.maxSpendableRaw > 0n && !exec.inputsLocked && (
+            <button
+              type="button"
+              className="swap-max"
+              onClick={() => setAmount(formatUnits(exec.maxSpendableRaw, fromToken.decimals))}
+              /* Not the whole balance for native PLS: the fee comes out of the
+                 same pot, so filling in all of it produces a transaction with
+                 nothing left to pay for itself. */
+              title={
+                fromToken.isNative
+                  ? 'Your balance, less enough PLS to cover the fee'
+                  : 'Your full balance'
+              }
+            >
+              Max
+            </button>
+          )}
         </div>
         <div className="swap-field-row">
           <input

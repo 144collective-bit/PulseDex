@@ -3,18 +3,23 @@ import { useAccount, useWaitForTransactionReceipt, useWriteContract } from 'wagm
 import { pulsechain } from '../config/pulsechain'
 import { FEATURES } from '../config/features'
 import { buildApproveCall, buildSwapCall } from '../services/swap'
+import { NATIVE_PLS } from '../config/dex'
 import {
   APPROVAL,
+  BALANCE,
   SWAP_INTENT,
   SWAP_PHASE,
   approvalCoversCall,
   approvalState,
+  balanceState,
   blockingReason,
   canBuildSwap,
   derivePhase,
   executionKey,
   isApprovalSettling,
+  estimateGasReserve,
   isSwapInFlight,
+  maxSpendable,
   needsAllowanceReset,
   nextAllowancePollMs,
   parseAmountRaw,
@@ -25,6 +30,7 @@ import {
 import { describeTxError, isRejection } from '../utils/walletErrors'
 import { explorerTxUrl } from '../utils/explorer'
 import { useAllowance } from './useAllowance'
+import { useGasPrice, useTokenBalance } from './useTokenBalance'
 import { usePulsechainGuard } from './usePulsechainGuard'
 
 /**
@@ -86,6 +92,33 @@ export function useSwapExecution({
    */
   const allowanceRaw = allowance.data
   const refetchAllowance = allowance.refetch
+
+  /*
+   * Two balances, because both can be the thing that stops a trade. Selling a
+   * token needs that token and some PLS for the fee; selling PLS needs the
+   * amount and the fee to come out of one balance.
+   */
+  const isNativeFrom = from?.address === NATIVE_PLS
+  const fromBalance = useTokenBalance({ token: from, owner: address })
+  const nativeBalance = useTokenBalance({
+    token: { address: NATIVE_PLS, decimals: 18, symbol: 'PLS' },
+    owner: address,
+    enabled: Boolean(address) && !isNativeFrom,
+  })
+  const gasPrice = useGasPrice({ enabled: Boolean(address) })
+
+  const gasReserveRaw = estimateGasReserve(gasPrice.data)
+  const nativeBalanceRaw = isNativeFrom ? fromBalance.data : nativeBalance.data
+
+  const balance = balanceState({
+    isNative: isNativeFrom,
+    balanceRaw: fromBalance.data,
+    nativeBalanceRaw,
+    amountInRaw,
+    gasReserveRaw,
+    isLoading: fromBalance.isLoading || (!isNativeFrom && nativeBalance.isLoading),
+    isError: fromBalance.isError,
+  })
 
   const approveWrite = useWriteContract()
   const swapWrite = useWriteContract()
@@ -149,6 +182,7 @@ export function useSwapExecution({
     isQuoteFetching,
     isQuoteError,
     canBuild,
+    balance,
   })
 
   const { phase, failedStep } = derivePhase({
@@ -358,6 +392,19 @@ export function useSwapExecution({
     },
     isInFlight: inFlight,
     inputsLocked: shouldLockInputs(phase),
+    balance,
+    balanceRaw: fromBalance.data,
+    /*
+     * The largest amount that can actually be sent - the whole balance for a
+     * token, and everything but the fee reserve for native PLS. Offered as a
+     * bigint so the panel formats it with the token's own decimals rather than
+     * round-tripping it through a float.
+     */
+    maxSpendableRaw: maxSpendable({
+      balanceRaw: fromBalance.data,
+      isNative: isNativeFrom,
+      gasReserveRaw,
+    }),
     approveHash,
     swapHash,
     explorer: {
