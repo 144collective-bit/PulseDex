@@ -2212,3 +2212,75 @@
   padding: 2px 6px;
   letter-spacing: 0.04em;
 }
+
+/*
+ * Token picker rows.
+ *
+ * The list grew from eleven curated tokens to every token with a real market,
+ * so a row now has to say more than its name: a price and a pool depth are what
+ * separate the token someone meant from the three others sharing its ticker.
+ */
+.dex-token-market {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  margin-left: auto;
+  padding-left: 10px;
+  flex: none;
+  font-family: var(--font-mono);
+  line-height: 1.25;
+}
+
+.dex-token-price {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-primary, #f8fafc);
+}
+
+.dex-token-liq {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--text-muted, #64748b);
+}
+
+.dex-token-liq svg {
+  opacity: 0.7;
+}
+
+/* A heading over results the curated list does not vouch for. */
+.dex-token-section {
+  margin: 12px 0 6px;
+  padding: 0 4px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--pulse-yellow, #fbbf24);
+}
+
+/*
+ * Anything reached by search rather than by the list. Marked with a warm edge
+ * rather than a warning of its own - the section heading above already says
+ * what these are, and a banner per row would train people to ignore banners.
+ */
+.dex-token-row.is-unlisted {
+  border-left: 2px solid rgba(251, 191, 36, 0.4);
+}
+
+.dex-token-row:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+/* The address, on rows where the name is not enough to identify the token. */
+.dex-token-addr {
+  margin-left: 6px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--text-muted, #64748b);
+  opacity: 0.8;
+}
