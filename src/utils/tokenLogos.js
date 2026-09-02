@@ -16,8 +16,8 @@ export const TOKEN_LOGO_MAP = {
   '0x2b591e99afe9f32eaa6214f7b7629768c40eeb39': 'https://dd.dexscreener.com/ds-data/tokens/pulsechain/0x2b591e99afe9f32eaa6214f7b7629768c40eeb39.png',
 
   // eHEX / HEX from Ethereum
-  'EHEX': 'https://dd.dexscreener.com/ds-data/tokens/pulsechain/0x57fde0a71132198bbec939bb98976993d8d89d225.png',
-  '0x57fde0a71132198bbec939bb98976993d8d89d225': 'https://dd.dexscreener.com/ds-data/tokens/pulsechain/0x57fde0a71132198bbec939bb98976993d8d89d225.png',
+  'EHEX': 'https://dd.dexscreener.com/ds-data/tokens/pulsechain/0x57fde0a71132198bbec939b98976993d8d89d225.png',
+  '0x57fde0a71132198bbec939b98976993d8d89d225': 'https://dd.dexscreener.com/ds-data/tokens/pulsechain/0x57fde0a71132198bbec939b98976993d8d89d225.png',
 
   // INC (Incentive Token)
   'INC': 'https://dd.dexscreener.com/ds-data/tokens/pulsechain/0x2fa878ab3f87cc1c9737fc071108f904c0b0c95d.png',

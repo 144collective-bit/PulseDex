@@ -58,7 +58,12 @@ export const KNOWN_PULSE_TOKENS = [
   },
   {
     address: '0x57fde0a71132198BBeC939B98976993d8D89D225',
-    symbol: 'HEX',
+    // Bridged HEX, distinct from PulseChain's own at 0x2b59... and holding
+    // separate pools. Both report "HEX" on chain and through the explorer, so
+    // the picker would otherwise offer two identical rows for two different
+    // tokens - and choosing the wrong one is a trade into the wrong pool.
+    // eHEX is what the chain's own users call it.
+    symbol: 'eHEX',
     name: 'HEX from Ethereum',
     decimals: 8,
     logo: 'https://dd.dexscreener.com/ds-data/tokens/pulsechain/0x57fde0a71132198bbec939b98976993d8d89d225.png',

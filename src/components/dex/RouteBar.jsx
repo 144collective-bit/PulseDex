@@ -66,8 +66,9 @@ export default function RouteBar({ route, activePair, fromSymbol, toSymbol }) {
       <div className="dex-route-note">
         <AlertTriangle size={13} />
         <span>
-          {/* The pool's own symbols, not the picker's: two curated tokens both
-              answer to "HEX", so naming the pool is the unambiguous form. */}
+          {/* The pool's own symbols, not the picker's. The picker separates
+              PulseChain HEX from bridged eHEX; the pool data does not, and this
+              sentence is about a pool. */}
           Thin pool — {activePair.baseToken?.symbol}/{activePair.quoteToken?.symbol}{' '}
           holds only {liq(activePair)} in liquidity. A single trade can move this
           price sharply and the chart reflects that, so treat the ratio with
