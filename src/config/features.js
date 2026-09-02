@@ -37,13 +37,15 @@ export const FEATURES = {
    *  that tax transfers, which `getAmountsOut` over-quotes - the swap is now
    *  simulated before signing and floored against what will actually arrive.
    *
-   *  It is still false. Nothing above is a substitute for a trade made with
-   *  real money on a real wallet, and turning it on is a decision to make
-   *  deliberately rather than a box that got ticked when the last test passed.
+   *  Now true, deliberately and with the gap named: no transaction has ever
+   *  been signed through this path. Everything above is tested, simulated and
+   *  mutation-checked, and none of that is the same as a trade made with real
+   *  money on a real wallet.
    *
-   *  With this false the panel quotes exactly as before and the button reads
-   *  "Trading not enabled". Nothing can be signed. */
-  dexSwapLive: false,
+   *  This site is public, so it is on for everyone who visits, not only for
+   *  whoever is testing. Setting it back to false is the whole rollback - the
+   *  button returns to "Trading not enabled" and nothing can be signed. */
+  dexSwapLive: true,
 
   /** The Trenches tab shows the live pump.tires bonding-curve board. When
    *  false it falls back to the curated ecosystem link directory, which is
