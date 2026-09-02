@@ -150,3 +150,42 @@ describe('activeCandle', () => {
     expect(activeCandle(null, 1)).toBeNull()
   })
 })
+
+describe('when the series is not quoted in dollars', () => {
+  /*
+   * Candles built from a pool's own swaps are priced in that pool's quote
+   * token. Printing "$0.8372" over a figure that is 0.8372 WPLS states a price
+   * about a hundred thousand times what was actually paid - the chart would be
+   * confidently, enormously wrong, and look completely ordinary doing it.
+   */
+  const c = { time: 1, open: 0.8372, high: 0.8379, low: 0.8335, close: 0.8336, volume: 80_900_000 }
+
+  it('drops the dollar sign and names the token instead', () => {
+    const out = legendForCandle(c, { quote: 'WPLS' })
+    expect(out.open).not.toContain('$')
+    expect(out.close).not.toContain('$')
+    expect(out.volume).toContain('WPLS')
+    expect(out.volume).not.toContain('$')
+  })
+
+  it('still shows the price to a useful precision', () => {
+    const out = legendForCandle(c, { quote: 'WPLS' })
+    expect(Number(out.open)).toBeCloseTo(0.8372, 4)
+  })
+
+  it('reports which token it is quoting, so the caller can label it', () => {
+    expect(legendForCandle(c, { quote: 'WPLS' }).quote).toBe('WPLS')
+  })
+
+  it('keeps dollars when no token is named, which is the default', () => {
+    // The aggregator's series is in USD and must stay that way.
+    const out = legendForCandle(c)
+    expect(out.open).toContain('$')
+    expect(out.quote).toBeNull()
+  })
+
+  it('measures the move identically either way', () => {
+    // Denomination changes the units, never the percentage.
+    expect(legendForCandle(c, { quote: 'WPLS' }).changeLabel).toBe(legendForCandle(c).changeLabel)
+  })
+})

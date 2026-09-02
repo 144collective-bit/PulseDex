@@ -47,10 +47,30 @@ export function candleChangePct(candle) {
  * Reported compactly: the digits of a pool's five-minute turnover are noise,
  * the magnitude is the signal.
  */
-export function formatVolume(value) {
+export function formatVolume(value, quote = null) {
   const n = Number(value)
   if (!Number.isFinite(n) || n <= 0) return null
-  return formatUsd(n, n >= 1000 ? 1 : 2)
+  const compact = formatUsd(n, n >= 1000 ? 1 : 2)
+  // Quoted in a token, the dollar sign is simply false. Swapped for the
+  // symbol rather than dropped, so the number still says what it counts.
+  return quote ? `${compact.replace('$', '')} ${quote}` : compact
+}
+
+/**
+ * A price, in whatever the series is actually quoted in.
+ *
+ * The default is USD, which is what the aggregator returns. Candles built from
+ * a pool's own swaps are quoted in that pool's quote token instead, and
+ * printing "$0.8372" for a figure that is 0.8372 WPLS states a price roughly a
+ * hundred thousand times what was paid.
+ */
+function formatQuotedPrice(value, quote) {
+  if (!quote) return formatCryptoPrice(value)
+
+  const n = Number(value)
+  if (!Number.isFinite(n)) return null
+  // Enough significant figures to separate adjacent candles at any magnitude.
+  return n >= 1 ? n.toPrecision(6).replace(/\.?0+$/, '') : n.toPrecision(4)
 }
 
 /**
@@ -59,7 +79,7 @@ export function formatVolume(value) {
  * Returns null when there is no candle to describe, so the caller renders
  * nothing rather than a row of dashes.
  */
-export function legendForCandle(candle) {
+export function legendForCandle(candle, { quote = null } = {}) {
   if (!candle) return null
 
   /*
@@ -81,11 +101,12 @@ export function legendForCandle(candle) {
 
   return {
     time: candle.time ?? null,
-    open: formatCryptoPrice(open),
-    high: formatCryptoPrice(high),
-    low: formatCryptoPrice(low),
-    close: formatCryptoPrice(close),
-    volume: formatVolume(candle.volume),
+    quote,
+    open: formatQuotedPrice(open, quote),
+    high: formatQuotedPrice(high, quote),
+    low: formatQuotedPrice(low, quote),
+    close: formatQuotedPrice(close, quote),
+    volume: formatVolume(candle.volume, quote),
     changePct,
     changeLabel: changePct === null ? null : `${changePct >= 0 ? '+' : ''}${changePct.toFixed(2)}%`,
     direction: candleDirection(candle),

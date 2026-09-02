@@ -19,6 +19,26 @@ export const FEATURES = {
    *  commented-out block. */
   auth: false,
 
+  /**
+   *  Candles built from the pool's own Swap events rather than an aggregator.
+   *
+   *  An experiment, off by default, and it replaces the series rather than
+   *  merging into it - the two are not in the same units. The aggregator quotes
+   *  in USD; this quotes in the pool's own quote token, which is what the swaps
+   *  actually say. Laying one over the other would put a five-order-of-
+   *  magnitude cliff in the middle of the chart.
+   *
+   *  Converting to USD is possible but not free: it needs the quote token's
+   *  price per candle, not now. Measured against GeckoTerminal with a single
+   *  spot rate, the error runs about 1% an hour back and 0.15% at the latest
+   *  candle - which is the conversion drifting, not the candles.
+   *
+   *  What it buys, once finished: no rate limit, no third-party outage, candles
+   *  for pairs too new to be indexed, and a live tail that updates as swaps
+   *  land instead of on a thirty-second poll.
+   */
+  onchainCandles: false,
+
   /** Markets tab. */
   markets: false,
 

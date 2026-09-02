@@ -12,6 +12,7 @@ import {
 import { Loader2, AlertTriangle, RefreshCw } from 'lucide-react'
 import { getPoolCandles, CHART_INTERVALS, DEFAULT_INTERVAL } from '../services/geckoterminal'
 import { legendForCandle, activeCandle, DIRECTION } from '../utils/chartLegend'
+import { useOnchainCandles } from '../hooks/useOnchainCandles'
 import { EMA_PERIODS, SMA_PERIODS, RSI_BANDS, PANES } from '../config/chartTools'
 import { sma, ema, bollinger, rsi, macd } from '../utils/indicators'
 import ChartToolbar from './ChartToolbar'
@@ -109,6 +110,27 @@ export default function PairChart({
   // The candle under the crosshair. Null means the pointer is off the chart,
   // which the readout treats as "the latest" rather than as nothing.
   const [hoveredTime, setHoveredTime] = useState(null)
+
+  /*
+   * The experiment: candles from the pool's Swap events.
+   *
+   * Off unless FEATURES.onchainCandles is on, and it stands in for the
+   * aggregator's series rather than merging with it - the two are in different
+   * units. This one is quoted in the pool's quote token, straight from what the
+   * swaps say; the aggregator quotes USD. Laid over one another they would put
+   * a five-order-of-magnitude cliff in the middle of the chart.
+   *
+   * Only offered on the short intervals. A day candle needs weeks of blocks,
+   * and a log query that wide is refused by every public node worth using.
+   */
+  const onchainSeconds = { '1m': 60, '5m': 300, '15m': 900 }[interval] ?? null
+  const onchain = useOnchainCandles({
+    pair: pairAddress,
+    intervalSeconds: onchainSeconds ?? 60,
+    // A window sized to fill the visible chart without a wide log query.
+    seconds: (onchainSeconds ?? 60) * 120,
+    enabled: Boolean(onchainSeconds),
+  })
   const { settings, update, toggleMa, togglePane, setRsiPeriod, reset } = useChartSettings()
   const draw = useChartDrawings(pairAddress)
 
@@ -164,7 +186,7 @@ export default function PairChart({
    */
   const [measured, setMeasured] = useState(false)
 
-  const { data: candles, isLoading, isError, error, refetch, isFetching } = useQuery({
+  const { data: history, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['poolCandles', pairAddress?.toLowerCase(), tokenAddress?.toLowerCase(), interval],
     queryFn: () => getPoolCandles(pairAddress, interval, { tokenAddress }),
     enabled: Boolean(pairAddress),
@@ -311,7 +333,22 @@ export default function PairChart({
 
   // Derived rather than stored: the readout is a view of the candles, and
   // keeping a second copy in state is how the two drift apart.
-  const legend = legendForCandle(activeCandle(candles, hoveredTime))
+  /*
+   * Whichever series is in play. The on-chain one only wins when it is switched
+   * on and actually returned something, so a failed or empty read falls back to
+   * the chart that was already being drawn rather than to an empty frame.
+   */
+  const usingOnchain = onchain.enabled && onchain.candles.length > 0
+  const candles = usingOnchain ? onchain.candles : history
+
+  /*
+   * On-chain candles are quoted in the pool's quote token, so the readout is
+   * told which - printing a dollar sign over a figure that is 0.8372 WPLS
+   * would state a price a hundred thousand times what was paid.
+   */
+  const legend = legendForCandle(activeCandle(candles, hoveredTime), {
+    quote: usingOnchain ? quoteSymbol : null,
+  })
 
   /*
    * Own the set of series.
