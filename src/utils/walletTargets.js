@@ -96,8 +96,6 @@ export function walletHandoffLink(walletId, href) {
   }
 
   switch (walletId) {
-    case 'trust-app':
-      return `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(href)}`
     case 'okx-app':
       /*
        * Encoded twice, and both are load-bearing. The inner call protects the
@@ -109,8 +107,6 @@ export function walletHandoffLink(walletId, href) {
       return `https://web3.okx.com/download?deeplink=${encodeURIComponent(
         `okx://wallet/dapp/url?dappUrl=${encodeURIComponent(href)}`,
       )}`
-    case 'coinbase-app':
-      return `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(href)}`
     default:
       return null
   }

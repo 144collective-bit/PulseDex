@@ -142,12 +142,6 @@ function hasInjectedProvider() {
  */
 const MOBILE_HANDOFF = [
   {
-    id: 'trust-app',
-    name: 'Trust Wallet',
-    desc: 'Opens this page inside Trust Wallet.',
-    link: () => walletHandoffLink('trust-app', window.location.href),
-  },
-  {
     id: 'okx-app',
     name: 'OKX Wallet',
     desc: 'Opens this page inside the OKX app.',
@@ -158,12 +152,6 @@ const MOBILE_HANDOFF = [
      * its first query separator and the wallet opens on its home screen.
      */
     link: () => walletHandoffLink('okx-app', window.location.href),
-  },
-  {
-    id: 'coinbase-app',
-    name: 'Coinbase Wallet',
-    desc: 'Opens this page inside Coinbase Wallet.',
-    link: () => walletHandoffLink('coinbase-app', window.location.href),
   },
 ]
 

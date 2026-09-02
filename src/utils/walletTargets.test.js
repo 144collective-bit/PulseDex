@@ -123,9 +123,12 @@ describe('walletHandoffLink', () => {
     expect(link.split('?deeplink=')[1]).not.toContain('&')
   })
 
-  it('encodes the whole address for Trust and Coinbase', () => {
-    expect(walletHandoffLink('trust-app', HREF)).toContain(encodeURIComponent(HREF))
-    expect(walletHandoffLink('coinbase-app', HREF)).toContain(encodeURIComponent(HREF))
+  it('offers no handoff for a wallet this app does not list', () => {
+    // Trust and Coinbase were dropped with MetaMask: the four wallets are
+    // Rabby, Internet Money, OKX and ZKX, and a link to anything else invites
+    // a connection nobody wanted.
+    expect(walletHandoffLink('trust-app', HREF)).toBeNull()
+    expect(walletHandoffLink('coinbase-app', HREF)).toBeNull()
   })
 
   it('returns nothing rather than a broken link', () => {
@@ -136,6 +139,15 @@ describe('walletHandoffLink', () => {
 
   it('no longer offers a MetaMask handoff', () => {
     expect(walletHandoffLink('metamask-app', HREF)).toBeNull()
+  })
+
+  it('leaves OKX as the only wallet with a mobile handoff', () => {
+    // Worth stating plainly: of the four, OKX is the only one publishing a
+    // link format, so it is the only one a phone can reach without
+    // WalletConnect configured.
+    const offered = ['rabby', 'internetmoney', 'okx-app', 'zkxwallet', 'trust-app', 'coinbase-app']
+      .filter((id) => walletHandoffLink(id, HREF) !== null)
+    expect(offered).toEqual(['okx-app'])
   })
 })
 
