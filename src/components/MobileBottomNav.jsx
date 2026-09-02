@@ -4,7 +4,6 @@ import {
   Flame,
   Zap,
   Radio,
-  LayoutGrid,
   PieChart,
 } from 'lucide-react'
 import { FEATURES } from '../config/features'
@@ -24,16 +23,6 @@ export default function MobileBottomNav({
           <Home size={22} className="text-pulse-cyan" />
         </div>
         <span className="mobile-nav-label">Home</span>
-      </button>
-
-      <button
-        className={`mobile-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
-        onClick={() => setActiveTab('dashboard')}
-      >
-        <div className="mobile-nav-icon-wrapper">
-          <LayoutGrid size={22} className="text-pulse-cyan" />
-        </div>
-        <span className="mobile-nav-label">Dashboard</span>
       </button>
 
       <button

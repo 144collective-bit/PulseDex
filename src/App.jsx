@@ -22,14 +22,12 @@ import { SiweAuthProvider, useSiweAuth } from './context/SiweAuthContext'
  *
  * Only one of these is ever on screen, and the shell already mounts them that
  * way - but importing them statically still put every one into the first
- * download. Someone arriving to look at a price was paying for the dashboard,
- * the charting library, the grid engine and the trenches board before anything
- * appeared.
+ * download. Someone arriving to look at a price was paying for the charting
+ * library and the trenches board before anything appeared.
  *
  * Home is deliberately not in this list. It is the landing page, so deferring
  * it would only add a round trip to the one view everybody sees.
  */
-const Dashboard = lazy(() => import('./dashboard/components/Dashboard'))
 const TokenPage = lazy(() => import('./components/TokenPage'))
 const TrenchesView = lazy(() => import('./components/TrenchesView'))
 const DexTerminal = lazy(() => import('./components/DexTerminal'))
@@ -220,9 +218,9 @@ function MainApp() {
    * Track this account's watchlist, and follow it when anything else changes it.
    *
    * The address change is the obvious case. The subscription is the important
-   * one: the dashboard's watchlist module writes the same record, and holding a
-   * stale copy here meant the next star toggled on the screener wrote that
-   * stale list back and dropped whatever the dashboard had added.
+   * one: more than one surface writes this same record, and holding a stale
+   * copy here meant the next star toggled on the screener wrote that stale list
+   * back and dropped whatever another had added.
    */
   useEffect(() => {
     const load = () => {
@@ -390,11 +388,6 @@ function MainApp() {
         {activeTab === 'home' && (
           <HomeView onSelectPairForChart={handleSelectPair} />
         )}
-
-        {/* The dashboard owns its own state and data. It is mounted only while
-            its tab is active so a canvas of modules is not polling in the
-            background behind every other page. */}
-        {activeTab === 'dashboard' && <Dashboard />}
 
         {activeTab === 'trenches' && (
           <TrenchesView onSelectPairForChart={handleSelectPair} onOpenTokenPage={openToken} />

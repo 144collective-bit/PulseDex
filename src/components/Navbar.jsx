@@ -13,7 +13,6 @@ import {
   LogOut,
   Zap,
   Radio,
-  LayoutGrid,
   User,
   UserPlus,
   Sparkles,
@@ -161,13 +160,6 @@ export default function Navbar({
             >
               <Home size={16} className="text-pulse-cyan" />
               <span>Home</span>
-            </button>
-            <button
-              className={`btn-tab ${activeTab === 'dashboard' ? 'active' : ''}`}
-              onClick={() => setActiveTab('dashboard')}
-            >
-              <LayoutGrid size={16} className="text-pulse-cyan" />
-              <span>Dashboard</span>
             </button>
             <button
               className={`btn-tab ${activeTab === 'screener' ? 'active' : ''}`}
