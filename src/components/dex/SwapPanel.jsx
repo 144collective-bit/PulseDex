@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   ArrowDown,
   Settings2,
+  BadgePercent,
   ChevronDown,
   Info,
   AlertTriangle,
@@ -199,6 +200,18 @@ export default function SwapPanel({
     <section className={`swap-panel ${compact ? 'is-compact' : ''}`}>
       <header className="swap-head">
         <span className="swap-head-title">{compact ? `Swap ${toToken.symbol}` : 'Swap'}</span>
+        {/* The claim is about this app's own cut, which is nothing: the call
+            goes straight to the PulseX router and the recipient is the user.
+            The pool's fee still applies, which the title says, because a badge
+            reading "0% fees" next to a trade that visibly loses 0.29% would be
+            the kind of small lie that costs trust. */}
+        <span
+          className="swap-fee-badge"
+          title="PulseDEX adds no fee of its own and takes no cut of your trade. You pay the pool's own fee and PulseChain gas, exactly as if you traded on PulseX directly."
+        >
+          <BadgePercent size={11} />
+          0% platform fee
+        </span>
         <button
           type="button"
           className={`swap-gear ${showSettings ? 'active' : ''}`}

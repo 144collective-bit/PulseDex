@@ -156,13 +156,15 @@ export default function Navbar({
           <nav className="nav-tabs desktop-only-nav">
             <button
               className={`btn-tab ${activeTab === 'home' ? 'active' : ''}`}
+              aria-current={activeTab === 'home' ? 'page' : undefined}
               onClick={() => setActiveTab('home')}
             >
-              <Home size={16} className="text-pulse-cyan" />
+              <Home size={16} />
               <span>Home</span>
             </button>
             <button
               className={`btn-tab ${activeTab === 'screener' ? 'active' : ''}`}
+              aria-current={activeTab === 'screener' ? 'page' : undefined}
               onClick={() => setActiveTab('screener')}
             >
               <TrendingUp size={16} />
@@ -170,21 +172,24 @@ export default function Navbar({
             </button>
             <button
               className={`btn-tab ${activeTab === 'trenches' ? 'active' : ''}`}
+              aria-current={activeTab === 'trenches' ? 'page' : undefined}
               onClick={() => setActiveTab('trenches')}
             >
-              <Flame size={16} className="text-pulse-cyan" />
+              <Flame size={16} />
               <span>Trenches</span>
             </button>
             <button
               className={`btn-tab ${activeTab === 'dex' ? 'active' : ''}`}
+              aria-current={activeTab === 'dex' ? 'page' : undefined}
               onClick={() => setActiveTab('dex')}
             >
-              <Zap size={16} className="text-pulse-green" />
+              <Zap size={16} />
               <span>DEX</span>
             </button>
             {FEATURES.markets && (
               <button
                 className={`btn-tab ${activeTab === 'markets' ? 'active' : ''}`}
+              aria-current={activeTab === 'markets' ? 'page' : undefined}
                 onClick={() => setActiveTab('markets')}
               >
                 <Radio size={16} />
@@ -193,6 +198,7 @@ export default function Navbar({
             )}
             <button
               className={`btn-tab ${activeTab === 'portfolio' ? 'active' : ''}`}
+              aria-current={activeTab === 'portfolio' ? 'page' : undefined}
               onClick={() => setActiveTab('portfolio')}
             >
               <PieChart size={16} />
