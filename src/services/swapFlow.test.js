@@ -1132,3 +1132,57 @@ describe('derivePhase: a token fee against a transaction already in flight', () 
     expect(action.label).not.toBe('Swap')
   })
 })
+
+describe('an approval started after a swap has settled', () => {
+  const base = { block: SWAP_BLOCK.none, approval: APPROVAL.required, isRejection: () => false }
+
+  it('is invisible while the settled swap is still in the record', () => {
+    /*
+     * Reproduces what a user hit on the live site. A swap had confirmed; their
+     * wallet had not caught up, so they pressed Approve. The approval reached
+     * the chain and succeeded - and the panel showed nothing about it, because
+     * a successful swap outranks every approve rule and keeps doing so.
+     *
+     * This test pins the mechanism rather than the fix: given both, the swap
+     * still wins. The fix is that the hook stops producing this state, by
+     * clearing the settled swap when an approval starts.
+     */
+    expect(derivePhase({ ...base, swap: { outcome: 'success' }, approve: { pending: true } }).phase).toBe(
+      SWAP_PHASE.success
+    )
+    expect(derivePhase({ ...base, swap: { outcome: 'success' }, approve: { hash: '0xa' } }).phase).toBe(
+      SWAP_PHASE.success
+    )
+  })
+
+  it('is visible once the settled swap has been cleared, which is what the fix does', () => {
+    expect(derivePhase({ ...base, swap: {}, approve: { pending: true } }).phase).toBe(
+      SWAP_PHASE.approving
+    )
+    expect(derivePhase({ ...base, swap: {}, approve: { hash: '0xa' } }).phase).toBe(
+      SWAP_PHASE.approveConfirming
+    )
+  })
+
+  it('leaves a settled swap unable to hold the inputs open behind it', () => {
+    /*
+     * The second half of the failure. `success` is deliberately not in flight,
+     * so inputs unlock and quotes resume - and the next edit resets the record,
+     * taking a live approval hash with it. An approval that is visible is also
+     * in flight, which is what stops that.
+     */
+    expect(isSwapInFlight(SWAP_PHASE.success)).toBe(false)
+    expect(isSwapInFlight(SWAP_PHASE.approving)).toBe(true)
+    expect(isSwapInFlight(SWAP_PHASE.approveConfirming)).toBe(true)
+  })
+
+  it('still refuses to let a finished approval pull a running swap backwards', () => {
+    // The precedence exists for a reason and must survive the fix.
+    expect(
+      derivePhase({ ...base, swap: { pending: true }, approve: { outcome: 'success' } }).phase
+    ).toBe(SWAP_PHASE.swapping)
+    expect(
+      derivePhase({ ...base, swap: { hash: '0xs' }, approve: { outcome: 'success' } }).phase
+    ).toBe(SWAP_PHASE.swapConfirming)
+  })
+})

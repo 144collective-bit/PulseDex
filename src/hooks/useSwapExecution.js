@@ -366,11 +366,29 @@ export function useSwapExecution({
       if (!call) return
 
       const hash = await approveWrite.writeContractAsync(call)
+
+      /*
+       * An approval starts a new cycle, so the previous swap's result is
+       * cleared rather than merged alongside it.
+       *
+       * Without this the record carries a settled swap and a live approval at
+       * once, and `derivePhase` answers for the swap - its success outranks
+       * every approve rule, and goes on doing so indefinitely. The approval
+       * then confirms on chain while the panel shows nothing about it, and
+       * because a settled swap is not "in flight" the inputs stay live, so the
+       * next edit resets the record and discards the hash mid-flight.
+       *
+       * Safe to clear here: the button only offers an approval when no swap is
+       * outstanding, because the in-flight phases disable it.
+       */
+      clearPendingSwap(address, chainId)
+      swapWrite.reset?.()
+      setSwapError(null)
       recordPendingSwap({ address, chainId, approveHash: hash, pair: tradeLabel(from, to, amount) })
     } catch (err) {
       setApproveError(err)
     }
-  }, [address, chainId, from, to, amount, spender, amountInRaw, allowanceRaw, approveWrite])
+  }, [address, chainId, from, to, amount, spender, amountInRaw, allowanceRaw, approveWrite, swapWrite])
 
   const swap = useCallback(async () => {
     setSwapError(null)
