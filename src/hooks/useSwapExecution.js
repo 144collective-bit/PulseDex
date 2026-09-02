@@ -27,6 +27,7 @@ import {
   quoteDrift,
   parseAmountRaw,
   receiptOutcome,
+  routeChanged,
   shouldLockInputs,
   swapAction,
 } from '../services/swapFlow'
@@ -80,11 +81,23 @@ export function useSwapExecution({
    * several moves ago.
    */
   const [priceMoved, setPriceMoved] = useState(null)
+  const [routeMoved, setRouteMoved] = useState(false)
   const [acceptedRaw, setAcceptedRaw] = useState(null)
   const [requoting, setRequoting] = useState(false)
 
   const amountInRaw = parseAmountRaw(amount, from?.decimals)
-  const spender = quote?.router ?? null
+  /*
+   * The router the allowance is about.
+   *
+   * Normally the one the displayed quote used, but re-pricing at the moment of
+   * signing can land on the other one, and from then on it is the new router
+   * that matters: the allowance has to be read for it, and an approval has to
+   * be granted to it. Held separately from the quote so that switching does
+   * not read as a different trade and wipe the state of the one in progress.
+   */
+  const quotedRouter = quote?.router ?? null
+  const [activeRouter, setActiveRouter] = useState(null)
+  const spender = activeRouter ?? quotedRouter
 
   const allowance = useAllowance({
     token: from,
@@ -229,6 +242,8 @@ export function useSwapExecution({
     setRefetchesSinceConfirm(0)
     setPriceMoved(null)
     setAcceptedRaw(null)
+    setActiveRouter(null)
+    setRouteMoved(false)
     approveWrite.reset?.()
     swapWrite.reset?.()
   }, [approveWrite, swapWrite])
@@ -268,7 +283,7 @@ export function useSwapExecution({
     slippagePct,
     recipient: address,
     chainId: guard.chainId,
-    router: spender,
+    router: quotedRouter,
   })
   const lastKey = useRef(key)
 
@@ -349,6 +364,27 @@ export function useSwapExecution({
       setSwapError(new Error('Could not price this trade just now. Try again.'))
       return
     }
+
+    /*
+     * The route moved to the other router.
+     *
+     * Only when an allowance is in play. Selling native PLS approves nothing,
+     * so which router the call names costs the user a press for no reason -
+     * the call is built from `fresh` and names the right one either way.
+     *
+     * When it does matter, nothing is signed on this press: pointing the
+     * allowance at the new router has to happen first, which re-reads it and
+     * lets the button offer an approval for the router the trade will actually
+     * use. Carrying on here would fail the spender check below and then send
+     * the user to approve the old router again - a loop with a fee on a lap.
+     */
+    if (approval !== APPROVAL.notRequired && routeChanged(spender, fresh.router)) {
+      setActiveRouter(fresh.router)
+      setAcceptedRaw(fresh.amountOutRaw)
+      setRouteMoved(true)
+      return
+    }
+    setRouteMoved(false)
 
     /*
      * A move beyond their own tolerance is shown rather than signed. The floor
@@ -461,6 +497,7 @@ export function useSwapExecution({
     inputsLocked: shouldLockInputs(phase),
     balance,
     priceMoved,
+    routeMoved,
     isRequoting: requoting,
     balanceRaw: fromBalance.data,
     /*

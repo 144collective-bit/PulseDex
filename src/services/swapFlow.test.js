@@ -17,6 +17,7 @@ import {
   needsRequoteConfirmation,
   quoteDrift,
   receiptOutcome,
+  routeChanged,
   isApprovalSettling,
   nextAllowancePollMs,
   derivePhase,
@@ -888,5 +889,33 @@ describe('needsRequoteConfirmation', () => {
     expect(
       needsRequoteConfirmation({ shownRaw: undefined, freshRaw: shownRaw, slippagePct: 0.5 })
     ).toBe(false)
+  })
+})
+
+describe('routeChanged', () => {
+  it('notices when re-pricing lands on the other router', () => {
+    /*
+     * An allowance granted to one PulseX router is worth nothing to the other.
+     * Missing this sends the user to approve the router they are not trading
+     * through, which fails, which sends them to approve it again - a loop with
+     * a fee on every lap.
+     */
+    expect(routeChanged(PULSEX_ROUTER_V2, PULSEX_ROUTER_V1)).toBe(true)
+  })
+
+  it('is quiet when the route held', () => {
+    expect(routeChanged(PULSEX_ROUTER_V2, PULSEX_ROUTER_V2)).toBe(false)
+  })
+
+  it('does not mistake casing for a different router', () => {
+    // The two sides come from different places and wallets disagree about case.
+    expect(routeChanged(PULSEX_ROUTER_V2.toLowerCase(), PULSEX_ROUTER_V2.toUpperCase().replace('0X', '0x'))).toBe(
+      false
+    )
+  })
+
+  it('claims nothing when either side is missing', () => {
+    expect(routeChanged(null, PULSEX_ROUTER_V1)).toBe(false)
+    expect(routeChanged(PULSEX_ROUTER_V2, null)).toBe(false)
   })
 })

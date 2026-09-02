@@ -430,6 +430,23 @@ export function shouldLockInputs(phase) {
 }
 
 /**
+ * Whether re-pricing moved the trade onto the other router.
+ *
+ * PulseX has two, holding different pools, and `quoteSwap` prefers V2 and only
+ * falls to V1 when V2 has nothing. So a flip between one press and the next
+ * means the pair genuinely moved - rare, but the twelve-second refresh runs for
+ * as long as the panel is open, and the consequence is not small: an allowance
+ * granted to one router is worth nothing to the other.
+ *
+ * Compared case-insensitively, because the two sides of this comparison come
+ * from different places and wallets disagree about address casing.
+ */
+export function routeChanged(spender, freshRouter) {
+  if (!spender || !freshRouter) return false
+  return String(spender).toLowerCase() !== String(freshRouter).toLowerCase()
+}
+
+/**
  * Whether the allowance we checked actually covers the call we are about to send.
  *
  * PulseX has two routers holding different pools, and the quote picks whichever

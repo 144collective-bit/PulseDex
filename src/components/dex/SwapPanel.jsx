@@ -468,6 +468,16 @@ export default function SwapPanel({
         </div>
       )}
 
+      {exec.routeMoved && (
+        <div className="swap-warning is-info">
+          <AlertTriangle size={14} />
+          <span>
+            The best route moved to a different PulseX pool. Approvals are per pool, so check the
+            button below before pressing again.
+          </span>
+        </div>
+      )}
+
       {exec.priceMoved && (
         <div className="swap-warning">
           <AlertTriangle size={14} />
