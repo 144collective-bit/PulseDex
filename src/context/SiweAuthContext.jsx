@@ -159,7 +159,7 @@ export function SiweAuthProvider({ children }) {
 
         /*
          * Only offer connectors whose provider actually resolves. The config
-         * declares targets for Rabby, MetaMask, Internet Money and ZKX; for
+         * declares targets for Rabby, Internet Money, OKX and ZKX; for
          * someone running just one of them the rest resolve to nothing and
          * throw instantly, which previously burned through the list and ended
          * in a misleading error.
@@ -174,7 +174,7 @@ export function SiweAuthProvider({ children }) {
           throw new Error(
             isMobileBrowser()
               ? 'No wallet found. Open pulsedex.net inside your wallet app’s browser, then try again.'
-              : 'No wallet extension detected. Install Rabby, MetaMask, Internet Money or ZKX, then try again.'
+              : 'No wallet extension detected. Install Rabby, Internet Money, OKX or ZKX, then try again.'
           )
         }
 

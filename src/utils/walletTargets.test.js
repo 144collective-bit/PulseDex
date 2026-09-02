@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { matchesWallet, detectWallet, walletHandoffLink } from './walletTargets'
+import {
+  matchesWallet,
+  detectWallet,
+  walletHandoffLink,
+  providerIsWallet,
+} from './walletTargets'
 
 /*
  * Getting the right wallet, and getting to it.
@@ -38,9 +43,16 @@ describe('matchesWallet', () => {
   })
 
   it('does not match one wallet against another', () => {
-    expect(matchesWallet(conn('rabby', 'Rabby Wallet'), 'metamask')).toBe(false)
-    expect(matchesWallet(conn('metaMask', 'MetaMask'), 'rabby')).toBe(false)
     expect(matchesWallet(conn('okxWallet', 'OKX Wallet'), 'internetmoney')).toBe(false)
+    expect(matchesWallet(conn('rabby', 'Rabby Wallet'), 'zkxwallet')).toBe(false)
+  })
+
+  it('offers nothing for MetaMask, which is no longer a choice here', () => {
+    // The four wallets are Rabby, Internet Money, OKX and ZKX. A matcher that
+    // still answered for MetaMask would let it back in through the connect
+    // flow without ever appearing in the list.
+    expect(matchesWallet(conn('metaMask', 'MetaMask'), 'metamask')).toBe(false)
+    expect(matchesWallet(conn('metaMaskSDK', 'MetaMask'), 'metamask')).toBe(false)
   })
 
   it('matches WalletConnect, which a case-sensitive comparison never did', () => {
@@ -76,21 +88,15 @@ describe('detectWallet', () => {
     const win = { ethereum: { isMetaMask: true }, okxwallet: {}, rabby: {} }
     expect(detectWallet('okx', win)).toBe(true)
     expect(detectWallet('rabby', win)).toBe(true)
-    expect(detectWallet('metamask', win)).toBe(true)
   })
 
-  it('does not report MetaMask for a wallet wearing its flag', () => {
-    // Several set isMetaMask for compatibility. Trusting it lists MetaMask as
-    // installed on machines that have never had it.
-    expect(detectWallet('metamask', { ethereum: { isMetaMask: true, isRabby: true } })).toBe(false)
-    expect(detectWallet('metamask', { ethereum: { isMetaMask: true, isOKXWallet: true } })).toBe(
-      false,
-    )
+  it('never reports MetaMask as present, since it is not offered', () => {
+    expect(detectWallet('metamask', { ethereum: { isMetaMask: true } })).toBe(false)
   })
 
   it('reports nothing on a page with no wallet at all', () => {
     // Every phone browser. The modal shows the handoff links instead.
-    for (const id of ['okx', 'rabby', 'internetmoney', 'metamask', 'zkxwallet']) {
+    for (const id of ['okx', 'rabby', 'internetmoney', 'zkxwallet']) {
       expect(detectWallet(id, {}), id).toBe(false)
       expect(detectWallet(id, undefined), id).toBe(false)
     }
@@ -117,10 +123,6 @@ describe('walletHandoffLink', () => {
     expect(link.split('?deeplink=')[1]).not.toContain('&')
   })
 
-  it('hands MetaMask an address with the scheme stripped, as it expects', () => {
-    expect(walletHandoffLink('metamask-app', HREF)).toBe('https://metamask.app.link/dapp/pulsedex.net/')
-  })
-
   it('encodes the whole address for Trust and Coinbase', () => {
     expect(walletHandoffLink('trust-app', HREF)).toContain(encodeURIComponent(HREF))
     expect(walletHandoffLink('coinbase-app', HREF)).toContain(encodeURIComponent(HREF))
@@ -130,5 +132,37 @@ describe('walletHandoffLink', () => {
     expect(walletHandoffLink('okx-app', '')).toBeNull()
     expect(walletHandoffLink('okx-app', 'not a url')).toBeNull()
     expect(walletHandoffLink('nonesuch', HREF)).toBeNull()
+  })
+
+  it('no longer offers a MetaMask handoff', () => {
+    expect(walletHandoffLink('metamask-app', HREF)).toBeNull()
+  })
+})
+
+describe('providerIsWallet', () => {
+  it('accepts a provider that is the wallet asked for', () => {
+    expect(providerIsWallet({ isRabby: true }, 'rabby')).toBe(true)
+    expect(providerIsWallet({ isInternetMoney: true }, 'internetmoney')).toBe(true)
+    expect(providerIsWallet({ isZKX: true }, 'zkxwallet')).toBe(true)
+    expect(providerIsWallet({ isOKXWallet: true }, 'okx')).toBe(true)
+    expect(providerIsWallet({ isOkxWallet: true }, 'okx')).toBe(true)
+  })
+
+  it('refuses a provider belonging to a different wallet', () => {
+    /*
+     * The reason this exists. The connect flow can fall back to whatever owns
+     * window.ethereum, and unchecked that means pressing "Rabby" hands back an
+     * account from whichever extension won the race - now including wallets
+     * that are no longer offered at all.
+     */
+    expect(providerIsWallet({ isMetaMask: true }, 'rabby')).toBe(false)
+    expect(providerIsWallet({ isRabby: true }, 'okx')).toBe(false)
+    expect(providerIsWallet({ isZKX: true }, 'okx')).toBe(false)
+  })
+
+  it('refuses a provider with nothing to identify it', () => {
+    expect(providerIsWallet({}, 'rabby')).toBe(false)
+    expect(providerIsWallet(null, 'rabby')).toBe(false)
+    expect(providerIsWallet({ isMetaMask: true }, 'metamask')).toBe(false)
   })
 })

@@ -540,7 +540,7 @@ export default function PortfolioView({ onSelectTokenForChart }) {
               </div>
               <h3 className="empty-hero-title">PulseChain Portfolio Tracker</h3>
               <p className="empty-hero-desc">
-                Connect your Web3 wallet (Rabby, MetaMask, Internet Money, ZKX) or track any watch-only PulseChain address (0x...) to automatically discover on-chain token holdings, live valuations, and 24h PnL.
+                Connect your Web3 wallet (Rabby, Internet Money, OKX, ZKX) or track any watch-only PulseChain address (0x...) to automatically discover on-chain token holdings, live valuations, and 24h PnL.
               </p>
               <div className="empty-hero-actions">
                 <button

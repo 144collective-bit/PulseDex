@@ -1,5 +1,5 @@
 import { http, createConfig, fallback } from 'wagmi'
-import { injected, metaMask, walletConnect } from 'wagmi/connectors'
+import { injected, walletConnect } from 'wagmi/connectors'
 import { mainnet, base, bsc, polygon, arbitrum } from 'viem/chains'
 import { pulsechain } from './pulsechain'
 
@@ -12,17 +12,18 @@ import { pulsechain } from './pulsechain'
  * four extensions, detected none of them, and offered to install browser
  * add-ons that cannot exist on a phone - there was no path to connect at all.
  *
- * Two are added, and they cover different ground:
+ * The wallets offered are Rabby, Internet Money, OKX and ZKX. MetaMask was
+ * removed as a choice, and with it the only mobile route that worked without
+ * configuration - its SDK was what deep-linked out to an app and back.
  *
- * - `metaMask` speaks to the MetaMask app directly, deep-linking out and back.
- *   It needs no account or key of ours, so it works the moment this ships.
- * - `walletConnect` is the universal one - Trust, Rainbow, Rabby mobile and
- *   the rest all speak it - but it needs a free project id from reown.com.
- *   Until that exists it is left out entirely rather than added broken, since
- *   a connector with no id fails at the moment someone taps it.
+ * What remains for a phone is `walletConnect`, which every one of the four
+ * speaks, but which needs a free project id from reown.com. Until that exists
+ * it is left out entirely rather than added broken, because a connector with
+ * no id fails at the moment someone taps it - so on a phone the modal falls
+ * back to handing the page to a wallet's own in-app browser.
  *
- * Both SDKs are loaded lazily by the connector, so a visitor who never opens
- * the wallet modal never downloads them.
+ * Its SDK is loaded lazily by the connector, so a visitor who never opens the
+ * wallet modal never downloads it.
  */
 const walletConnectProjectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID
 
@@ -51,13 +52,7 @@ export const wagmiConfig = createConfig({
       shimDisconnect: true,
     }),
 
-    // 2. MetaMask
-    injected({
-      target: 'metaMask',
-      shimDisconnect: true,
-    }),
-
-    // 3. Internet Money Wallet (Native PulseChain Multi-Chain Wallet)
+    // 2. Internet Money Wallet (Native PulseChain Multi-Chain Wallet)
     injected({
       target() {
         return {
@@ -73,7 +68,7 @@ export const wagmiConfig = createConfig({
       shimDisconnect: true,
     }),
 
-    // 4. ZKX Wallet (Web3 Smart Wallet on PulseChain)
+    // 3. ZKX Wallet (Web3 Smart Wallet on PulseChain)
     injected({
       target() {
         return {
@@ -89,7 +84,7 @@ export const wagmiConfig = createConfig({
     }),
 
     /*
-     * 5. OKX Wallet.
+     * 4. OKX Wallet.
      *
      * Reached through its own namespace first. OKX publishes `window.okxwallet`
      * and only takes `window.ethereum` when it is the sole extension installed,
@@ -114,31 +109,12 @@ export const wagmiConfig = createConfig({
       shimDisconnect: true,
     }),
 
-    // 6. Standard Injected & EIP-6963 Multi-Injected Discovery
+    // 5. Standard Injected & EIP-6963 Multi-Injected Discovery
     injected({
       shimDisconnect: true,
     }),
 
-    /*
-     * 7. MetaMask, over its own SDK rather than through the window - but only
-     *    where the window has nothing to offer.
-     *
-     * On a phone it opens the MetaMask app, asks there, and returns: the only
-     * route that needs nothing from us to start working. Behind an installed
-     * extension it is redundant, because the injected entries above already
-     * reach that same wallet.
-     *
-     * The gate is about weight, not tidiness. wagmi reconnects on mount by
-     * asking every connector for its provider, and this connector answers by
-     * loading its SDK - so merely listing it costs every visitor 106 kB of
-     * JavaScript before they have expressed any interest in a wallet at all.
-     * Skipping it where an extension exists keeps that off the majority of
-     * desktop visits. A late-announcing extension is still found: the injected
-     * connectors remain, and this one was never how it would have been reached.
-     */
-    ...(typeof window !== 'undefined' && !window.ethereum ? [metaMask({ dappMetadata })] : []),
-
-    // 8. WalletConnect, when a project id has been configured. Reaches every
+    // 6. WalletConnect, when a project id has been configured. Reaches every
     //    other mobile wallet: a QR on desktop, a deep link on a phone.
     ...(walletConnectProjectId
       ? [

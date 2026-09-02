@@ -14,7 +14,12 @@ import {
 import { pulsechain } from '../config/pulsechain'
 import { hasWalletConnect } from '../config/wagmi'
 import { useEscapeKey } from '../hooks/useEscapeKey'
-import { matchesWallet, detectWallet, walletHandoffLink } from '../utils/walletTargets'
+import {
+  matchesWallet,
+  detectWallet,
+  walletHandoffLink,
+  providerIsWallet,
+} from '../utils/walletTargets'
 
 // Curated supported wallet definitions with detection checks, official download links & SVGs
 const SUPPORTED_WALLETS = [
@@ -36,32 +41,6 @@ const SUPPORTED_WALLETS = [
         <path
           d="M24.2 16.8C23.6 15.7 22.4 15 21 15H17V25H19.5V21.5H21C22.4 21.5 23.6 20.8 24.2 19.7C24.5 19.2 24.7 18.6 24.7 18C24.7 17.4 24.5 16.8 24.2 16.8ZM21 19.5H19.5V17H21C21.6 17 22.2 17.4 22.2 18.25C22.2 19.1 21.6 19.5 21 19.5Z"
           fill="#FFFFFF"
-        />
-      </svg>
-    ),
-  },
-  {
-    id: 'metaMask',
-    name: 'MetaMask',
-    badge: 'Standard',
-    badgeColor: 'amber',
-    desc: 'The classic Web3 wallet extension and mobile app for PulseChain & EVM.',
-    downloadUrl: 'https://metamask.io/download/',
-    detect: () => detectWallet('metamask'),
-    icon: (
-      <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
-        <rect width="32" height="32" rx="8" fill="#F6851B" fillOpacity="0.15" />
-        <path
-          d="M26.85 7.23L17.2 13.91L18.99 9.87L26.85 7.23ZM5.15 7.23L14.73 13.95L13.01 9.87L5.15 7.23ZM23.3 22.47L20.87 25.96L26.15 27.38L27.65 22.56L23.3 22.47ZM4.35 22.56L5.85 27.38L11.13 25.96L8.7 22.47L4.35 22.56ZM11.45 17.65L9.67 19.92L14.76 20.15L14.65 15.34L11.45 17.65ZM20.55 17.65L17.34 15.3L17.23 20.15L22.33 19.92L20.55 17.65ZM11.13 25.96L14.41 24.36L11.75 22.54L11.13 25.96ZM20.87 25.96L20.25 22.54L17.59 24.36L20.87 25.96Z"
-          fill="#E2761B"
-        />
-        <path
-          d="M17.59 24.36L20.25 22.54L20.55 17.65L17.23 20.15L17.59 24.36ZM11.75 22.54L14.41 24.36L14.76 20.15L11.45 17.65L11.75 22.54Z"
-          fill="#E4761B"
-        />
-        <path
-          d="M14.41 24.36L11.13 25.96L14.9 28.5L14.86 26.23L14.41 24.36ZM17.59 24.36L17.14 26.23L17.1 28.5L20.87 25.96L17.59 24.36Z"
-          fill="#D7C1B3"
         />
       </svg>
     ),
@@ -163,12 +142,6 @@ function hasInjectedProvider() {
  */
 const MOBILE_HANDOFF = [
   {
-    id: 'metamask-app',
-    name: 'MetaMask',
-    desc: 'Opens this page inside the MetaMask app.',
-    link: () => walletHandoffLink('metamask-app', window.location.href),
-  },
-  {
     id: 'trust-app',
     name: 'Trust Wallet',
     desc: 'Opens this page inside Trust Wallet.',
@@ -261,11 +234,20 @@ export default function WalletConnectModal({ isOpen, onClose }) {
         }
       }
 
-      // Fallback to the generic injected connector (bare `window.ethereum`)
+      /*
+       * Last resort: the bare `window.ethereum`, but only when it really is the
+       * wallet that was asked for.
+       *
+       * Whichever extension won that object answers here, so connecting to it
+       * unchecked means pressing "Rabby" can hand back an account from another
+       * wallet entirely - and since MetaMask is no longer offered, it would be
+       * connecting something the user was never shown. Refusing sends them to
+       * their wallet's own download page instead, which is the honest outcome.
+       */
       if (!connector) {
         const generic = connectors.find((c) => c.id === 'injected' || c.type === 'injected')
         const provider = generic ? await generic.getProvider().catch(() => undefined) : undefined
-        if (provider) connector = generic
+        if (provider && providerIsWallet(provider, walletDef.id.toLowerCase())) connector = generic
       }
 
       if (connector) {
@@ -422,32 +404,6 @@ export default function WalletConnectModal({ isOpen, onClose }) {
             */}
             {isMobile && !injectedPresent ? (
               <div className="wallet-options-list">
-                <button
-                  type="button"
-                  className={`wallet-option-item ${connectingWalletId === 'metaMaskSDK' ? 'is-connecting' : ''}`}
-                  onClick={() => connectVia('metaMaskSDK', 'MetaMask')}
-                  disabled={connectingWalletId === 'metaMaskSDK'}
-                >
-                  <div className="wallet-option-left">
-                    <div className="wallet-option-icon">{SUPPORTED_WALLETS[1].icon}</div>
-                    <div className="wallet-option-meta">
-                      <div className="wallet-option-name-row">
-                        <span className="wallet-option-name">MetaMask</span>
-                        <span className="wallet-badge badge-amber">Mobile app</span>
-                      </div>
-                      <span className="wallet-option-desc">
-                        Opens the MetaMask app to approve, then comes back here.
-                      </span>
-                    </div>
-                  </div>
-                  <div className="wallet-option-right">
-                    {connectingWalletId === 'metaMaskSDK' ? (
-                      <div className="wallet-spin-loader"></div>
-                    ) : (
-                      <span className="wallet-connect-cta-btn">Connect</span>
-                    )}
-                  </div>
-                </button>
 
                 {hasWalletConnect && (
                   <button

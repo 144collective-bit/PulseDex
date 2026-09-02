@@ -24,8 +24,6 @@ export function matchesWallet(connector, walletId) {
   const has = (needle) => id.includes(needle) || name.includes(needle)
 
   switch (walletId) {
-    case 'metamask':
-      return has('metamask')
     case 'walletconnect':
       // Both sides lower case. Comparing against the mixed-case connector id
       // here could never be true, and the name check was carrying it alone.
@@ -61,10 +59,6 @@ export function detectWallet(walletId, win = typeof window !== 'undefined' ? win
   switch (walletId) {
     case 'rabby':
       return Boolean(win.rabby || eth?.isRabby)
-    case 'metamask':
-      // Several wallets set isMetaMask to inherit its compatibility, so the
-      // ones known to do that are excluded rather than trusted.
-      return Boolean(eth?.isMetaMask && !eth?.isRabby && !eth?.isInternetMoney && !eth?.isOKXWallet)
     case 'internetmoney':
       return Boolean(win.internetmoney || eth?.isInternetMoney)
     case 'zkxwallet':
@@ -89,17 +83,19 @@ export function detectWallet(walletId, win = typeof window !== 'undefined' ? win
 export function walletHandoffLink(walletId, href) {
   if (!href) return null
 
-  let url
+  /*
+   * Parsed only to reject what is not a URL. Every link below embeds the
+   * address whole, so a malformed one would be handed to a wallet as-is and
+   * fail somewhere the user cannot see. The result is deliberately unused -
+   * MetaMask was the one format that needed the parts, and it is gone.
+   */
   try {
-    url = new URL(href)
+    void new URL(href)
   } catch {
     return null
   }
 
   switch (walletId) {
-    case 'metamask-app':
-      // MetaMask takes the address with the scheme already stripped.
-      return `https://metamask.app.link/dapp/${url.host}${url.pathname}`
     case 'trust-app':
       return `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent(href)}`
     case 'okx-app':
@@ -117,5 +113,34 @@ export function walletHandoffLink(walletId, href) {
       return `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(href)}`
     default:
       return null
+  }
+}
+
+/**
+ * Is this provider really the wallet that was asked for?
+ *
+ * The connect flow has a last-resort branch that falls back to whatever owns
+ * `window.ethereum`. Without this check that branch connects whichever
+ * extension happens to hold it - so pressing "Rabby" on a machine where
+ * another wallet won that race silently connects the other wallet, and the
+ * account that appears is not the one anybody chose.
+ *
+ * Only the wallets this app offers can answer yes. Anything else is refused,
+ * which sends the user to that wallet's own download page instead.
+ */
+export function providerIsWallet(provider, walletId) {
+  if (!provider) return false
+
+  switch (walletId) {
+    case 'rabby':
+      return Boolean(provider.isRabby)
+    case 'internetmoney':
+      return Boolean(provider.isInternetMoney)
+    case 'zkxwallet':
+      return Boolean(provider.isZKX)
+    case 'okx':
+      return Boolean(provider.isOKXWallet || provider.isOkxWallet)
+    default:
+      return false
   }
 }

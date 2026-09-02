@@ -25,24 +25,61 @@ const { pulsechain } = await import('./pulsechain')
 const ids = wagmiConfig.connectors.map((c) => c.id)
 
 describe('a browser with no wallet extension', () => {
-  it('offers a connector that does not need an injected provider', () => {
-    // The regression guard. Without one of these a phone has no way to reach a
-    // wallet at all, which is exactly what shipped.
-    expect(ids.filter((id) => id === 'metaMaskSDK' || id === 'walletConnect').length).toBeGreaterThan(0)
+  it('has exactly one route that does not need an injected provider, and it is WalletConnect', () => {
+    /*
+     * This guard used to be satisfied by the MetaMask SDK, which deep-linked
+     * out to the app and back and needed no configuration from us. MetaMask is
+     * no longer one of the wallets this app offers, so that route is gone and
+     * WalletConnect is the only one left.
+     *
+     * Which means the guard now depends on configuration - see the next test.
+     * It is written this way rather than deleted because the condition it was
+     * protecting against is real and has shipped before: a phone that can see
+     * the wallet list and reach none of it.
+     */
+    const bridged = ids.filter((id) => id === 'walletConnect')
+    expect(ids).not.toContain('metaMaskSDK')
+    expect(bridged.length).toBe(hasWalletConnect ? 1 : 0)
   })
 
-  it('puts the bridged connector last, so a late-announcing extension still wins', () => {
+  it('leaves a phone with no in-place connector at all when WalletConnect is unset', () => {
+    /*
+     * Stated rather than asserted away. With no project id and no extension,
+     * every remaining connector needs a provider on `window` that a phone
+     * browser does not have - so the modal falls back to handing the page to a
+     * wallet's own in-app browser, and only the wallets with a published deep
+     * link can be reached that way.
+     *
+     * Configuring VITE_WALLETCONNECT_PROJECT_ID closes this. Until then it is
+     * a known gap, and this test is where it is written down.
+     */
+    if (!hasWalletConnect) {
+      expect(ids.every((id) => id !== 'walletConnect' && id !== 'metaMaskSDK')).toBe(true)
+    }
+  })
+
+  it('puts the bridged connector after the extensions, so a late announcement still wins', () => {
     // Sign-in walks the list and takes the first connector that resolves a
-    // provider. The SDK always resolves one, so ahead of the extensions it
-    // would take over every connection.
-    expect(ids.indexOf('metaMaskSDK')).toBeGreaterThan(ids.indexOf('injected'))
+    // provider. A bridged connector always resolves one, so ahead of the
+    // extensions it would take over every connection.
+    if (hasWalletConnect) {
+      expect(ids.indexOf('walletConnect')).toBeGreaterThan(ids.indexOf('injected'))
+    }
   })
 
-  it('still lists every injected wallet', () => {
+  it('lists the four wallets this app offers, and no others', () => {
     expect(ids).toContain('rabby')
     expect(ids).toContain('internetMoney')
     expect(ids).toContain('zkxWallet')
+    expect(ids).toContain('okxWallet')
     expect(ids).toContain('injected')
+  })
+
+  it('does not offer MetaMask by any route', () => {
+    // Removed as a choice, so neither the targeted connector nor the SDK may
+    // survive - either would let it back in without appearing in the list.
+    expect(ids).not.toContain('metaMask')
+    expect(ids).not.toContain('metaMaskSDK')
   })
 
   it('gives every connector a distinct id', () => {
