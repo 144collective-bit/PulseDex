@@ -2,7 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount, useWaitForTransactionReceipt, useWriteContract } from 'wagmi'
 import { pulsechain } from '../config/pulsechain'
 import { FEATURES } from '../config/features'
-import { buildApproveCall, buildSwapCall } from '../services/swap'
+import {
+  buildApproveCall,
+  buildSwapCall,
+  floorArgIndex,
+  minimumReceivedRaw,
+  withFloor,
+} from '../services/swap'
+import { probeDeliverable } from '../services/swapProbe'
 import { quoteSwap } from '../services/dex'
 import { NATIVE_PLS } from '../config/dex'
 import {
@@ -28,6 +35,8 @@ import {
   parseAmountRaw,
   receiptOutcome,
   routeChanged,
+  PROBE,
+  needsFeeConsent,
   shouldLockInputs,
   swapAction,
 } from '../services/swapFlow'
@@ -82,6 +91,8 @@ export function useSwapExecution({
    */
   const [priceMoved, setPriceMoved] = useState(null)
   const [routeMoved, setRouteMoved] = useState(false)
+  const [tokenFee, setTokenFee] = useState(null)
+  const [feeAcknowledgedPct, setFeeAcknowledgedPct] = useState(null)
   const [acceptedRaw, setAcceptedRaw] = useState(null)
   const [requoting, setRequoting] = useState(false)
 
@@ -229,6 +240,7 @@ export function useSwapExecution({
     },
     approvalSettling,
     priceMoved: Boolean(priceMoved),
+    tokenFee: Boolean(tokenFee),
     isRejection,
   })
 
@@ -244,6 +256,8 @@ export function useSwapExecution({
     setAcceptedRaw(null)
     setActiveRouter(null)
     setRouteMoved(false)
+    setTokenFee(null)
+    setFeeAcknowledgedPct(null)
     approveWrite.reset?.()
     swapWrite.reset?.()
   }, [approveWrite, swapWrite])
@@ -432,8 +446,67 @@ export function useSwapExecution({
       return
     }
 
+    /*
+     * Ask the chain what this call would actually deliver.
+     *
+     * `getAmountsOut` models the pool and nothing else, so for a token that
+     * charges a fee on transfer it promises more than can ever arrive and the
+     * floor derived from it sits above the deliverable amount. The swap then
+     * reverts, after the gas is spent. The simulation runs the real call
+     * against real state and sends nothing, so the answer is measured.
+     *
+     * One round trip when the token is clean, which is nearly always.
+     */
+    const floorRaw = call.args[floorArgIndex(call.functionName)]
+    const probe = await probeDeliverable({
+      call,
+      account: address,
+      quotedRaw: fresh.amountOutRaw,
+      floorRaw,
+    })
+
+    let finalCall = call
+
+    if (probe.status === PROBE.unsellable) {
+      /*
+       * It fails with no floor at all, so slippage was never the problem: an
+       * empty pool, a balance that is short, or a token that cannot be sold.
+       * All of them would revert on chain too, so refusing here costs nothing
+       * and saves the gas it would have taken to find out.
+       */
+      setSwapError(probe.error ?? new Error('This swap would fail. Nothing was sent.'))
+      return
+    }
+
+    if (probe.status === PROBE.fee) {
+      if (needsFeeConsent({ feePct: probe.feePct, acknowledgedPct: feeAcknowledgedPct })) {
+        // Their next press is the consent. Recorded now so that press goes
+        // through rather than asking again about a fee already accepted.
+        setTokenFee({ feePct: probe.feePct, symbol: to?.symbol ?? 'token' })
+        setFeeAcknowledgedPct(probe.feePct)
+        return
+      }
+
+      /*
+       * Floored against what the token will really deliver rather than against
+       * a figure it was never going to honour. Slippage still means slippage -
+       * it is taken off the measured amount, so the protection is intact and
+       * only the fee has been accounted for.
+       */
+      const refloored = withFloor(finalCall, minimumReceivedRaw(probe.deliverableRaw, slippagePct))
+      // A fee deep enough to floor at zero is an unprotected trade, and the
+      // rest of this module refuses to build one of those.
+      if (!refloored || refloored.args[floorArgIndex(refloored.functionName)] <= 0n) {
+        setSwapError(new Error('This token’s fee is too large to trade safely here.'))
+        return
+      }
+      finalCall = refloored
+    }
+
+    setTokenFee(null)
+
     try {
-      const hash = await swapWrite.writeContractAsync(call)
+      const hash = await swapWrite.writeContractAsync(finalCall)
       setSwapHash(hash)
     } catch (err) {
       setSwapError(err)
@@ -451,6 +524,7 @@ export function useSwapExecution({
     allowanceRaw,
     spender,
     amountInRaw,
+    feeAcknowledgedPct,
     swapWrite,
   ])
 
@@ -466,6 +540,8 @@ export function useSwapExecution({
       // Accepting re-prices once more before signing, which is the point: the
       // number just shown could itself have moved while it was being read.
       case SWAP_INTENT.acceptPrice:
+      // Same for a token fee: the press that follows the notice is the consent.
+      case SWAP_INTENT.acceptFee:
         return swap
       case SWAP_INTENT.reset:
         return reset
@@ -498,6 +574,7 @@ export function useSwapExecution({
     balance,
     priceMoved,
     routeMoved,
+    tokenFee,
     isRequoting: requoting,
     balanceRaw: fromBalance.data,
     /*

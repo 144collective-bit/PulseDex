@@ -478,6 +478,17 @@ export default function SwapPanel({
         </div>
       )}
 
+      {exec.tokenFee && (
+        <div className="swap-warning">
+          <AlertTriangle size={14} />
+          <span>
+            {exec.tokenFee.symbol} charges a {exec.tokenFee.feePct.toFixed(2)}% fee on transfer, so
+            that much of this trade will not reach you. Your slippage limit still applies to the
+            rest. Press again to trade anyway.
+          </span>
+        </div>
+      )}
+
       {exec.priceMoved && (
         <div className="swap-warning">
           <AlertTriangle size={14} />

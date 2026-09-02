@@ -29,14 +29,17 @@ export const FEATURES = {
 
   /** Signing in the swap panel: approvals and the swap call itself.
    *
-   *  The whole path is built and the decision layer is tested, but it stays
-   *  dark until three things land that a trader would otherwise pay for: a
-   *  balance check with gas headroom, so selling every last PLS cannot produce
-   *  a transaction that has nothing left to pay for itself; a re-quote
-   *  immediately before signing, since a floor derived from a twelve-second-old
-   *  quote reverts against a pool that has moved; and handling for tokens that
-   *  tax transfers, which `getAmountsOut` over-quotes, putting the floor above
-   *  what can actually arrive.
+   *  Three things had to land before a trader would not pay for them, and all
+   *  three now have: a balance check with gas headroom, so selling every last
+   *  PLS cannot produce a transaction with nothing left to pay for itself; a
+   *  re-quote immediately before signing, since a floor derived from a
+   *  twelve-second-old quote reverts against a pool that has moved; and tokens
+   *  that tax transfers, which `getAmountsOut` over-quotes - the swap is now
+   *  simulated before signing and floored against what will actually arrive.
+   *
+   *  It is still false. Nothing above is a substitute for a trade made with
+   *  real money on a real wallet, and turning it on is a decision to make
+   *  deliberately rather than a box that got ticked when the last test passed.
    *
    *  With this false the panel quotes exactly as before and the button reads
    *  "Trading not enabled". Nothing can be signed. */

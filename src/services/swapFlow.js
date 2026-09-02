@@ -24,6 +24,7 @@ export const SWAP_PHASE = {
   approving: 'approving',
   approveConfirming: 'approveConfirming',
   priceMoved: 'priceMoved',
+  tokenFee: 'tokenFee',
   ready: 'ready',
   swapping: 'swapping',
   swapConfirming: 'swapConfirming',
@@ -55,6 +56,7 @@ export const SWAP_INTENT = {
   approve: 'approve',
   swap: 'swap',
   acceptPrice: 'acceptPrice',
+  acceptFee: 'acceptFee',
   reset: 'reset',
 }
 
@@ -366,6 +368,7 @@ export function derivePhase({
   swap = {},
   approvalSettling = false,
   priceMoved = false,
+  tokenFee = false,
   isRejection,
 }) {
   const rejected = typeof isRejection === 'function' ? isRejection : () => false
@@ -397,6 +400,15 @@ export function derivePhase({
    * transaction already signed has passed that point.
    */
   if (priceMoved) return { phase: SWAP_PHASE.priceMoved, failedStep: null }
+
+  /*
+   * A token's own fee, below a price that moved. Both ask the same press to
+   * mean consent, so only one can be put at a time, and a price the user has
+   * not seen is the more urgent of the two: the fee is a fixed property of the
+   * token and will still be there on the next press, while a stale price is
+   * the thing that goes on getting staler.
+   */
+  if (tokenFee) return { phase: SWAP_PHASE.tokenFee, failedStep: null }
 
   if (block && block !== SWAP_BLOCK.none) return { phase: SWAP_PHASE.idle, failedStep: null }
 
@@ -531,6 +543,10 @@ export function swapAction({ phase, block, fromSymbol = 'token', failedStep = nu
       // Their own press is the consent, so the label has to say what it is
       // consenting to rather than repeating "Swap".
       return idle('Accept new price', SWAP_INTENT.acceptPrice, { tone: 'warn' })
+    case SWAP_PHASE.tokenFee:
+      // Same reason as above: the press is the consent, so it has to name what
+      // is being consented to. This one is not about the price at all.
+      return idle('Accept token fee & swap', SWAP_INTENT.acceptFee, { tone: 'warn' })
     case SWAP_PHASE.ready:
       return idle('Swap', SWAP_INTENT.swap)
     default:
@@ -565,4 +581,104 @@ export function executionKey({ from, to, amount, slippagePct, recipient, chainId
  */
 export function canBuildSwap(args) {
   return buildSwapCall({ ...args, nowMs: args.nowMs ?? Date.now() }) !== null
+}
+
+/**
+ * What asking the chain what a trade would really deliver can conclude.
+ *
+ * `getAmountsOut` models the pool and nothing else, so for a token that takes a
+ * fee on transfer it reports more than can ever arrive: the pair receives less
+ * than was sent, or the recipient receives less than the pair sent, and the
+ * router's own check is on the recipient's balance change. A floor derived from
+ * the untaxed figure therefore sits above the deliverable amount and the swap
+ * reverts - after the gas is spent finding out.
+ *
+ * These are read-only simulations of the real call, so the answer is measured
+ * rather than guessed at, and it costs nothing to be wrong about.
+ */
+export const PROBE = {
+  /** The intended floor is deliverable. The overwhelmingly common answer. */
+  ok: 'OK',
+  /** Less arrives than was quoted. The measured shortfall is the fee. */
+  fee: 'FEE',
+  /** Reverts with no floor at all: nothing to do with slippage. */
+  unsellable: 'UNSELLABLE',
+  /** The simulation could not be run. */
+  unavailable: 'UNAVAILABLE',
+}
+
+/**
+ * A shortfall too small to be a fee.
+ *
+ * Integer division in the router's own arithmetic can leave a trade a few units
+ * short of the quote. Treating that as a fee to be consented to would put a
+ * notice in front of every swap, which is how notices come to be ignored.
+ */
+export const FEE_DUST_PCT = 0.05
+
+/**
+ * How close the search has to get before the answer is good enough.
+ *
+ * A basis point of the quote. The figure is only used to set a floor that then
+ * has slippage taken off it, so resolving it beyond this buys nothing and costs
+ * a round trip per bit.
+ */
+export function probeTolerance(quotedRaw, bps = 1) {
+  if (typeof quotedRaw !== 'bigint' || quotedRaw <= 0n) return 1n
+  const width = (quotedRaw * BigInt(Math.max(1, Math.round(bps)))) / 10_000n
+  return width > 0n ? width : 1n
+}
+
+/**
+ * One step of the search for the largest floor the trade still clears.
+ *
+ * `lo` is a floor known to pass, `hi` one known to fail, so the deliverable
+ * amount is between them and `lo` is always a safe answer to stop on.
+ *
+ * Termination is the property that matters: the gap halves each step, and the
+ * tolerance is at least one unit, so `hi - lo <= tolerance` is reached. The
+ * probe budget is a second guarantee rather than the first - each step is a
+ * network round trip, and an unbounded loop against a misbehaving node would
+ * hang the panel with a wallet waiting on it.
+ */
+export function probeStep({ lo, hi, tolerance, probesLeft }) {
+  if (typeof lo !== 'bigint' || typeof hi !== 'bigint') return { done: true, mid: null }
+  if (hi <= lo) return { done: true, mid: null }
+  if (!Number.isFinite(probesLeft) || probesLeft <= 0) return { done: true, mid: null }
+
+  const tol = typeof tolerance === 'bigint' && tolerance > 0n ? tolerance : 1n
+  if (hi - lo <= tol) return { done: true, mid: null }
+
+  // Strictly between lo and hi, because hi - lo is at least two here.
+  return { done: false, mid: lo + (hi - lo) / 2n }
+}
+
+/**
+ * How much of the quote never arrives, as a percentage.
+ *
+ * The same scaling as `quoteDrift` - a shortfall against a quoted figure is the
+ * same measurement whichever cause it has - and clamped at zero, because a
+ * token that delivers more than quoted is not charging a fee.
+ */
+export function effectiveFeePct({ quotedRaw, deliverableRaw }) {
+  const pct = quoteDrift(quotedRaw, deliverableRaw)
+  if (pct === null) return null
+  return pct > 0 ? pct : 0
+}
+
+/**
+ * Whether a measured fee still has to be put to the user.
+ *
+ * The floor is rebuilt from what the token will actually deliver, so the trade
+ * is protected either way. What consent covers is the fee itself: several
+ * percent of the trade going somewhere other than the user is not something to
+ * discover afterwards from a wallet balance.
+ *
+ * An acknowledgement carries to any fee at or below the one accepted, so a fee
+ * that eases between the press and the signature does not ask twice.
+ */
+export function needsFeeConsent({ feePct, acknowledgedPct }) {
+  if (!Number.isFinite(feePct) || feePct <= FEE_DUST_PCT) return false
+  if (!Number.isFinite(acknowledgedPct)) return true
+  return acknowledgedPct < feePct
 }

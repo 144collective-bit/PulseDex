@@ -205,3 +205,40 @@ export function buildSwapCall({
     value: 0n,
   }
 }
+
+/**
+ * Where `amountOutMin` sits in a built call's arguments.
+ *
+ * The native-in variant takes no `amountIn` - the amount is the value sent -
+ * so its floor is the first argument where the other two have it second.
+ * Returned rather than assumed, because rewriting the wrong slot would edit
+ * the path or the deadline and the mistake would look like a revert.
+ */
+export function floorArgIndex(functionName) {
+  if (functionName === 'swapExactETHForTokensSupportingFeeOnTransferTokens') return 0
+  if (
+    functionName === 'swapExactTokensForETHSupportingFeeOnTransferTokens' ||
+    functionName === 'swapExactTokensForTokensSupportingFeeOnTransferTokens'
+  ) {
+    return 1
+  }
+  return -1
+}
+
+/**
+ * The same call with a different floor.
+ *
+ * Used to ask the chain what a trade would actually deliver: the floor is the
+ * only thing that varies between probes, and everything else - path, router,
+ * recipient, deadline, value - has to stay identical or the answer describes a
+ * different trade.
+ */
+export function withFloor(call, amountOutMinRaw) {
+  if (!call || typeof amountOutMinRaw !== 'bigint' || amountOutMinRaw < 0n) return null
+  const i = floorArgIndex(call.functionName)
+  if (i < 0 || !Array.isArray(call.args) || i >= call.args.length) return null
+
+  const args = [...call.args]
+  args[i] = amountOutMinRaw
+  return { ...call, args }
+}

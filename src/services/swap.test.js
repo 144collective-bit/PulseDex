@@ -10,6 +10,8 @@ import {
   buildApproveCall,
   buildAllowanceRead,
   buildSwapCall,
+  floorArgIndex,
+  withFloor,
 } from './swap'
 import { NATIVE_PLS, WPLS, PULSEX_ROUTER_V2, PULSEX_ROUTER_V1 } from '../config/dex'
 
@@ -364,5 +366,88 @@ describe('buildSwapCall', () => {
 
   it('refuses PLS against itself', () => {
     expect(buildSwapCall({ ...baseArgs, from: PLS, to: PLS })).toBeNull()
+  })
+})
+
+describe('floorArgIndex', () => {
+  it('knows the native variant carries its floor first', () => {
+    // It takes no amountIn - the amount is the value sent - so everything after
+    // shifts down one. Rewriting slot 1 there would overwrite the path.
+    expect(floorArgIndex('swapExactETHForTokensSupportingFeeOnTransferTokens')).toBe(0)
+  })
+
+  it('knows both token variants carry it second', () => {
+    expect(floorArgIndex('swapExactTokensForETHSupportingFeeOnTransferTokens')).toBe(1)
+    expect(floorArgIndex('swapExactTokensForTokensSupportingFeeOnTransferTokens')).toBe(1)
+  })
+
+  it('refuses to guess for anything else', () => {
+    expect(floorArgIndex('transfer')).toBe(-1)
+    expect(floorArgIndex(undefined)).toBe(-1)
+  })
+})
+
+describe('withFloor', () => {
+  const native = buildSwapCall({
+    quote: quote({ path: [WPLS, TOKEN.address] }),
+    from: PLS,
+    to: TOKEN,
+    amount: '1000',
+    slippagePct: 1,
+    recipient: RECIPIENT,
+    deadlineMinutes: 20,
+    nowMs: 1_700_000_000_000,
+  })
+
+  const erc20 = buildSwapCall({
+    quote: quote(),
+    from: TOKEN,
+    to: TOKEN_B,
+    amount: '1000',
+    slippagePct: 1,
+    recipient: RECIPIENT,
+    deadlineMinutes: 20,
+    nowMs: 1_700_000_000_000,
+  })
+
+  it('replaces the floor in the native variant and nothing else', () => {
+    const out = withFloor(native, 7n)
+    expect(out.args[0]).toBe(7n)
+    expect(out.args.slice(1)).toEqual(native.args.slice(1))
+    expect(out.value).toBe(native.value)
+    expect(out.address).toBe(native.address)
+    expect(out.functionName).toBe(native.functionName)
+  })
+
+  it('replaces the floor in the token variant and nothing else', () => {
+    const out = withFloor(erc20, 7n)
+    expect(out.args[1]).toBe(7n)
+    // The amount in above all: a probe that changed it would measure a
+    // different trade and hand back a floor for an amount nobody is sending.
+    expect(out.args[0]).toBe(erc20.args[0])
+    expect(out.args.slice(2)).toEqual(erc20.args.slice(2))
+  })
+
+  it('leaves the original call untouched', () => {
+    // The real call gets built once and probed repeatedly. Mutating it in place
+    // would let a probe's floor end up in the transaction that gets signed.
+    const before = [...erc20.args]
+    withFloor(erc20, 1n)
+    expect(erc20.args).toEqual(before)
+  })
+
+  it('accepts a floor of zero, which is what the unsellable check needs', () => {
+    expect(withFloor(erc20, 0n)?.args[1]).toBe(0n)
+  })
+
+  it('refuses a floor that is not a whole number of units', () => {
+    expect(withFloor(erc20, 1.5)).toBeNull()
+    expect(withFloor(erc20, '1')).toBeNull()
+    expect(withFloor(erc20, -1n)).toBeNull()
+  })
+
+  it('refuses a call it does not recognise', () => {
+    expect(withFloor({ functionName: 'transfer', args: [1n, 2n] }, 1n)).toBeNull()
+    expect(withFloor(null, 1n)).toBeNull()
   })
 })

@@ -18,6 +18,12 @@ import {
   quoteDrift,
   receiptOutcome,
   routeChanged,
+  PROBE,
+  FEE_DUST_PCT,
+  probeTolerance,
+  probeStep,
+  effectiveFeePct,
+  needsFeeConsent,
   isApprovalSettling,
   nextAllowancePollMs,
   derivePhase,
@@ -917,5 +923,212 @@ describe('routeChanged', () => {
   it('claims nothing when either side is missing', () => {
     expect(routeChanged(null, PULSEX_ROUTER_V1)).toBe(false)
     expect(routeChanged(PULSEX_ROUTER_V2, null)).toBe(false)
+  })
+})
+
+describe('probeTolerance', () => {
+  it('stops the search a basis point from the quote', () => {
+    expect(probeTolerance(10_000n)).toBe(1n)
+    expect(probeTolerance(1_000_000n)).toBe(100n)
+  })
+
+  it('never returns zero, which would make the search unable to finish', () => {
+    // hi - lo <= 0 is only true when they are equal, so a zero tolerance turns
+    // the loop into one bounded solely by the probe budget - sixteen round
+    // trips to resolve something a basis point would have settled.
+    expect(probeTolerance(1n)).toBe(1n)
+    expect(probeTolerance(0n)).toBe(1n)
+    expect(probeTolerance(null)).toBe(1n)
+  })
+})
+
+describe('probeStep', () => {
+  it('halves the remaining gap', () => {
+    expect(probeStep({ lo: 0n, hi: 1000n, tolerance: 1n, probesLeft: 10 })).toEqual({
+      done: false,
+      mid: 500n,
+    })
+  })
+
+  it('always picks a point strictly inside the gap, so the search moves', () => {
+    // A midpoint equal to lo would retest a floor already known to pass and
+    // narrow nothing: the loop would spend its whole budget standing still.
+    const { mid } = probeStep({ lo: 100n, hi: 102n, tolerance: 1n, probesLeft: 10 })
+    expect(mid).toBeGreaterThan(100n)
+    expect(mid).toBeLessThan(102n)
+  })
+
+  it('stops once the gap is within tolerance', () => {
+    expect(probeStep({ lo: 0n, hi: 100n, tolerance: 100n, probesLeft: 10 })).toEqual({
+      done: true,
+      mid: null,
+    })
+  })
+
+  it('stops when the probe budget runs out', () => {
+    // Each step is a network round trip with a wallet waiting behind it.
+    expect(probeStep({ lo: 0n, hi: 1_000_000n, tolerance: 1n, probesLeft: 0 })).toEqual({
+      done: true,
+      mid: null,
+    })
+  })
+
+  it('terminates from any starting gap', () => {
+    // The property the loop depends on. Without it the panel hangs with a
+    // wallet waiting behind it.
+    const quoted = 10n ** 24n
+    const tolerance = probeTolerance(quoted)
+    let lo = 0n
+    let hi = quoted
+    let steps = 0
+    for (let probesLeft = 64; ; probesLeft -= 1) {
+      const { done, mid } = probeStep({ lo, hi, tolerance, probesLeft })
+      if (done) break
+      steps += 1
+      // The worst case for the search: every probe fails, so hi does all the
+      // moving and the gap only ever closes from above.
+      hi = mid
+    }
+    expect(steps).toBeLessThanOrEqual(14)
+    expect(hi - lo).toBeLessThanOrEqual(tolerance)
+  })
+
+  it('needs a tolerance fixed to the quote, not to the shrinking gap', () => {
+    /*
+     * Computing it from `hi` inside the loop shrinks it exactly as fast as the
+     * gap it is measured against, so `hi - lo <= tolerance` never comes true
+     * and the search runs to its budget every time - sixteen round trips on
+     * every taxed trade instead of fourteen, and no convergence guarantee at
+     * all. The probe computes it once, before the loop, for this reason.
+     */
+    let lo = 0n
+    let hi = 10n ** 24n
+    let steps = 0
+    for (let probesLeft = 64; ; probesLeft -= 1) {
+      const { done, mid } = probeStep({ lo, hi, tolerance: probeTolerance(hi), probesLeft })
+      if (done) break
+      steps += 1
+      hi = mid
+    }
+    expect(steps).toBe(64)
+  })
+
+  it('has nothing to do when the bounds have crossed', () => {
+    expect(probeStep({ lo: 100n, hi: 100n, tolerance: 1n, probesLeft: 10 }).done).toBe(true)
+    expect(probeStep({ lo: 200n, hi: 100n, tolerance: 1n, probesLeft: 10 }).done).toBe(true)
+  })
+})
+
+describe('effectiveFeePct', () => {
+  it('measures the part of the quote that never arrives', () => {
+    // A real PulseChain token measured at 3.69% against a live pool.
+    expect(effectiveFeePct({ quotedRaw: 10_000n, deliverableRaw: 9631n })).toBeCloseTo(3.69, 2)
+  })
+
+  it('reads a token that delivers the full quote as no fee at all', () => {
+    expect(effectiveFeePct({ quotedRaw: 10_000n, deliverableRaw: 10_000n })).toBe(0)
+  })
+
+  it('does not report a negative fee', () => {
+    // A rebasing token can deliver more than quoted. That is not a charge.
+    expect(effectiveFeePct({ quotedRaw: 10_000n, deliverableRaw: 10_500n })).toBe(0)
+  })
+
+  it('has no answer without both figures', () => {
+    expect(effectiveFeePct({ quotedRaw: 0n, deliverableRaw: 10n })).toBeNull()
+    expect(effectiveFeePct({ quotedRaw: 10n, deliverableRaw: null })).toBeNull()
+  })
+})
+
+describe('needsFeeConsent', () => {
+  it('puts a real fee to the user', () => {
+    // The floor is rebuilt so the trade is protected either way. What consent
+    // covers is the fee: several percent going somewhere other than the user is
+    // not something to find out afterwards from a wallet balance.
+    expect(needsFeeConsent({ feePct: 3.69, acknowledgedPct: null })).toBe(true)
+  })
+
+  it('does not stop a trade over rounding dust', () => {
+    // A notice on every swap is a notice nobody reads.
+    expect(needsFeeConsent({ feePct: FEE_DUST_PCT, acknowledgedPct: null })).toBe(false)
+    expect(needsFeeConsent({ feePct: 0.001, acknowledgedPct: null })).toBe(false)
+  })
+
+  it('does not ask twice for a fee already accepted', () => {
+    expect(needsFeeConsent({ feePct: 3.69, acknowledgedPct: 3.69 })).toBe(false)
+  })
+
+  it('lets an acknowledgement cover a fee that eased', () => {
+    expect(needsFeeConsent({ feePct: 3.0, acknowledgedPct: 3.69 })).toBe(false)
+  })
+
+  it('asks again when the fee rose above what was accepted', () => {
+    expect(needsFeeConsent({ feePct: 9.0, acknowledgedPct: 3.69 })).toBe(true)
+  })
+
+  it('asks when there is no usable fee reading', () => {
+    expect(needsFeeConsent({ feePct: null, acknowledgedPct: null })).toBe(false)
+  })
+})
+
+describe('PROBE', () => {
+  it('separates a node that will not answer from a trade that will not go through', () => {
+    // Conflating them either refuses good swaps whenever an RPC is unwell, or
+    // signs a doomed one because a node timed out.
+    expect(PROBE.unavailable).not.toBe(PROBE.unsellable)
+  })
+})
+
+describe('derivePhase: a token fee against a transaction already in flight', () => {
+  const base = { block: SWAP_BLOCK.none, approval: APPROVAL.satisfied, isRejection: () => false }
+
+  it('does not pull a pending swap back to a consent prompt', () => {
+    /*
+     * Phase decides whether inputs lock and whether quoting pauses, and the
+     * button's own label comes from it. A fee notice surfacing over a swap
+     * already sent would offer "Accept token fee & swap" on a transaction in
+     * the mempool - and the press would send a second one.
+     */
+    expect(derivePhase({ ...base, tokenFee: true, swap: { pending: true } }).phase).toBe(
+      SWAP_PHASE.swapping
+    )
+  })
+
+  it('does not pull a confirming swap back either', () => {
+    expect(derivePhase({ ...base, tokenFee: true, swap: { hash: '0xabc' } }).phase).toBe(
+      SWAP_PHASE.swapConfirming
+    )
+  })
+
+  it('does not reopen a finished swap', () => {
+    expect(derivePhase({ ...base, tokenFee: true, swap: { outcome: 'success' } }).phase).toBe(
+      SWAP_PHASE.success
+    )
+  })
+
+  it('stays out of the way of an approval in flight', () => {
+    expect(derivePhase({ ...base, tokenFee: true, approve: { pending: true } }).phase).toBe(
+      SWAP_PHASE.approving
+    )
+  })
+
+  it('yields to a price that moved, which is the more perishable of the two', () => {
+    // Both want the same press to mean consent, so only one can be asked at a
+    // time. A fee is a fixed property of the token and will still be there on
+    // the next press; a stale price only gets staler.
+    expect(derivePhase({ ...base, tokenFee: true, priceMoved: true }).phase).toBe(
+      SWAP_PHASE.priceMoved
+    )
+  })
+
+  it('is asked once nothing is in flight', () => {
+    expect(derivePhase({ ...base, tokenFee: true }).phase).toBe(SWAP_PHASE.tokenFee)
+  })
+
+  it('offers a press that names what it consents to', () => {
+    const action = swapAction({ phase: SWAP_PHASE.tokenFee, block: SWAP_BLOCK.none })
+    expect(action.intent).toBe(SWAP_INTENT.acceptFee)
+    expect(action.disabled).toBe(false)
+    expect(action.label).not.toBe('Swap')
   })
 })
