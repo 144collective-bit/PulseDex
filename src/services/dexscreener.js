@@ -61,6 +61,16 @@ export function isStablecoin(symbol) {
 const cache = new Map()
 const CACHE_TTL = 8000 // 8 seconds
 
+/**
+ * Requests already in the air, by URL.
+ *
+ * The board is built from two dozen parallel calls and more than one poller
+ * asks for it, so without this the same URL goes out twice whenever two
+ * callers line up inside the cache window - which is exactly when the upstream
+ * starts answering 429.
+ */
+const inflight = new Map()
+
 async function fetchWithCache(url) {
   const now = Date.now()
   if (cache.has(url)) {
@@ -70,19 +80,28 @@ async function fetchWithCache(url) {
     }
   }
 
-  try {
-    const res = await fetchWithTimeout(url)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    cache.set(url, { timestamp: now, data })
-    return data
-  } catch (err) {
-    console.warn(`DexScreener fetch failed for ${url}:`, err)
-    if (cache.has(url)) {
-      return cache.get(url).data
+  if (inflight.has(url)) return inflight.get(url)
+
+  const request = (async () => {
+    try {
+      const res = await fetchWithTimeout(url)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      cache.set(url, { timestamp: Date.now(), data })
+      return data
+    } catch (err) {
+      console.warn(`DexScreener fetch failed for ${url}:`, err)
+      if (cache.has(url)) {
+        return cache.get(url).data
+      }
+      throw err
+    } finally {
+      inflight.delete(url)
     }
-    throw err
-  }
+  })()
+
+  inflight.set(url, request)
+  return request
 }
 
 /**
@@ -238,11 +257,63 @@ export function getCorePulseRank(pair) {
 }
 
 /**
+ * The board, memoised.
+ *
+ * buildTopPulsePairs costs twenty-four upstream requests - one batched token
+ * lookup and twenty-three ecosystem searches - and two independent pollers ask
+ * for it: the screener page on a twenty-second interval and the dashboard's
+ * React Query on thirty. The per-URL cache below is eight seconds, far shorter
+ * than either, so nothing was being shared and the board alone was spending
+ * roughly fifty requests a minute. DexScreener answers that with 429, which is
+ * what put the rate-limit banner on the chart.
+ *
+ * One result, one flight, for everyone who asks inside the window.
+ */
+const TOP_PAIRS_TTL = 25_000
+
+let boardCache = { at: 0, data: null }
+let boardInflight = null
+
+export async function getTopPulsePairs() {
+  if (boardCache.data && Date.now() - boardCache.at < TOP_PAIRS_TTL) {
+    return boardCache.data
+  }
+
+  if (boardInflight) return boardInflight
+
+  boardInflight = buildTopPulsePairs()
+    .then((data) => {
+      // The builder swallows its own failures and returns an empty array, so an
+      // outage would otherwise be cached as "the board is empty" for the whole
+      // window. An empty answer never replaces a good one.
+      if (data.length === 0 && boardCache.data) return boardCache.data
+      boardCache = { at: Date.now(), data }
+      return data
+    })
+    .catch((err) => {
+      // A blip should not blank the board when a good answer is still held.
+      if (boardCache.data) return boardCache.data
+      throw err
+    })
+    .finally(() => {
+      boardInflight = null
+    })
+
+  return boardInflight
+}
+
+/** Test seam: module-level memo state would otherwise leak between tests. */
+export function __resetBoardCache() {
+  boardCache = { at: 0, data: null }
+  boardInflight = null
+}
+
+/**
  * Fetch top pulsechain pairs across known ecosystem tokens & active volume leaders
  * Filters out dead tokens with $0 prices or 0 liquidity
  * Ranks by composite score (Volume, Liquidity, Market Cap, Trades)
  */
-export async function getTopPulsePairs() {
+async function buildTopPulsePairs() {
   try {
     const pairMap = new Map()
 
@@ -306,7 +377,7 @@ export async function getTopPulsePairs() {
 
     return filtered
   } catch (err) {
-    console.error('getTopPulsePairs error:', err)
+    console.error('buildTopPulsePairs error:', err)
     return []
   }
 }

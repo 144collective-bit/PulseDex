@@ -23,6 +23,57 @@ import { WPLS } from '../state/tokens'
  * the hook returns null and the module says so.
  */
 
+/**
+ * A queue in front of the candle API.
+ *
+ * The chart wall renders up to six tiles, each wanting its own pool's history,
+ * and React mounts them all in the same tick - six simultaneous requests to an
+ * unauthenticated endpoint that rate-limits hard. Every one of them came back
+ * 429, so the module rendered six empty charts and looked broken on a perfectly
+ * healthy connection.
+ *
+ * Caching does not help: they are six different pools, so there is nothing to
+ * deduplicate. The requests have to be spread out instead, and measured against
+ * the real endpoint the limit is tighter than it looks - three sequential calls
+ * a second apart still drew a 429 in the middle. So requests are spaced, and
+ * paired with the backoff below, because the failures are intermittent rather
+ * than a hard wall: the same request usually succeeds a moment later.
+ *
+ * Deliberately here rather than in `services/geckoterminal.js`: that module is
+ * shared with the screener, where a single chart should not be made to wait
+ * behind a queue it never contributed to.
+ */
+const CANDLE_SPACING_MS = 700
+
+function createSpacedQueue(spacing) {
+  let tail = Promise.resolve()
+
+  return function enqueue(task) {
+    // Each call chains onto the last, so tasks start in order and at least
+    // `spacing` apart. Rejections are swallowed from the chain - one failed
+    // request must not stop everything queued behind it - while still being
+    // returned to that request's own caller.
+    const result = tail.then(task)
+    tail = result.catch(() => {}).then(() => new Promise((r) => setTimeout(r, spacing)))
+    return result
+  }
+}
+
+const queueCandleRequest = createSpacedQueue(CANDLE_SPACING_MS)
+
+/**
+ * Be patient with the candle endpoint rather than failing fast.
+ *
+ * Its rejections are transient - a request refused now generally succeeds a
+ * couple of seconds later - so one immediate retry, which is React Query's
+ * default posture, converts a momentary limit into a module that says it is
+ * broken. Backing off gives the window time to reopen.
+ */
+const CANDLE_RETRY = {
+  retry: 3,
+  retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+}
+
 /** One place for the polling intervals, so modules cannot each pick their own. */
 const REFRESH = {
   /** Board-level data: everything derives from this, so it is the one that matters. */
@@ -148,13 +199,97 @@ export function usePairMarket(pair) {
 export function usePoolCandles(poolAddress, interval) {
   return useQuery({
     queryKey: ['dashboard', 'candles', poolAddress?.toLowerCase() ?? null, interval],
-    queryFn: () => getPoolCandles(poolAddress, interval),
+    queryFn: () => queueCandleRequest(() => getPoolCandles(poolAddress, interval)),
     enabled: Boolean(poolAddress),
     refetchInterval: REFRESH.candles,
     staleTime: REFRESH.candles / 2,
     placeholderData: (prev) => prev,
-    retry: 1,
+    ...CANDLE_RETRY,
   })
+}
+
+/**
+ * A token's price history in USD.
+ *
+ * The OHLCV endpoint quotes a pool, not a token, so asking it for a pool
+ * returns whichever side that pool happens to lead with - the WPLS/DAI pool
+ * answers with DAI at about a dollar, a flat line if you wanted PLS. Naming the
+ * token leaves no room for that, and the values come back in USD rather than in
+ * the pool's own units: PLSX from the PLSX/WPLS pool reads 0.00000955, its
+ * dollar price, not 0.875, its price in WPLS.
+ *
+ * That is what makes a ratio between two tokens meaningful - both series are in
+ * the same unit, so dividing them cancels it out.
+ */
+export function useTokenUsdSeries(token, interval = '1h') {
+  const { pair } = useTokenMarket(token)
+  const poolAddress = pair?.pairAddress
+  const address = marketAddress(token)
+
+  return useQuery({
+    queryKey: [
+      'dashboard',
+      'usdSeries',
+      poolAddress?.toLowerCase() ?? null,
+      address?.toLowerCase() ?? null,
+      interval,
+    ],
+    queryFn: () =>
+      queueCandleRequest(() => getPoolCandles(poolAddress, interval, { tokenAddress: address })),
+    enabled: Boolean(poolAddress && address),
+    refetchInterval: REFRESH.candles,
+    staleTime: REFRESH.candles / 2,
+    placeholderData: (prev) => prev,
+    ...CANDLE_RETRY,
+  })
+}
+
+/**
+ * How many of B one A is worth, over time.
+ *
+ * Aligned on timestamps the two series actually share rather than zipped by
+ * index. The tokens are priced from different pools, which trade at different
+ * times and can be missing different candles, so pairing the nth of one with
+ * the nth of the other would silently compare prices from different hours - and
+ * the resulting line would look plausible while being wrong.
+ *
+ * @returns {{data: {time:number,value:number}[], isLoading:boolean, isError:boolean, error:unknown, refetch:Function, missing:boolean}}
+ */
+export function useRatioSeries(tokenA, tokenB, interval = '1h') {
+  const a = useTokenUsdSeries(tokenA, interval)
+  const b = useTokenUsdSeries(tokenB, interval)
+
+  const data = useMemo(() => {
+    if (!a.data?.length || !b.data?.length) return []
+
+    const byTime = new Map(b.data.map((c) => [c.time, c.close]))
+    const out = []
+
+    for (const candle of a.data) {
+      const other = byTime.get(candle.time)
+      // A zero denominator is a bad candle, not a ratio of infinity.
+      if (!other || !isFinite(other) || other === 0) continue
+      if (!isFinite(candle.close)) continue
+      out.push({ time: candle.time, value: candle.close / other })
+    }
+
+    return out
+  }, [a.data, b.data])
+
+  return {
+    data,
+    isLoading: a.isLoading || b.isLoading,
+    isFetching: a.isFetching || b.isFetching,
+    isError: a.isError || b.isError,
+    error: a.error ?? b.error,
+    refetch: () => {
+      a.refetch()
+      b.refetch()
+    },
+    // Both sides loaded but nothing lined up - worth saying, because it means
+    // something different from "still loading".
+    missing: Boolean(a.data?.length && b.data?.length && data.length === 0),
+  }
 }
 
 /** Chain-level figures the PulseChain modules read. */

@@ -10,7 +10,7 @@ import {
 } from 'react'
 import { useSiweAuth } from '../../context/SiweAuthContext'
 import { dashboardReducer, initHistory, getActiveDashboard } from './dashboardReducer'
-import { loadDashboardState, saveDashboardState } from './dashboardStorage'
+import { hasSavedDashboards, loadDashboardState, saveDashboardState } from './dashboardStorage'
 
 /**
  * Dashboard state provider.
@@ -45,6 +45,14 @@ export function DashboardProvider({ children }) {
   const [saveState, setSaveState] = useState('saved')
 
   /*
+   * Whether this account has never saved a dashboard, which is what the desk
+   * chooser keys off. Read from storage rather than inferred from the state:
+   * once hydrated, a default layout and a saved one look identical, so a
+   * returning user would otherwise be asked to choose a desk on every visit.
+   */
+  const [isFirstVisit, setIsFirstVisit] = useState(false)
+
+  /*
    * Storage is scoped per account, so switching wallets has to load that
    * account's dashboards rather than carry the previous one across. `hydrated`
    * guards the autosave below: without it the first render after a switch would
@@ -54,6 +62,7 @@ export function DashboardProvider({ children }) {
 
   useEffect(() => {
     hydratedFor.current = undefined
+    setIsFirstVisit(!hasSavedDashboards(account))
     dispatch({ type: 'hydrate', state: loadDashboardState(account) })
     hydratedFor.current = account ?? null
     setSaveState('saved')
@@ -97,10 +106,19 @@ export function DashboardProvider({ children }) {
       globalContext: dashboard?.globalContext ?? {},
       customizing,
       saveState,
+      isFirstVisit,
       canUndo: history.past.length > 0,
       canRedo: history.future.length > 0,
     }),
-    [dashboard, present, customizing, saveState, history.past.length, history.future.length],
+    [
+      dashboard,
+      present,
+      customizing,
+      saveState,
+      isFirstVisit,
+      history.past.length,
+      history.future.length,
+    ],
   )
 
   const actions = useMemo(
@@ -111,7 +129,10 @@ export function DashboardProvider({ children }) {
       moveModuleOrder: (id, direction) => dispatch({ type: 'moveModuleOrder', id, direction }),
 
       /* modules */
-      addModule: (definition, config) => dispatch({ type: 'addModule', definition, config }),
+      // Options rather than three positional extras: callers set some of
+      // config, layout and contextMode and never all three.
+      addModule: (definition, options = {}) =>
+        dispatch({ type: 'addModule', definition, ...options }),
       removeModule: (id) => dispatch({ type: 'removeModule', id }),
       duplicateModule: (id) => dispatch({ type: 'duplicateModule', id }),
       updateModuleConfig: (id, patch) => dispatch({ type: 'updateModuleConfig', id, patch }),
@@ -136,6 +157,7 @@ export function DashboardProvider({ children }) {
 
       /* session */
       setCustomizing,
+      dismissFirstVisit: () => setIsFirstVisit(false),
       save: flush,
     }),
     [flush],

@@ -16,21 +16,29 @@
 /**
  * Categories, in the order the library lists them.
  *
+ * Deliberately finer than the obvious four or five. The library now carries
+ * named presets alongside the generic modules, and a single "Market" heading
+ * held twenty-three entries in one alphabetical run - price tiles, charts and
+ * rankings interleaved, so nothing could be found by scanning. Splitting the
+ * headings is what makes that list navigable without adding a second level of
+ * chrome to a narrow drawer.
+ *
  * A module naming a category that is not here still registers - it is grouped
  * under "Other" rather than dropped, because losing a module from the library
  * is a worse failure than showing it in the wrong section.
  */
 export const MODULE_CATEGORIES = [
-  { key: 'market', label: 'Market' },
+  { key: 'prices', label: 'Prices & metrics' },
+  { key: 'charts', label: 'Charts' },
+  { key: 'rankings', label: 'Rankings' },
+  { key: 'discovery', label: 'Discovery' },
   { key: 'trading', label: 'Trading' },
-  { key: 'portfolio', label: 'Portfolio' },
-  { key: 'pair', label: 'Pair' },
+  { key: 'pairs', label: 'Pools & pairs' },
+  { key: 'wallet', label: 'Wallet' },
   { key: 'hex', label: 'HEX' },
-  { key: 'pulsechain', label: 'PulseChain' },
+  { key: 'network', label: 'PulseChain' },
   { key: 'personal', label: 'Personal' },
 ]
-
-const OTHER_CATEGORY = { key: 'other', label: 'Other' }
 
 /** @type {Map<string, DashboardModuleDefinition>} */
 const registry = new Map()
@@ -51,6 +59,21 @@ function normalise(def) {
     defaultConfig: {},
     minSize: { w: 2, h: 2 },
     defaultSize: { w: 4, h: 4 },
+    /*
+     * Whether the module fills the box it is given, or is sized by what is in
+     * it.
+     *
+     * Almost everything here is ordinary flowing content - a table, a few
+     * figures - and knows its own height. A chart does not: it draws into a
+     * canvas sized to its container, so a container sized to its content would
+     * collapse to nothing.
+     *
+     * The grid gives every module a fixed height either way, so this only
+     * matters in the stacked view, where imposing the desktop height on a
+     * content-sized module is what left a liquidity panel with 72px of figures
+     * in a 546px box.
+     */
+    fillsHeight: false,
     ...def,
   }
 }
@@ -96,38 +119,6 @@ export function getModuleDefinition(type) {
 /** @returns {DashboardModuleDefinition[]} */
 export function listModules() {
   return Array.from(registry.values())
-}
-
-/**
- * Every registered module grouped for the library, in category order, with
- * empty categories dropped.
- *
- * @param {string} [query] Case-insensitive filter over name and description.
- * @returns {{key:string,label:string,modules:DashboardModuleDefinition[]}[]}
- */
-export function listModulesByCategory(query = '') {
-  const q = query.trim().toLowerCase()
-  const matches = (m) =>
-    !q ||
-    m.name.toLowerCase().includes(q) ||
-    m.description.toLowerCase().includes(q) ||
-    m.type.includes(q)
-
-  const known = new Set(MODULE_CATEGORIES.map((c) => c.key))
-  const buckets = [...MODULE_CATEGORIES, OTHER_CATEGORY].map((c) => ({ ...c, modules: [] }))
-  const byKey = new Map(buckets.map((b) => [b.key, b]))
-
-  for (const mod of registry.values()) {
-    if (!matches(mod)) continue
-    const key = known.has(mod.category) ? mod.category : OTHER_CATEGORY.key
-    byKey.get(key).modules.push(mod)
-  }
-
-  for (const bucket of buckets) {
-    bucket.modules.sort((a, b) => a.name.localeCompare(b.name))
-  }
-
-  return buckets.filter((b) => b.modules.length > 0)
 }
 
 /** Test seam. Not used by the app. */

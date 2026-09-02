@@ -1,4 +1,4 @@
-import { X } from 'lucide-react'
+import { Plus, X } from 'lucide-react'
 import { getModuleDefinition } from '../registry/moduleRegistry'
 import { useDashboardActions, useDashboardState } from '../state/DashboardProvider'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
@@ -39,6 +39,62 @@ function Field({ field, value, onChange }) {
           {field.help ? <span className="dash-field-help">{field.help}</span> : null}
         </div>
       )
+
+    /*
+     * A variable-length list of pairs.
+     *
+     * The modules that compare or tile several markets need more than one
+     * subject, and every other field here holds exactly one value. Rather than
+     * those modules shipping their own settings form - which is the thing the
+     * schema-driven configurator exists to avoid - the schema grew a field type
+     * that holds a list.
+     */
+    case 'pair-list': {
+      const list = Array.isArray(value) ? value : []
+      const max = field.max ?? 6
+
+      const replace = (index, pair) =>
+        onChange(list.map((item, i) => (i === index ? pair : item)))
+
+      return (
+        <div className="dash-field">
+          <span className="dash-field-label">{field.label}</span>
+
+          <ul className="dash-field-list">
+            {list.map((pair, index) => (
+              // eslint-disable-next-line react/no-array-index-key
+              <li key={index}>
+                <PairSelector value={pair} onChange={(next) => replace(index, next)} />
+                <button
+                  type="button"
+                  className="dash-icon-btn"
+                  onClick={() => onChange(list.filter((_, i) => i !== index))}
+                  aria-label={`Remove ${pair?.label ?? 'pair'}`}
+                >
+                  <X size={12} />
+                </button>
+              </li>
+            ))}
+          </ul>
+
+          {list.length < max ? (
+            <button
+              type="button"
+              className="dash-btn dash-btn-sm"
+              // Seeded from the last entry so the two selectors are not both
+              // empty - picking one side is usually all that changes.
+              onClick={() => onChange([...list, list[list.length - 1] ?? null])}
+            >
+              <Plus size={12} /> Add pair
+            </button>
+          ) : (
+            <span className="dash-field-help">{max} is the most this module will show.</span>
+          )}
+
+          {field.help ? <span className="dash-field-help">{field.help}</span> : null}
+        </div>
+      )
+    }
 
     case 'select':
       return (

@@ -14,7 +14,8 @@
  */
 
 import { readScoped, writeScoped } from '../../utils/profileStorage'
-import { buildDefaultDashboard } from './defaultDashboard'
+import { buildDefaultDashboard, GRID_COLS } from './defaultDashboard'
+import { repairModuleLayouts } from './compactor'
 
 const STORAGE_KEY = 'dashboards'
 
@@ -77,13 +78,26 @@ export function migrate(raw) {
       preset: null,
       globalContext: {},
       ...d,
-      modules: d.modules.map((m) => ({
-        config: {},
-        contextMode: 'local',
-        locked: false,
-        hidden: false,
-        ...m,
-      })),
+      /*
+       * Defaults first, then a physical check.
+       *
+       * The grid refuses to draw two modules in the same cell sensibly - they
+       * render on top of each other, and nothing in the interface explains why
+       * or offers a way out. Since a stored layout can be malformed for reasons
+       * that are no longer reachable (an older build, a hand edit), it is
+       * repaired on the way in rather than trusted. Valid layouts pass through
+       * unchanged, so this never rearranges a dashboard that was fine.
+       */
+      modules: repairModuleLayouts(
+        d.modules.map((m) => ({
+          config: {},
+          contextMode: 'local',
+          locked: false,
+          hidden: false,
+          ...m,
+        })),
+        GRID_COLS,
+      ),
     })),
     activeId,
   }
@@ -101,6 +115,20 @@ export function migrate(raw) {
 export function loadDashboardState(account) {
   const stored = readScoped(STORAGE_KEY, account, null)
   return migrate(stored) ?? buildInitialState()
+}
+
+/**
+ * Whether this account has a dashboard it built, as opposed to the default one.
+ *
+ * Used to decide whether to offer a starting desk. The distinction matters
+ * because the default layout is indistinguishable from a saved one once it is
+ * on screen - without asking storage directly, a returning user would be
+ * offered the choice again every visit.
+ *
+ * @param {string | null} account
+ */
+export function hasSavedDashboards(account) {
+  return migrate(readScoped(STORAGE_KEY, account, null)) !== null
 }
 
 /**

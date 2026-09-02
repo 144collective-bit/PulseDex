@@ -6,6 +6,7 @@ import DashboardGrid from './DashboardGrid'
 import ModuleLibrary from './ModuleLibrary'
 import ModuleConfigurator from './ModuleConfigurator'
 import HiddenModules from './HiddenModules'
+import DeskChooser from './DeskChooser'
 
 // Registers every module with the registry. This is the one import in the app
 // that exists for its side effect, and it is why nothing else in the dashboard
@@ -23,15 +24,37 @@ import 'react-grid-layout/css/styles.css'
  * Adding a module changes none of these files.
  */
 function DashboardInner() {
-  const { dashboard, customizing } = useDashboardState()
+  const { dashboard, customizing, isFirstVisit } = useDashboardState()
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [configuringId, setConfiguringId] = useState(null)
+
+  /*
+   * The two halves of placement, both owned here because the library and the
+   * grid are siblings and neither should reach into the other.
+   *
+   * `draggingEntry` is what the grid needs to size its drop preview while a card
+   * is in flight. `targetSlot` is the gap a user clicked, which the library
+   * then places into.
+   */
+  const [draggingEntry, setDraggingEntry] = useState(null)
+  const [targetSlot, setTargetSlot] = useState(null)
+
+  const openLibrary = (slot = null) => {
+    setTargetSlot(slot)
+    setLibraryOpen(true)
+  }
+
+  const closeLibrary = () => {
+    setLibraryOpen(false)
+    setTargetSlot(null)
+    setDraggingEntry(null)
+  }
 
   const empty = (dashboard?.modules ?? []).filter((m) => !m.hidden).length === 0
 
   return (
     <div className={`dash-page ${customizing ? 'is-customizing' : ''}`}>
-      <DashboardToolbar onAddModule={() => setLibraryOpen(true)} />
+      <DashboardToolbar onAddModule={() => openLibrary()} />
       <DashboardContextBar />
 
       <div className="dash-canvas">
@@ -43,13 +66,16 @@ function DashboardInner() {
               <button
                 type="button"
                 className="dash-btn dash-btn-primary"
-                onClick={() => setLibraryOpen(true)}
+                onClick={() => openLibrary()}
               >
                 Add module
               </button>
             </div>
           ) : (
-            <DashboardGrid onConfigure={setConfiguringId} />
+            <DashboardGrid
+              onConfigure={setConfiguringId}
+              draggingEntry={draggingEntry}
+            />
           )}
 
           {customizing ? <HiddenModules /> : null}
@@ -60,7 +86,15 @@ function DashboardInner() {
         ) : null}
       </div>
 
-      <ModuleLibrary open={libraryOpen} onClose={() => setLibraryOpen(false)} />
+      {/* Offered once, before anything else is in the way. */}
+      {isFirstVisit ? <DeskChooser /> : null}
+
+      <ModuleLibrary
+        open={libraryOpen}
+        onClose={closeLibrary}
+        targetSlot={targetSlot}
+        onDragDefChange={setDraggingEntry}
+      />
     </div>
   )
 }

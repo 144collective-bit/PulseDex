@@ -27,6 +27,8 @@ const {
   getPairsByTokens,
   searchPulsePairs,
   getPulsePair,
+  getTopPulsePairs,
+  __resetBoardCache,
   CORE_PULSE_CONTRACTS,
   BLOCKED_FAKE_ADDRESSES,
 } = await import('./dexscreener')
@@ -320,5 +322,63 @@ describe('getPulsePair', () => {
 
     fetchWithTimeout.mockRejectedValue(new Error('network down'))
     expect(await getPulsePair(address)).toBe(good)
+  })
+})
+
+
+/*
+ * The board is the expensive call - two dozen upstream requests - and two
+ * independent pollers ask for it on different intervals. These pin the sharing
+ * that keeps that from becoming a 429.
+ */
+describe('getTopPulsePairs', () => {
+  beforeEach(() => {
+    __resetBoardCache()
+  })
+
+  it('serves concurrent callers from a single flight', async () => {
+    fetchWithTimeout.mockResolvedValue(jsonResponse({ pairs: [pair({ liquidity: { usd: 5000 } })] }))
+
+    const [a, b, c] = await Promise.all([
+      getTopPulsePairs(),
+      getTopPulsePairs(),
+      getTopPulsePairs(),
+    ])
+
+    // One flight, so all three callers get the very same array back.
+    expect(a).toBe(b)
+    expect(b).toBe(c)
+  })
+
+  it('answers a second caller from the memo rather than going upstream again', async () => {
+    fetchWithTimeout.mockResolvedValue(jsonResponse({ pairs: [pair({ liquidity: { usd: 5000 } })] }))
+
+    await getTopPulsePairs()
+    const callsAfterFirst = fetchWithTimeout.mock.calls.length
+
+    await getTopPulsePairs()
+
+    expect(fetchWithTimeout.mock.calls.length).toBe(callsAfterFirst)
+  })
+
+  it('keeps the last good board when the upstream goes down', async () => {
+    fetchWithTimeout.mockResolvedValue(jsonResponse({ pairs: [pair({ liquidity: { usd: 5000 } })] }))
+    const good = await getTopPulsePairs()
+    expect(good.length).toBeGreaterThan(0)
+
+    // Step past the memo window with everything upstream now failing. Two
+    // layers have to hold for this: the per-URL cache answers each failed
+    // request with its last good body, and the memo refuses to let an empty
+    // result replace a good board. The rebuilt board is an equal one rather
+    // than the same array, which is why this is an equality check.
+    vi.useFakeTimers()
+    vi.setSystemTime(Date.now() + 60_000)
+    fetchWithTimeout.mockRejectedValue(new Error('network down'))
+
+    try {
+      expect(await getTopPulsePairs()).toStrictEqual(good)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

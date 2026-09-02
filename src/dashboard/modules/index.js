@@ -4,12 +4,15 @@ import {
   Bell,
   CandlestickChart,
   Coins,
+  Columns3,
   Droplets,
   Flame,
   Gauge,
   Globe2,
+  LayoutGrid,
   ListOrdered,
   Receipt,
+  Scale,
   Sparkles,
   Star,
   Tag,
@@ -25,6 +28,8 @@ import TopMovers from './market/TopMovers'
 import Trending from './market/Trending'
 import MarketOverview from './market/MarketOverview'
 import NewPairs from './market/NewPairs'
+import RatioChart from './market/RatioChart'
+import MultiChart from './market/MultiChart'
 
 import TradeModule from './trading/TradeModule'
 
@@ -35,13 +40,14 @@ import PairExplorer from './pair/PairExplorer'
 import RecentTrades from './pair/RecentTrades'
 import Liquidity from './pair/Liquidity'
 import Volume from './pair/Volume'
+import PairCompare from './pair/PairCompare'
 
 import HexOverview from './hex/HexOverview'
 
 import Watchlist from './personal/Watchlist'
 import Alerts from './personal/Alerts'
 
-import { HEX, PLS, USDC, DEFAULT_PAIR } from '../state/tokens'
+import { HEX, PLS, PLSX, INC, USDC, WPLS, DAI, DEFAULT_PAIR, makePair } from '../state/tokens'
 
 /**
  * Every module, registered.
@@ -76,7 +82,7 @@ registerModules([
     type: 'price-card',
     name: 'Token metric',
     description: 'One figure about one token: price, market cap, liquidity, volume or transactions.',
-    category: 'market',
+    category: 'prices',
     icon: Tag,
     component: PriceCard,
     defaultSize: { w: 3, h: 3 },
@@ -108,11 +114,14 @@ registerModules([
     type: 'price-chart',
     name: 'Price chart',
     description: 'Candles, line or area for any pair, on any of the supported timeframes.',
-    category: 'market',
+    category: 'charts',
     icon: CandlestickChart,
     component: PriceChart,
     defaultSize: { w: 8, h: 8 },
     minSize: { w: 4, h: 5 },
+    // Draws into a canvas sized to its container, so it needs a real height
+    // rather than one derived from its content.
+    fillsHeight: true,
     contextAware: true,
     contextKind: 'pair',
     defaultConfig: { pair: DEFAULT_PAIR, timeframe: '1h', chartType: 'candles' },
@@ -143,10 +152,65 @@ registerModules([
   },
 
   {
+    type: 'ratio-chart',
+    name: 'Ratio',
+    description:
+      'How many of one token another is worth, charted over time. Moves only when the two diverge.',
+    category: 'charts',
+    icon: Scale,
+    component: RatioChart,
+    defaultSize: { w: 4, h: 6 },
+    minSize: { w: 3, h: 5 },
+    // Draws into a canvas, so it needs a real height rather than one derived
+    // from its content.
+    fillsHeight: true,
+    defaultConfig: { tokenA: HEX, tokenB: PLSX, timeframe: '1h' },
+    configSchema: [
+      { key: 'tokenA', label: 'Token', type: 'token', help: 'The asset being measured.' },
+      { key: 'tokenB', label: 'Against', type: 'token', help: 'The asset it is measured in.' },
+      {
+        key: 'timeframe',
+        label: 'Timeframe',
+        type: 'select',
+        options: TIMEFRAMES.map((t) => ({ value: t.value, label: t.label })),
+      },
+    ],
+    getTitle: ({ instance }) => {
+      const { tokenA, tokenB } = instance.config
+      return tokenA && tokenB ? `${tokenA.symbol} / ${tokenB.symbol} ratio` : 'Ratio'
+    },
+  },
+
+  {
+    type: 'multi-chart',
+    name: 'Chart wall',
+    description: 'Up to six markets as sparkline tiles, for watching several at once.',
+    category: 'charts',
+    icon: LayoutGrid,
+    component: MultiChart,
+    defaultSize: { w: 6, h: 7 },
+    minSize: { w: 3, h: 5 },
+    fillsHeight: true,
+    defaultConfig: {
+      pairs: [makePair(HEX, WPLS), makePair(PLSX, WPLS), makePair(INC, WPLS), makePair(WPLS, DAI)],
+      timeframe: '1h',
+    },
+    configSchema: [
+      { key: 'pairs', label: 'Markets', type: 'pair-list', max: 6 },
+      {
+        key: 'timeframe',
+        label: 'Timeframe',
+        type: 'select',
+        options: TIMEFRAMES.map((t) => ({ value: t.value, label: t.label })),
+      },
+    ],
+  },
+
+  {
     type: 'top-movers',
     name: 'Top movers',
     description: 'Gainers, losers, volume or transaction leaders across tracked pairs.',
-    category: 'market',
+    category: 'rankings',
     icon: TrendingUp,
     component: TopMovers,
     ...LIST_SIZE,
@@ -188,7 +252,7 @@ registerModules([
     type: 'trending',
     name: 'Trending',
     description: 'Pairs trading well above their own daily average right now.',
-    category: 'market',
+    category: 'rankings',
     icon: Flame,
     component: Trending,
     ...LIST_SIZE,
@@ -200,7 +264,7 @@ registerModules([
     type: 'market-overview',
     name: 'Market overview',
     description: 'Volume, liquidity, transactions and gas across the pairs PulseDEX tracks.',
-    category: 'pulsechain',
+    category: 'network',
     icon: Globe2,
     component: MarketOverview,
     defaultSize: { w: 12, h: 3 },
@@ -211,7 +275,7 @@ registerModules([
     type: 'new-pairs',
     name: 'New pairs',
     description: 'Recently created pairs, filtered by age and liquidity.',
-    category: 'market',
+    category: 'discovery',
     icon: Sparkles,
     component: NewPairs,
     ...LIST_SIZE,
@@ -271,7 +335,7 @@ registerModules([
     type: 'portfolio',
     name: 'Portfolio',
     description: 'Total value and weighted 24h change for the connected wallet.',
-    category: 'portfolio',
+    category: 'wallet',
     icon: Wallet,
     component: Portfolio,
     defaultSize: { w: 6, h: 5 },
@@ -291,7 +355,7 @@ registerModules([
     type: 'holdings',
     name: 'Holdings',
     description: 'Every position in the wallet, with value and share of the total.',
-    category: 'portfolio',
+    category: 'wallet',
     icon: Coins,
     component: Holdings,
     defaultSize: { w: 6, h: 8 },
@@ -325,7 +389,7 @@ registerModules([
     type: 'pair-explorer',
     name: 'Pair explorer',
     description: 'Price, liquidity, volume, transactions and venue for one pair.',
-    category: 'pair',
+    category: 'pairs',
     icon: ListOrdered,
     component: PairExplorer,
     defaultSize: { w: 4, h: 6 },
@@ -339,10 +403,25 @@ registerModules([
   },
 
   {
+    type: 'pair-compare',
+    name: 'Compare markets',
+    description: 'Two or more pairs on the same measures, so their differences are readable.',
+    category: 'pairs',
+    icon: Columns3,
+    component: PairCompare,
+    defaultSize: { w: 6, h: 5 },
+    minSize: { w: 4, h: 4 },
+    defaultConfig: {
+      pairs: [makePair(HEX, WPLS), makePair(PLSX, WPLS), makePair(INC, WPLS)],
+    },
+    configSchema: [{ key: 'pairs', label: 'Markets', type: 'pair-list', max: 6 }],
+  },
+
+  {
     type: 'recent-trades',
     name: 'Recent trades',
     description: 'Swaps through the pool, reconstructed from on-chain transfers.',
-    category: 'pair',
+    category: 'pairs',
     icon: Receipt,
     component: RecentTrades,
     defaultSize: { w: 6, h: 7 },
@@ -381,7 +460,7 @@ registerModules([
     type: 'liquidity',
     name: 'Liquidity',
     description: 'Pool depth and how it is split between the two assets.',
-    category: 'pair',
+    category: 'pairs',
     icon: Droplets,
     component: Liquidity,
     defaultSize: { w: 4, h: 6 },
@@ -396,7 +475,7 @@ registerModules([
     type: 'volume',
     name: 'Volume and activity',
     description: 'Volume across every window the venue reports, plus the buy/sell split.',
-    category: 'pair',
+    category: 'pairs',
     icon: Activity,
     component: Volume,
     defaultSize: { w: 4, h: 6 },

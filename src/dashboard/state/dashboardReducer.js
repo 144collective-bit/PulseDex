@@ -195,7 +195,7 @@ function reducePresent(state, action) {
     /* -------------------------------------------------------------- modules */
 
     case 'addModule': {
-      const { definition, config } = action
+      const { definition, config, layout, contextMode } = action
       return updateActive(state, (d) => ({
         ...d,
         modules: [
@@ -203,14 +203,31 @@ function reducePresent(state, action) {
           {
             id: newModuleId(definition.type),
             type: definition.type,
-            layout: {
+            /*
+             * An explicit placement wins - that is a slot the user picked or a
+             * spot they dropped onto, and moving it somewhere "better" would
+             * ignore the instruction they just gave. Without one, the module
+             * goes below everything else rather than at the origin, so adding
+             * something never shoves the existing layout down the page.
+             */
+            layout: layout ?? {
               x: 0,
               y: nextFreeRow(d.modules),
               w: definition.defaultSize.w,
               h: definition.defaultSize.h,
             },
             config: { ...definition.defaultConfig, ...config },
-            contextMode: definition.contextAware ? 'global' : 'local',
+            /*
+             * An explicit mode wins over the module's default.
+             *
+             * Context-aware modules follow the dashboard pair by default, which
+             * is right for one added from the generic library and wrong for one
+             * added from a preset that names its subject: "HEX Market Cap"
+             * would quietly show PLSX the moment someone changed the toolbar,
+             * still wearing its HEX label. Anything that pins a subject says so
+             * here instead.
+             */
+            contextMode: contextMode ?? (definition.contextAware ? 'global' : 'local'),
             locked: false,
             hidden: false,
           },
