@@ -15,6 +15,36 @@
 import { describe, it, expect, vi } from 'vitest'
 import { browserWindow } from '../test/fixtures'
 
+/*
+ * A document, as well as a window.
+ *
+ * Only this file needs one. Building the config with a project id constructs
+ * the WalletConnect connector, which reaches AppKit's initialiser, which reads
+ * the page title and icon off `document` to name the dapp in the wallet. In a
+ * Node test there is no document, so that rejects - asynchronously, after the
+ * assertions have already passed.
+ *
+ * Vitest reports the file green and then exits 1 on the unhandled rejection,
+ * which is the worst shape a failure can take: `npm test` says 649 passed and
+ * fails anyway, so CI is red with nothing to point at.
+ *
+ * Stubbed rather than switched to a DOM environment, because what is wanted
+ * here is not a browser - it is the four assertions below about which
+ * connectors exist. Every method returns the empty answer, which is enough:
+ * AppKit falls back to its own defaults and the metadata it derives is never
+ * asserted on.
+ */
+globalThis.document = {
+  getElementsByTagName: () => [],
+  querySelector: () => null,
+  querySelectorAll: () => [],
+  createElement: () => ({ setAttribute() {}, style: {}, appendChild() {} }),
+  head: { appendChild() {} },
+  body: { appendChild() {} },
+  addEventListener() {},
+  removeEventListener() {},
+}
+
 // Both set before importing: the config reads them while it is being built.
 globalThis.window = browserWindow({ ethereum: undefined })
 vi.stubEnv('VITE_WALLETCONNECT_PROJECT_ID', '00000000000000000000000000000000')
