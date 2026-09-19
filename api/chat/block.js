@@ -1,6 +1,7 @@
 import { SESSION_COOKIE, getCookie, readSession } from '../_lib/session.js'
 import { isSameOrigin } from '../_lib/guard.js'
 import { serviceClient } from '../_lib/supabase.js'
+import { removeAvatar } from '../_lib/avatars.js'
 import {
   parseAdminAddresses,
   isAdminAddress,
@@ -17,6 +18,13 @@ import {
  * purpose: a moderator may want the history to stand while the account stops
  * adding to it, and hiding a conversation retroactively is a bigger decision
  * than silencing an account.
+ *
+ * It does remove the picture, though, and the distinction is not a
+ * contradiction. Text is what somebody said once and it is in the history at
+ * the point they said it; an avatar is shown beside every message they have
+ * ever posted and keeps being shown after the block, so an account silenced
+ * for what it was displaying would go on displaying it. Leaving it up is the
+ * one way a block does nothing about the thing it was used for.
  */
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store')
@@ -81,6 +89,18 @@ async function block(req, res, db, moderator) {
   if (error) {
     console.error('block: write failed:', error.message)
     return res.status(503).json({ error: 'That could not be saved.' })
+  }
+
+  /*
+   * The picture comes down after the block is recorded, and a failure here
+   * does not fail the request. The block is the part that had to happen; a
+   * moderator told "that could not be saved" would reasonably try again,
+   * having already stopped the account posting.
+   */
+  try {
+    await removeAvatar(db, address)
+  } catch (err) {
+    console.error('block: avatar removal failed:', err.message)
   }
 
   return res.status(200).json({ address, blocked: true })

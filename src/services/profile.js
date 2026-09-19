@@ -1,3 +1,6 @@
+import { supabase, hasSupabase } from '../config/supabase'
+import { normaliseLinks } from '../utils/profileFields'
+
 /**
  * The signed-in wallet's chat identity, held by the server.
  *
@@ -25,12 +28,12 @@ export async function fetchMyProfile() {
  * name. The endpoint says so in a sentence, which is passed through rather
  * than replaced, because it is the only error here the person can act on.
  */
-export async function saveMyProfile({ handle, avatarId }) {
+export async function saveMyProfile({ handle, avatarId, bio, links }) {
   const res = await fetch('/api/profile', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'same-origin',
-    body: JSON.stringify({ handle, avatarId }),
+    body: JSON.stringify({ handle, avatarId, bio, links }),
   })
 
   const payload = await res.json().catch(() => ({}))
@@ -51,5 +54,91 @@ export async function blockAddress({ address, reason }) {
   if (!res.ok) {
     const payload = await res.json().catch(() => ({}))
     throw new Error(payload.error || 'That address could not be blocked.')
+  }
+}
+
+/**
+ * Publish a picture.
+ *
+ * Takes the same compressed data URL that Profile settings already produces
+ * and stores on this device. Sending it rather than the original file is not
+ * an optimisation: the browser's crop and re-encode is what turns a photograph
+ * with a location in its EXIF into 256 square pixels with nothing attached,
+ * and the endpoint would have no way to do that for us.
+ *
+ * Deliberately a separate call from saving the rest of the profile, made only
+ * when somebody changes their picture. Publishing is a different act from
+ * saving a preference, and it should take a decision rather than happen on the
+ * next save that touches anything.
+ */
+export async function uploadMyAvatar(dataUrl) {
+  const res = await fetch('/api/profile/avatar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ dataUrl }),
+  })
+
+  const payload = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(payload.error || 'That picture could not be published.')
+  return payload.avatarUrl || null
+}
+
+/**
+ * Take a picture down.
+ *
+ * With no address, your own. With one, somebody else's - which only a
+ * moderator may do, and for anyone else the endpoint answers as though the
+ * route does not exist.
+ */
+export async function removeAvatar(address = null) {
+  const query = address ? `?address=${encodeURIComponent(address)}` : ''
+  const res = await fetch(`/api/profile/avatar${query}`, {
+    method: 'DELETE',
+    credentials: 'same-origin',
+  })
+
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({}))
+    throw new Error(payload.error || 'That picture could not be removed.')
+  }
+}
+
+/**
+ * Somebody else's public profile.
+ *
+ * Read straight from Supabase over the anon key rather than through an
+ * endpoint, like the messages are and for the same reason: row level security
+ * already says these columns are public, so a function in front of them would
+ * be a second copy of that decision to keep in step with the first.
+ *
+ * Only the columns that are meant to be seen. The table also holds
+ * `updated_at`, which would say when somebody last touched their profile -
+ * harmless-looking, and a way of telling who is active right now.
+ */
+export async function fetchPublicProfile(address) {
+  if (!hasSupabase || !address) return null
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('address, handle, avatar_id, avatar_url, bio, links, created_at')
+    .eq('address', address.toLowerCase())
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!data) return null
+
+  return {
+    address: data.address,
+    handle: data.handle || null,
+    avatarId: data.avatar_id || null,
+    avatarUrl: data.avatar_url || null,
+    bio: data.bio || null,
+    // Normalised again on the way out, although it was normalised on the way
+    // in. This value arrives from the database over a public key, and the
+    // check that put it there ran in a different process on a different day -
+    // a link rendered as an anchor should be one this build approved.
+    links: normaliseLinks(data.links),
+    createdAt: data.created_at || null,
   }
 }

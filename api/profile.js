@@ -2,6 +2,7 @@ import { SESSION_COOKIE, getCookie, readSession } from './_lib/session.js'
 import { isSameOrigin, rateLimit } from './_lib/guard.js'
 import { serviceClient } from './_lib/supabase.js'
 import { normaliseHandle, normaliseAvatarId } from '../src/utils/chatMessage.js'
+import { normaliseBio, normaliseLinks } from '../src/utils/profileFields.js'
 
 /**
  * The signed-in wallet's own profile.
@@ -16,9 +17,14 @@ import { normaliseHandle, normaliseAvatarId } from '../src/utils/chatMessage.js'
  * whoever happens to share it.
  *
  * GET returns your profile, or nulls if you have never saved one.
- * PUT sets the handle and avatar. There is no DELETE: a profile with no
- * messages is harmless, and one with messages cannot be removed without
- * orphaning them.
+ * PUT sets the handle, preset avatar, bio and links. There is no DELETE: a
+ * profile with no messages is harmless, and one with messages cannot be
+ * removed without orphaning them.
+ *
+ * The uploaded picture is not written here - see api/profile/avatar.js. It is
+ * bytes going to a different store with its own failures, and a picture that
+ * could be set by the same request that sets a name would have to succeed or
+ * fail with it.
  */
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store')
@@ -52,7 +58,7 @@ async function signedInAddress(req) {
 async function read(res, db, address) {
   const { data, error } = await db
     .from('profiles')
-    .select('address, handle, avatar_id')
+    .select('address, handle, avatar_id, avatar_url, bio, links')
     .eq('address', address)
     .maybeSingle()
 
@@ -67,6 +73,9 @@ async function read(res, db, address) {
     address,
     handle: data?.handle || null,
     avatarId: data?.avatar_id || null,
+    avatarUrl: data?.avatar_url || null,
+    bio: data?.bio || null,
+    links: Array.isArray(data?.links) ? data.links : [],
   })
 }
 
@@ -85,16 +94,40 @@ async function write(req, res, db, address) {
    * whatever the person was actually trying to do. They show as their address
    * until they pick something usable.
    */
-  const handle = normaliseHandle(req.body?.handle)
-  const avatarId = normaliseAvatarId(req.body?.avatarId)
+  const body = req.body || {}
+
+  /*
+   * A field is written when the request mentions it and left alone when it
+   * does not. The distinction matters because two different things call this:
+   * the profile form, which sends everything, and useChatIdentity, which
+   * pushes a name when the local one changes and knows nothing about bios or
+   * links. Writing every column on every request would mean the second one
+   * silently emptied whatever the first had saved.
+   *
+   * Clearing is still possible, and is how it should be - an empty string
+   * clears a bio, an empty array clears the links. What cannot happen is
+   * clearing something by not mentioning it.
+   *
+   * What is stored is always what the normalisers returned, never what
+   * arrived. Normalising and then saving the raw value would put exactly the
+   * characters they strip - and exactly the URLs they refuse - into the
+   * database.
+   */
+  const patch = { address, updated_at: new Date().toISOString() }
+
+  if ('handle' in body) patch.handle = normaliseHandle(body.handle)
+  if ('avatarId' in body) patch.avatar_id = normaliseAvatarId(body.avatarId)
+  if ('bio' in body) patch.bio = normaliseBio(body.bio)
+
+  // Item by item: normaliseLinks keeps the ones it can accept and drops the
+  // rest, so somebody saving three links one of which is http ends up with
+  // the two that are https rather than an error about the third.
+  if ('links' in body) patch.links = normaliseLinks(body.links)
 
   const { data, error } = await db
     .from('profiles')
-    .upsert(
-      { address, handle, avatar_id: avatarId, updated_at: new Date().toISOString() },
-      { onConflict: 'address' },
-    )
-    .select('address, handle, avatar_id')
+    .upsert(patch, { onConflict: 'address' })
+    .select('address, handle, avatar_id, avatar_url, bio, links')
     .single()
 
   if (error) {
@@ -116,5 +149,10 @@ async function write(req, res, db, address) {
     address: data.address,
     handle: data.handle,
     avatarId: data.avatar_id,
+    // Echoed although this endpoint never writes it, so a save does not hand
+    // the caller a profile with the picture missing from it.
+    avatarUrl: data.avatar_url || null,
+    bio: data.bio,
+    links: Array.isArray(data.links) ? data.links : [],
   })
 }

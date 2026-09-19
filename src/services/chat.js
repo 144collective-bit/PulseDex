@@ -18,7 +18,8 @@ import { PAGE_SIZE, hasMoreBefore } from '../utils/chatPaging'
  * alternative, resolving names separately, is a request per author on first
  * paint.
  */
-const MESSAGE_FIELDS = 'id, address, room, body, created_at, profiles ( handle, avatar_id )'
+const MESSAGE_FIELDS =
+  'id, address, room, body, created_at, profiles ( handle, avatar_id, avatar_url )'
 
 /** Flatten the joined row into something a component can render without
  *  knowing the shape of the query that produced it. */
@@ -31,6 +32,10 @@ function toMessage(row) {
     createdAt: row.created_at,
     handle: row.profiles?.handle || null,
     avatarId: row.profiles?.avatar_id || null,
+    // The uploaded picture, when there is one. Preferred over the preset
+    // wherever a message is drawn - somebody who went to the trouble of
+    // uploading a face has said which of the two they meant.
+    avatarUrl: row.profiles?.avatar_url || null,
   }
 }
 

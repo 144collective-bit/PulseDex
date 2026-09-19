@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { Loader2, AlertTriangle, ChevronUp, Users } from 'lucide-react'
 import ChatMessageRow from './ChatMessageRow'
 import ChatComposer from './ChatComposer'
+import ChatProfileCard from './ChatProfileCard'
 import { useChatMessages, CHAT_STATUS } from '../../hooks/useChatMessages'
 import { useIsModerator } from '../../hooks/useIsModerator'
 import { useRoomPresence } from '../../hooks/useRoomPresence'
@@ -43,6 +44,13 @@ export default function RoomPanel({ room }) {
   const [removeError, setRemoveError] = useState(null)
 
   /*
+   * Whose profile is open, or null. An address rather than the message it was
+   * opened from: the card is about the person, and two messages from the same
+   * author should not be able to open two different versions of them.
+   */
+  const [openProfile, setOpenProfile] = useState(null)
+
+  /*
    * Follow the conversation, unless the reader has scrolled away from it.
    *
    * Yanking someone back to the bottom while they are reading what was said
@@ -80,6 +88,11 @@ export default function RoomPanel({ room }) {
     heightBeforeLoad.current = el ? el.scrollHeight : null
     loadOlder()
   }, [loadOlder])
+
+  // Stable, because ChatProfileCard hangs an Escape listener off it: a fresh
+  // arrow every render would tear that listener down and rebuild it on every
+  // keystroke in the composer.
+  const closeProfile = useCallback(() => setOpenProfile(null), [])
 
   const onScroll = useCallback(() => {
     const el = scroller.current
@@ -174,6 +187,7 @@ export default function RoomPanel({ room }) {
               canRemove={isModerator}
               onRemove={onRemove}
               onBlock={onBlock}
+              onOpenProfile={setOpenProfile}
             />
           ))
         )}
@@ -203,6 +217,14 @@ export default function RoomPanel({ room }) {
       )}
 
       <ChatComposer room={room} onPosted={add} />
+
+      {openProfile && (
+        <ChatProfileCard
+          address={openProfile}
+          canModerate={isModerator}
+          onClose={closeProfile}
+        />
+      )}
     </>
   )
 }

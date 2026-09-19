@@ -201,7 +201,15 @@ async function post(req, res) {
   const inserted = await db
     .from('messages')
     .insert({ address, room, body: message.body })
-    .select('id, address, room, body, created_at')
+    /*
+     * The author's profile comes back with the row, so the message the poster
+     * sees immediately carries their own name and picture. Without the join
+     * the reply is a bare row, which renders as an address and a generated
+     * mark until the realtime feed brings the same message round again with
+     * the profile attached - a visible flicker, on your own message, every
+     * time you post.
+     */
+    .select('id, address, room, body, created_at, profiles ( handle, avatar_id, avatar_url )')
     .single()
 
   if (inserted.error) {
