@@ -4,10 +4,14 @@ import {
   ShieldCheck, Volume2, VolumeX, Eye, EyeOff,
   Zap, CheckCircle2, Radio,
   FileText, Mail, Camera, Loader2, Trash2, Lock,
+  Link2, MessagesSquare,
 } from 'lucide-react'
 import { useUserProfile } from '../context/UserProfileContext'
 import { useSiweAuth } from '../context/SiweAuthContext'
 import { fileToAvatarDataUrl, isSafeAvatarUrl, ACCEPT_ATTRIBUTE } from '../utils/avatarImage'
+import { fetchMyProfile, saveMyProfile, uploadMyAvatar, removeAvatar } from '../services/profile'
+import { MAX_LINKS, normaliseLink } from '../utils/profileFields'
+import { hasSupabase } from '../config/supabase'
 
 function ToggleSwitch({ checked, onChange }) {
   return (
@@ -37,7 +41,13 @@ const LIMITS = {
   username: 20,
   email: 254, // RFC 5321 maximum
   bio: 160,
+  // Well under the 500 normaliseLink refuses at. A URL this long in a profile
+  // card is a tracking parameter train, not a link somebody meant to share.
+  link: 200,
 }
+
+/** Three empty boxes, which is what an account with no links looks like. */
+const EMPTY_LINKS = Array.from({ length: MAX_LINKS }, () => '')
 
 const clamp = (value, max) => String(value ?? '').slice(0, max)
 
@@ -131,7 +141,50 @@ export default function ProfileView() {
   const [avatarUrl, setAvatarUrl] = useState('')
   const [avatarError, setAvatarError] = useState('')
   const [avatarBusy, setAvatarBusy] = useState(false)
+  const [links, setLinks] = useState(EMPTY_LINKS)
   const fileInputRef = useRef(null)
+
+  /*
+   * The picture the chat is currently showing, or null.
+   *
+   * Held apart from `avatarUrl` because they are two different things that
+   * happen to look alike. `avatarUrl` is the picture on this device; this is
+   * the one published to everybody, which is a decision somebody made rather
+   * than a consequence of having saved a form. Conflating them is how a
+   * picture someone set months ago, before this feature existed, gets
+   * published by the next save they make for an unrelated reason.
+   */
+  const [published, setPublished] = useState(null)
+  const [publishBusy, setPublishBusy] = useState(false)
+
+  // Whether publishing is possible at all here. On a deployment with no
+  // database the chat is not offered, so neither is this.
+  const canPublish = isSignedIn && hasSupabase
+
+  useEffect(() => {
+    if (!canPublish) {
+      setPublished(null)
+      return undefined
+    }
+
+    let active = true
+    fetchMyProfile()
+      .then((server) => {
+        if (!active) return
+        setPublished(server.avatarUrl || null)
+        // The server is the authority on links, since they only exist there.
+        const saved = (server.links || []).map((l) => l.url)
+        setLinks([...saved, ...EMPTY_LINKS].slice(0, MAX_LINKS))
+      })
+      // Silent. Not knowing what is published is a worse profile page, not a
+      // broken one, and an error banner about the chat on the settings screen
+      // would be noise to somebody who came here to change their slippage.
+      .catch(() => {})
+
+    return () => {
+      active = false
+    }
+  }, [canPublish])
 
   /**
    * Read a picked file, shrink it, and hold it until Save.
@@ -176,19 +229,99 @@ export default function ProfileView() {
   const displayedName = displayName || currentUser?.displayName || 'Pulse Trader'
   const displayedHandle = username || currentUser?.username || 'pulse_degen'
 
-  const saveProfile = e => {
+  const saveProfile = async e => {
     e?.preventDefault()
     setIsSaving(true)
+    setAvatarError('')
+
+    const name = displayName.trim() || 'Pulse Trader'
+    const text = bio.trim()
+
     updateProfile({
-      displayName: displayName.trim() || 'Pulse Trader',
+      displayName: name,
       username: username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '') || 'pulse_degen',
       email: email.trim(),
-      bio: bio.trim(),
+      bio: text,
       avatarUrl,
     })
+
+    let message = 'Saved on this device'
+
+    if (canPublish) {
+      try {
+        /*
+         * The name, the bio and the links go up together, always as a set.
+         * Sending only what changed would mean the endpoint could not tell a
+         * field left alone from one cleared, and the reading it would have to
+         * pick - absent means unchanged - makes deleting a bio impossible.
+         *
+         * The email is deliberately not among them. It is the one thing on
+         * this form nobody else is meant to see, and this request writes to a
+         * table any visitor can read.
+         */
+        await saveMyProfile({
+          handle: name,
+          avatarId: profile.avatarId || null,
+          bio: text,
+          links: links.filter(Boolean),
+        })
+        message = 'Saved and published'
+      } catch (err) {
+        // Said out loud. A handle somebody else has taken is the common case
+        // and the person can do something about it.
+        setAvatarError(err.message)
+        message = 'Saved on this device'
+      }
+
+      /*
+       * The published picture follows the local one only when it was already
+       * published. Somebody who has not shown their face in the chat does not
+       * start doing so because they saved a slippage preference.
+       */
+      if (published && avatarUrl !== profile.avatarUrl) {
+        try {
+          if (avatarUrl) setPublished(await uploadMyAvatar(avatarUrl))
+          else {
+            await removeAvatar()
+            setPublished(null)
+          }
+        } catch (err) {
+          setAvatarError(err.message)
+        }
+      }
+    }
+
     triggerSound('success')
-    setSaveMsg('Saved on this device')
+    setSaveMsg(message)
     setTimeout(() => { setSaveMsg(null); setIsSaving(false) }, 2500)
+  }
+
+  /**
+   * Show this picture in the chat, or stop showing it.
+   *
+   * Its own control rather than part of Save, because it is its own decision.
+   * Everything else on this form is between somebody and their browser; this
+   * puts a photograph on a public CDN, beside every message they have posted,
+   * for anybody who opens a room. That deserves a button that says so.
+   *
+   * It is also not undoable in the way the rest of the form is. Hiding it
+   * deletes the file, but not any copy made while it was up.
+   */
+  const togglePublished = async () => {
+    setAvatarError('')
+    setPublishBusy(true)
+    try {
+      if (published) {
+        await removeAvatar()
+        setPublished(null)
+      } else {
+        setPublished(await uploadMyAvatar(avatarUrl))
+      }
+    } catch (err) {
+      setAvatarError(err.message)
+    } finally {
+      setPublishBusy(false)
+    }
   }
 
 
@@ -276,6 +409,35 @@ export default function ProfileView() {
                 </button>
               )}
 
+              {/* Offered whenever there is something to publish or something
+                  already published - the second half matters, because hiding
+                  has to stay reachable after the local copy is cleared. */}
+              {canPublish && (avatarUrl || published) && (
+                <div className="profile-publish-row">
+                  <button
+                    type="button"
+                    className={`profile-publish-btn${published ? ' is-live' : ''}`}
+                    onClick={togglePublished}
+                    disabled={publishBusy || (!published && !avatarUrl)}
+                  >
+                    {publishBusy ? (
+                      <Loader2 size={11} className="tch-spin" />
+                    ) : published ? (
+                      <EyeOff size={11} />
+                    ) : (
+                      <MessagesSquare size={11} />
+                    )}
+                    {published ? 'Hide from chat' : 'Show in chat'}
+                  </button>
+
+                  <span className="profile-publish-note">
+                    {published
+                      ? 'Everyone in the rooms can see this picture.'
+                      : 'This picture stays on this device until you publish it.'}
+                  </span>
+                </div>
+              )}
+
               {avatarError && (
                 <p className="profile-avatar-error" role="alert">{avatarError}</p>
               )}
@@ -309,6 +471,36 @@ export default function ProfileView() {
                 <FormField label="Trader Bio" hint="Optional">
                   <StyledInput icon={FileText} type="text" maxLength={LIMITS.bio} value={bio} onChange={e => setBio(clamp(e.target.value, LIMITS.bio))} placeholder="e.g. PulseChain LP provider & swing trader" />
                 </FormField>
+                {/*
+                  Links are shown on the profile card in the chat, which is
+                  why the hint says https rather than leaving somebody to
+                  discover it when one silently fails to save. Anything that
+                  is not an https URL is dropped on the way to the server; the
+                  rest are kept, so one bad line does not cost the others.
+
+                  What the reader sees is the host, never a label - that is
+                  enforced in normaliseLink and is the reason a link here
+                  cannot be made to read as somewhere it does not go.
+                */}
+                {canPublish && (
+                  <FormField label="Profile Links" hint={`Up to ${MAX_LINKS} · https only · shown in chat`}>
+                    <div className="profile-links-stack">
+                      {links.map((value, i) => (
+                        <StyledInput
+                          key={i}
+                          icon={Link2}
+                          type="url"
+                          inputMode="url"
+                          maxLength={LIMITS.link}
+                          value={value}
+                          onChange={e => setLinks(prev => prev.map((v, j) => (j === i ? clamp(e.target.value, LIMITS.link) : v)))}
+                          placeholder="https://example.com"
+                          aria-invalid={Boolean(value) && !normaliseLink(value)}
+                        />
+                      ))}
+                    </div>
+                  </FormField>
+                )}
                 <div className="profile-form-action-row">
                   <button type="submit" className="profile-save-btn" disabled={isSaving}><Save size={14} />{isSaving ? 'Saving…' : 'Save Changes'}</button>
                   {saveMsg && <span className="profile-success-chip animate-fade-in"><CheckCircle2 size={12} />{saveMsg}</span>}
@@ -391,8 +583,10 @@ export default function ProfileView() {
               <>
                 <strong>Signed in with your wallet.</strong> PulseDex never sees a
                 private key and cannot move your funds — signing in only proves you
-                control this address. Profile details are saved on this device only;
-                syncing them across devices is coming.
+                control this address. Your name, bio and links are saved to your
+                account and shown beside your messages in the chat. Your email
+                stays on this device and is never published. A picture is shown
+                to everyone only once you publish it.
               </>
             ) : (
               <>

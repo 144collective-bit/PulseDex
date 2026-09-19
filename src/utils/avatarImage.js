@@ -83,3 +83,27 @@ export async function fileToAvatarDataUrl(file) {
 export function isSafeAvatarUrl(value) {
   return typeof value === 'string' && /^data:image\/(png|jpeg|webp|gif);base64,/.test(value)
 }
+
+/**
+ * The same guard, widened to the pictures the server holds.
+ *
+ * A published avatar is an https URL in Supabase Storage rather than a data
+ * URL, so `isSafeAvatarUrl` refuses it - correctly, since that function guards
+ * what comes back out of localStorage, which is hand-editable. This one guards
+ * what may reach an `<img src>` from either source.
+ *
+ * https and nothing else. An `<img>` cannot run a `javascript:` URL in any
+ * browser still shipping, but "cannot" there rests on the browser rather than
+ * on us, and the same string tends to get reused as an `<a href>` where it
+ * very much can.
+ */
+export function isSafeAvatarSrc(value) {
+  if (isSafeAvatarUrl(value)) return true
+  if (typeof value !== 'string') return false
+
+  try {
+    return new URL(value).protocol === 'https:'
+  } catch {
+    return false
+  }
+}

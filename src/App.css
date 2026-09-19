@@ -14443,6 +14443,73 @@
 }
 
 /* --------------------------------------------------------------------------
+   Publishing a picture to the chat
+
+   Its own row rather than a third pill beside "Remove picture", because it is
+   not the same kind of action. The other controls here change what this
+   browser holds; this one puts a photograph in front of every visitor, and
+   the sentence beside the button is there to say which of the two states it
+   is currently in without anyone having to open a room to find out.
+   -------------------------------------------------------------------------- */
+.profile-publish-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.profile-publish-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  font-family: var(--font-instrument);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--pulse-cyan);
+  background: rgba(0, 229, 255, 0.1);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.profile-publish-btn:hover:not(:disabled) {
+  background: rgba(0, 229, 255, 0.18);
+}
+
+/* Live: the green the app uses everywhere else for "this is on". */
+.profile-publish-btn.is-live {
+  color: var(--pulse-green);
+  background: rgba(0, 255, 157, 0.1);
+  border-color: rgba(0, 255, 157, 0.32);
+}
+
+.profile-publish-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.profile-publish-note {
+  font-family: var(--font-instrument);
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+/* Three link boxes, stacked. */
+.profile-links-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* A link that will be dropped on the way to the server, said while it is
+   still being typed rather than by silently not saving it. */
+.profile-links-stack input[aria-invalid='true'] {
+  border-color: rgba(255, 61, 87, 0.45) !important;
+}
+
+/* --------------------------------------------------------------------------
    Signed-out profile
    -------------------------------------------------------------------------- */
 .profile-locked-card {

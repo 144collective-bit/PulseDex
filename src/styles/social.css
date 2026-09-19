@@ -595,3 +595,254 @@
     display: none;
   }
 }
+
+/* ==========================================================================
+   PROFILES - the face beside a message, and the card it opens
+   ========================================================================== */
+
+/*
+ * An uploaded picture, sized to match the preset and the generated mark.
+ *
+ * object-fit is what keeps it a circle rather than an oval: the file is
+ * already cropped square by the browser that uploaded it, but the endpoint is
+ * reachable with curl and a 600x200 image would otherwise be squashed into the
+ * frame. The background sits under it so a picture that fails to load leaves a
+ * disc rather than a broken-image glyph in the middle of a conversation.
+ */
+.chat-avatar-img {
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--ch-hairline);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* The avatar is a button now. Stripped back to the picture it wraps, with
+   only the focus ring and a lift on hover to say it does something. */
+.chat-avatar-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  line-height: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.chat-avatar-button:hover {
+  transform: scale(1.08);
+  box-shadow: 0 0 0 2px rgba(0, 229, 255, 0.35);
+}
+
+.chat-avatar-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ch-accent);
+}
+
+/* So is the author's name. It has to keep reading as a name rather than as a
+   link, so nothing is added until it is hovered. */
+.chat-author {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: inherit;
+}
+
+.chat-author:hover {
+  color: var(--ch-accent);
+}
+
+.chat-row.own .chat-author:hover {
+  color: var(--ch-mine);
+}
+
+/* ── The card ── */
+
+.chat-profile-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(4, 7, 12, 0.72);
+  backdrop-filter: blur(4px);
+  animation: chat-profile-in 0.16s ease;
+}
+
+.chat-profile-card {
+  position: relative;
+  width: min(360px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  border-radius: 16px;
+  border: 1px solid var(--ch-hairline);
+  /* The opaque surface, not the translucent one. This sits over the
+     conversation, and a stranger's bio with other people's messages showing
+     through it is unreadable. */
+  background: var(--ch-solid);
+  box-shadow: var(--ch-lift);
+}
+
+@keyframes chat-profile-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-profile-backdrop {
+    animation: none;
+  }
+}
+
+.chat-profile-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid var(--ch-hairline);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.chat-profile-close:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.chat-profile-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  /* Room for the close button, which is absolutely positioned over this row. */
+  padding-right: 30px;
+}
+
+.chat-profile-names {
+  min-width: 0;
+}
+
+.chat-profile-handle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+/*
+ * The address wraps rather than truncating, and that is the point of showing
+ * it. Half an address with an ellipsis is exactly as forgeable as a display
+ * name; the whole one is what somebody compares against what they already
+ * have.
+ */
+.chat-profile-address {
+  margin: 2px 0 0;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.chat-profile-bio {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  /* Typed by a stranger, so a single 300-character word cannot be allowed to
+     push the card wider than the screen. */
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.chat-profile-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chat-profile-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--ch-hairline);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-profile-link:hover {
+  color: var(--ch-accent);
+  border-color: rgba(0, 229, 255, 0.35);
+}
+
+.chat-profile-note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+/*
+ * Said on every card, not only on suspicious ones, because there is no such
+ * thing as a card this app can tell is suspicious. A warning that appears
+ * sometimes trains people to trust the cards it does not appear on.
+ */
+.chat-profile-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--ch-hairline);
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.chat-profile-warning svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--pulse-yellow, #fbbf24);
+}
+
+.chat-profile-moderate {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  background: rgba(244, 63, 94, 0.1);
+  color: var(--pulse-red, #f43f5e);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.chat-profile-moderate:disabled {
+  opacity: 0.55;
+  cursor: default;
+}

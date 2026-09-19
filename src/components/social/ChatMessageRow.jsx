@@ -1,6 +1,5 @@
 import { Trash2, Ban } from 'lucide-react'
-import Identicon from './Identicon'
-import { PRESET_AVATARS } from '../../context/UserProfileContext'
+import ChatAvatar from './ChatAvatar'
 import { formatAddress, formatTimeAgo } from '../../utils/formatters'
 
 /**
@@ -22,31 +21,42 @@ import { formatAddress, formatTimeAgo } from '../../utils/formatters'
  * bubble already carries its own edge, so a run of them reads as a run without
  * needing the header removed.
  */
-export default function ChatMessageRow({ message, isOwn, canRemove, onRemove, onBlock }) {
-  const preset = PRESET_AVATARS.find((a) => a.id === message.avatarId)
+export default function ChatMessageRow({ message, isOwn, canRemove, onRemove, onBlock, onOpenProfile }) {
   const posted = Date.parse(message.createdAt)
 
   return (
     <article className={`chat-row ${isOwn ? 'own' : ''}`}>
       {/*
-        The preset avatar wins when somebody chose one, and the generated mark
-        stands in when they did not - which is almost everyone. Before this,
-        an unset avatar fell back to the first preset, so a room was a wall of
-        the same icon and the eye could not use it.
+        A real button, not a div that listens for clicks. It opens a dialog,
+        so it has to be reachable by keyboard and has to say what it does - and
+        the avatar inside it is aria-hidden, which would leave a stop
+        announcing nothing at all without the label.
       */}
-      {preset ? (
-        <div className="chat-avatar" style={{ background: preset.bg }} aria-hidden="true">
-          <span>{preset.icon}</span>
-        </div>
-      ) : (
-        <Identicon address={message.address} size={32} />
-      )}
+      <button
+        type="button"
+        className="chat-avatar-button"
+        onClick={() => onOpenProfile(message.address)}
+        aria-label={`Profile for ${message.handle || formatAddress(message.address)}`}
+        title="View profile"
+      >
+        <ChatAvatar
+          address={message.address}
+          avatarUrl={message.avatarUrl}
+          avatarId={message.avatarId}
+          size={32}
+        />
+      </button>
 
       <div className="chat-body">
         <header className="chat-meta font-mono">
-          <span className="chat-author" title={message.address}>
+          <button
+            type="button"
+            className="chat-author"
+            title={message.address}
+            onClick={() => onOpenProfile(message.address)}
+          >
             {message.handle || formatAddress(message.address)}
-          </span>
+          </button>
 
           {message.handle && (
             <span className="chat-address" title={message.address}>
