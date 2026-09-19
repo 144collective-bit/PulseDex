@@ -58,7 +58,7 @@ async function signedInAddress(req) {
 async function read(res, db, address) {
   const { data, error } = await db
     .from('profiles')
-    .select('address, handle, avatar_id, avatar_url, bio, links')
+    .select('address, handle, avatar_id, avatar_url, banner_url, bio, links')
     .eq('address', address)
     .maybeSingle()
 
@@ -74,6 +74,7 @@ async function read(res, db, address) {
     handle: data?.handle || null,
     avatarId: data?.avatar_id || null,
     avatarUrl: data?.avatar_url || null,
+    bannerUrl: data?.banner_url || null,
     bio: data?.bio || null,
     links: Array.isArray(data?.links) ? data.links : [],
   })
@@ -127,7 +128,7 @@ async function write(req, res, db, address) {
   const { data, error } = await db
     .from('profiles')
     .upsert(patch, { onConflict: 'address' })
-    .select('address, handle, avatar_id, avatar_url, bio, links')
+    .select('address, handle, avatar_id, avatar_url, banner_url, bio, links')
     .single()
 
   if (error) {
@@ -152,6 +153,7 @@ async function write(req, res, db, address) {
     // Echoed although this endpoint never writes it, so a save does not hand
     // the caller a profile with the picture missing from it.
     avatarUrl: data.avatar_url || null,
+    bannerUrl: data.banner_url || null,
     bio: data.bio,
     links: Array.isArray(data.links) ? data.links : [],
   })

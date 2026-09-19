@@ -8,8 +8,20 @@
  * re-encoded at a fixed size first.
  */
 
-/** Longest edge of the stored image, in pixels. */
+/** Longest edge of a stored avatar, in pixels. */
 const OUTPUT_SIZE = 256
+
+/**
+ * A banner's dimensions.
+ *
+ * 3:1, which is roughly what every social banner has settled on, and wide
+ * enough that it still reads as a band rather than a photograph on a desktop
+ * window. Capped at 1200 across rather than the 1500 X uses: the extra pixels
+ * cost file size that the byte limit then has to allow, and nothing on this
+ * page renders a banner larger than about 900.
+ */
+const BANNER_WIDTH = 1200
+const BANNER_HEIGHT = 400
 
 /** Rejected before decoding - the browser should not be asked to parse a 40MB file. */
 const MAX_INPUT_BYTES = 8 * 1024 * 1024
@@ -26,6 +38,31 @@ export const ACCEPT_ATTRIBUTE = ACCEPTED.join(',')
  * photo that is too large, an image the browser cannot decode.
  */
 export async function fileToAvatarDataUrl(file) {
+  return fileToCroppedDataUrl(file, { width: OUTPUT_SIZE, height: OUTPUT_SIZE })
+}
+
+/**
+ * The same, for a banner: wide rather than square, and a little more forgiving
+ * on quality because the result is stretched across a page rather than shown
+ * at 84 pixels.
+ */
+export async function fileToBannerDataUrl(file) {
+  return fileToCroppedDataUrl(file, {
+    width: BANNER_WIDTH,
+    height: BANNER_HEIGHT,
+    quality: 0.82,
+  })
+}
+
+/**
+ * Decode a picked file, crop it to fill the target box, and re-encode.
+ *
+ * Cover rather than contain: the crop takes the largest centred region of the
+ * source with the target's aspect ratio, so the result always fills its frame.
+ * Letterboxing instead would mean bars whose colour is somebody else's choice
+ * showing through a layout that did not ask for them.
+ */
+async function fileToCroppedDataUrl(file, { width, height, quality = 0.85 }) {
   if (!file) return { error: 'No file selected.' }
 
   if (!ACCEPTED.includes(file.type)) {

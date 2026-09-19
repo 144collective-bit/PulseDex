@@ -62,3 +62,19 @@ export const MESSAGE_WRITE_FIELDS = `id, address, room, body, created_at, edited
  * belongs at the top level or under something else.
  */
 export const POST_FIELDS = `id, address, body, created_at, parent_id, ${POST_AUTHOR}`
+
+/**
+ * A public profile, as anybody reading somebody's page gets it.
+ *
+ * Here with the others so api/_routes/health.js can run it against the real
+ * database. That matters more for this one than for most: it grows a column
+ * every time the profile grows a feature, and a deployment whose migration has
+ * not been run fails on exactly this select - which without a health check
+ * presents as a profile page that will not load and no reason why.
+ *
+ * `updated_at` is deliberately absent. It would say when somebody last touched
+ * their profile, which is harmless-looking and a way of telling who is active
+ * right now.
+ */
+export const PUBLIC_PROFILE_FIELDS =
+  'address, handle, avatar_id, avatar_url, banner_url, bio, links, created_at'

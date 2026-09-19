@@ -1,5 +1,5 @@
 import { serviceClient } from '../_lib/supabase.js'
-import { MESSAGE_FIELDS, POST_FIELDS } from '../../src/config/queries.js'
+import { MESSAGE_FIELDS, POST_FIELDS, PUBLIC_PROFILE_FIELDS } from '../../src/config/queries.js'
 
 /**
  * Does this deployment actually work?
@@ -66,6 +66,7 @@ export default async function handler(req, res) {
      */
     checks.push(await query(db, 'messages-select', 'messages', MESSAGE_FIELDS))
     checks.push(await query(db, 'posts-select', 'posts', POST_FIELDS))
+    checks.push(await query(db, 'profiles-select', 'profiles', PUBLIC_PROFILE_FIELDS))
 
     // The tables with no read policy, which the endpoints reach with the
     // service role. A failure here means moderation is broken even though

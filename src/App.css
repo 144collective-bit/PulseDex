@@ -14917,3 +14917,49 @@ a.wallet-option-item {
 .profile-view-public:hover {
   background: rgba(0, 229, 255, 0.18);
 }
+
+/* --------------------------------------------------------------------------
+   Banner editing, in profile settings
+
+   The preview is the same 3:1 band the profile page draws, so what is chosen
+   here is what appears there - a preview at a different shape is a preview of
+   something else.
+   -------------------------------------------------------------------------- */
+.banner-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.banner-preview {
+  aspect-ratio: 3 / 1;
+  width: 100%;
+  border-radius: var(--radius-md);
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.03);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.banner-preview.has-image {
+  border-style: solid;
+  border-color: rgba(255, 255, 255, 0.12);
+  background-size: cover;
+  background-position: center;
+}
+
+.banner-preview-empty {
+  padding: 0 16px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}

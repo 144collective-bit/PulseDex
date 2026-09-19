@@ -4,12 +4,25 @@ import {
   ShieldCheck, Volume2, VolumeX, Eye, EyeOff,
   Zap, CheckCircle2, Radio,
   FileText, Mail, Camera, Loader2, Trash2, Lock,
-  Link2, MessagesSquare, UserRound,
+  Link2, MessagesSquare, UserRound, ImageIcon,
 } from 'lucide-react'
 import { useUserProfile } from '../context/UserProfileContext'
 import { useSiweAuth } from '../context/SiweAuthContext'
-import { fileToAvatarDataUrl, isSafeAvatarUrl, ACCEPT_ATTRIBUTE } from '../utils/avatarImage'
-import { fetchMyProfile, saveMyProfile, uploadMyAvatar, removeAvatar } from '../services/profile'
+import {
+  fileToAvatarDataUrl,
+  fileToBannerDataUrl,
+  isSafeAvatarUrl,
+  isSafeAvatarSrc,
+  ACCEPT_ATTRIBUTE,
+} from '../utils/avatarImage'
+import {
+  fetchMyProfile,
+  saveMyProfile,
+  uploadMyAvatar,
+  removeAvatar,
+  uploadMyBanner,
+  removeBanner,
+} from '../services/profile'
 import { MAX_LINKS, normaliseLink } from '../utils/profileFields'
 import { hasSupabase } from '../config/supabase'
 
@@ -157,6 +170,19 @@ export default function ProfileView({ onOpenPublicProfile }) {
   const [published, setPublished] = useState(null)
   const [publishBusy, setPublishBusy] = useState(false)
 
+  /*
+   * The banner, which is simpler than the avatar and deliberately so.
+   *
+   * An avatar has a local copy that predates this feature, so it needs a
+   * separate "published" state and a decision about when to push it. A banner
+   * has only ever existed on the server, so picking one publishes it and there
+   * is nothing to keep in step.
+   */
+  const [banner, setBanner] = useState(null)
+  const [bannerBusy, setBannerBusy] = useState(false)
+  const [bannerError, setBannerError] = useState('')
+  const bannerInputRef = useRef(null)
+
   // Whether publishing is possible at all here. On a deployment with no
   // database the chat is not offered, so neither is this.
   const canPublish = isSignedIn && hasSupabase
@@ -172,6 +198,7 @@ export default function ProfileView({ onOpenPublicProfile }) {
       .then((server) => {
         if (!active) return
         setPublished(server.avatarUrl || null)
+        setBanner(server.bannerUrl || null)
         // The server is the authority on links, since they only exist there.
         const saved = (server.links || []).map((l) => l.url)
         setLinks([...saved, ...EMPTY_LINKS].slice(0, MAX_LINKS))
@@ -294,6 +321,53 @@ export default function ProfileView({ onOpenPublicProfile }) {
     triggerSound('success')
     setSaveMsg(message)
     setTimeout(() => { setSaveMsg(null); setIsSaving(false) }, 2500)
+  }
+
+  /**
+   * Pick a banner, crop it and publish it in one go.
+   *
+   * Unlike the avatar there is no "save later" step: the file is cropped in
+   * the browser, sent, and the page shows what the server now holds. A banner
+   * has no meaning on this device alone - it exists to be the top of a public
+   * page - so holding one locally would be storing something that does
+   * nothing until it is published anyway.
+   */
+  const pickBanner = async (event) => {
+    const file = event.target.files?.[0]
+    // Reset, so picking the same file twice still fires a change.
+    event.target.value = ''
+    if (!file) return
+
+    setBannerError('')
+    setBannerBusy(true)
+
+    const { dataUrl, error } = await fileToBannerDataUrl(file)
+    if (error) {
+      setBannerError(error)
+      setBannerBusy(false)
+      return
+    }
+
+    try {
+      setBanner(await uploadMyBanner(dataUrl))
+    } catch (err) {
+      setBannerError(err.message)
+    } finally {
+      setBannerBusy(false)
+    }
+  }
+
+  const clearBanner = async () => {
+    setBannerError('')
+    setBannerBusy(true)
+    try {
+      await removeBanner()
+      setBanner(null)
+    } catch (err) {
+      setBannerError(err.message)
+    } finally {
+      setBannerBusy(false)
+    }
   }
 
   /**
@@ -491,6 +565,81 @@ export default function ProfileView({ onOpenPublicProfile }) {
                   enforced in normaliseLink and is the reason a link here
                   cannot be made to read as somewhere it does not go.
                 */}
+                {/*
+                  Its own control, outside the save flow, because a banner is
+                  not a field. Picking one uploads it - there is nothing to
+                  hold locally, since a banner exists only to be the top of a
+                  public page.
+                */}
+                {canPublish && (
+                  <FormField label="Profile Banner" hint="Shown across the top of your page">
+                    <div className="banner-edit">
+                      <div
+                        className={`banner-preview ${banner ? 'has-image' : ''}`}
+                        style={
+                          isSafeAvatarSrc(banner)
+                            ? { backgroundImage: `url(${JSON.stringify(banner)})` }
+                            : undefined
+                        }
+                      >
+                        {!banner && (
+                          <span className="banner-preview-empty font-mono">
+                            No banner - your page uses a pattern from your address
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="banner-actions">
+                        <button
+                          type="button"
+                          className="x-connect-btn"
+                          onClick={() => bannerInputRef.current?.click()}
+                          disabled={bannerBusy}
+                        >
+                          {bannerBusy ? (
+                            <Loader2 size={12} className="tch-spin" />
+                          ) : (
+                            <ImageIcon size={12} />
+                          )}
+                          {bannerBusy ? 'Working' : banner ? 'Replace banner' : 'Upload banner'}
+                        </button>
+
+                        {banner && !bannerBusy && (
+                          <button
+                            type="button"
+                            className="profile-avatar-remove"
+                            onClick={clearBanner}
+                          >
+                            <Trash2 size={11} />
+                            Remove
+                          </button>
+                        )}
+
+                        <input
+                          ref={bannerInputRef}
+                          type="file"
+                          accept={ACCEPT_ATTRIBUTE}
+                          onChange={pickBanner}
+                          className="visually-hidden-input"
+                          tabIndex={-1}
+                        />
+                      </div>
+
+                      {bannerError && (
+                        <p className="profile-avatar-error" role="alert">
+                          {bannerError}
+                        </p>
+                      )}
+
+                      <p className="x-connect-lede">
+                        Cropped to 1200 by 400 in your browser before it is sent, so
+                        nothing but the visible band leaves this device. It is public
+                        the moment it uploads.
+                      </p>
+                    </div>
+                  </FormField>
+                )}
+
                 {canPublish && (
                   <FormField label="Profile Links" hint={`Up to ${MAX_LINKS} · https only · shown in chat`}>
                     <div className="profile-links-stack">

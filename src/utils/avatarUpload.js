@@ -23,6 +23,15 @@
 export const MAX_AVATAR_BYTES = 256 * 1024
 
 /**
+ * The largest banner accepted.
+ *
+ * Four times an avatar, because a banner legitimately is: it spans the page
+ * where an avatar is 84 pixels across, and the same limit would force a
+ * quality nobody would want behind their name.
+ */
+export const MAX_BANNER_BYTES = 1024 * 1024
+
+/**
  * The first bytes of each format accepted, and what they really are.
  *
  * Checked because the declared type in a data URL is a claim by the sender.
@@ -52,11 +61,16 @@ const startsWith = (bytes, expected, offset = 0) =>
 /**
  * Turn a data URL into bytes worth storing, or say why not.
  *
+ * The size limit is a parameter rather than the constant it used to be,
+ * because a banner is legitimately several times an avatar and one number
+ * cannot serve both without being wrong for one of them.
+ *
  * @param {unknown} dataUrl
+ * @param {number} [maxBytes]
  * @returns {{ ok: true, bytes: Uint8Array, type: string, ext: string }
  *          | { ok: false, reason: string }}
  */
-export function decodeAvatar(dataUrl) {
+export function decodeAvatar(dataUrl, maxBytes = MAX_AVATAR_BYTES) {
   if (typeof dataUrl !== 'string') return { ok: false, reason: REJECTED_AVATAR.notDataUrl }
 
   const match = /^data:(image\/[a-z+]+);base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl.trim())
@@ -71,7 +85,7 @@ export function decodeAvatar(dataUrl) {
    * refuse something too big to want in memory.
    */
   const approxBytes = Math.floor((encoded.length * 3) / 4)
-  if (approxBytes > MAX_AVATAR_BYTES) return { ok: false, reason: REJECTED_AVATAR.tooLarge }
+  if (approxBytes > maxBytes) return { ok: false, reason: REJECTED_AVATAR.tooLarge }
 
   let bytes
   try {
@@ -80,7 +94,7 @@ export function decodeAvatar(dataUrl) {
     return { ok: false, reason: REJECTED_AVATAR.notDataUrl }
   }
 
-  if (bytes.length > MAX_AVATAR_BYTES) return { ok: false, reason: REJECTED_AVATAR.tooLarge }
+  if (bytes.length > maxBytes) return { ok: false, reason: REJECTED_AVATAR.tooLarge }
 
   const signature = SIGNATURES.find(
     (s) => startsWith(bytes, s.bytes) && (!s.at8 || startsWith(bytes, s.at8, 8)),
