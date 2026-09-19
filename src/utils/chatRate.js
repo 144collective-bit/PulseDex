@@ -31,8 +31,27 @@ export const POST_LIMITS = [
   { limit: 60, windowMs: 10 * 60_000 },
 ]
 
-/** The oldest message worth fetching to make this decision. */
-export const LONGEST_WINDOW_MS = Math.max(...POST_LIMITS.map((l) => l.windowMs))
+/**
+ * The same idea for feed posts, and deliberately much tighter.
+ *
+ * A chat message is one line in a room somebody can scroll past. A post goes
+ * onto a profile and into everyone's feed and stays there, so the cost of a
+ * flood is not an unreadable ten seconds - it is a timeline nobody else can
+ * get a word into, for as long as the posts remain.
+ *
+ * Three a minute is faster than anyone writes something worth reading, and
+ * twenty an hour is a busy day for a real account.
+ */
+export const FEED_POST_LIMITS = [
+  { limit: 3, windowMs: 60_000 },
+  { limit: 20, windowMs: 60 * 60_000 },
+]
+
+/** The oldest row worth fetching to make one of these decisions. */
+export const longestWindowMs = (limits) => Math.max(...limits.map((l) => l.windowMs))
+
+/** The chat's, kept as its own name because api/chat/messages.js reads it. */
+export const LONGEST_WINDOW_MS = longestWindowMs(POST_LIMITS)
 
 /**
  * Has this address posted too much?

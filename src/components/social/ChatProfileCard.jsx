@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, ExternalLink, ImageOff, Loader2, X } from 'lucide-react'
+import { AlertTriangle, ExternalLink, ImageOff, Loader2, UserRound, X } from 'lucide-react'
 import ChatAvatar from './ChatAvatar'
 import { fetchPublicProfile, removeAvatar } from '../../services/profile'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
@@ -23,7 +23,7 @@ import { formatAddress } from '../../utils/formatters'
  * mistaken for somebody trusted is worth money. The address is the part that
  * cannot be borrowed.
  */
-export default function ChatProfileCard({ address, canModerate, onClose }) {
+export default function ChatProfileCard({ address, canModerate, onClose, onOpenFullProfile }) {
   const [profile, setProfile] = useState(null)
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState(null)
@@ -159,6 +159,27 @@ export default function ChatProfileCard({ address, canModerate, onClose }) {
               <AlertTriangle size={11} />
               Anyone can write anything here. Check the address, not the name.
             </p>
+
+            {/*
+              The card is a glance - who is this, without losing your place in
+              the room. Everything they have written lives on the page behind
+              this button, which is a navigation away from the conversation
+              and therefore something to choose rather than something that
+              happens on a click.
+            */}
+            {onOpenFullProfile && (
+              <button
+                type="button"
+                className="chat-profile-open font-mono"
+                onClick={() => {
+                  onClose()
+                  onOpenFullProfile({ address, handle: profile?.handle || null })
+                }}
+              >
+                <UserRound size={11} />
+                View full profile
+              </button>
+            )}
 
             {canModerate && profile?.avatarUrl && (
               <button

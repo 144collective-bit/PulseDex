@@ -59,6 +59,13 @@ jobs:
 
       - run: npm run lint
 
+      # The serverless handlers, loaded the way Vercel's Node runtime loads
+      # them. Everything else here resolves imports through Vite, which
+      # accepts an extensionless relative path that Node refuses - so a
+      # handler can pass lint, test and build and still be a module-not-found
+      # at the first request after deploy.
+      - run: npm run check:api
+
       # Exits non-zero on an unhandled rejection as well as a failed
       # assertion, which is deliberate - the suite has been green and broken
       # at the same time before.

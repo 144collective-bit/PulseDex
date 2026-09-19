@@ -846,3 +846,279 @@
   opacity: 0.55;
   cursor: default;
 }
+
+/* ==========================================================================
+   THE FEED - posts, and the page they belong to
+   ========================================================================== */
+
+/*
+ * The feed scrolls with the page, where the chat scrolls inside a fixed box.
+ *
+ * Not an inconsistency: they are read differently. A conversation needs a
+ * bottom you can sit at while new lines arrive, which is what a fixed height
+ * buys. A feed has no bottom worth holding - you read down it and leave - and
+ * boxing it would put a scrollbar inside a scrollbar on every phone.
+ */
+.feed-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+}
+
+/* ── Writing one ── */
+
+.feed-composer {
+  padding: 14px;
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 60%);
+}
+
+.feed-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 72px;
+  background: rgba(8, 11, 17, 0.6);
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-md);
+  padding: 11px 13px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.feed-input:focus {
+  outline: none;
+  border-color: rgba(0, 229, 255, 0.45);
+  box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.1);
+}
+
+.feed-composer-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.feed-signin {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* ── One post ── */
+
+/*
+ * Every post drawn the same way, whoever wrote it.
+ *
+ * The chat tints your own messages and lays them out on the right, because a
+ * room is a conversation and the first question is who is speaking. A feed is
+ * a list of things people wrote; tinting your own would say a timeline is
+ * about you rather than about what is on it.
+ */
+.feed-post {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px;
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 55%);
+  box-shadow: var(--ch-rim);
+}
+
+.feed-post:hover {
+  border-color: rgba(255, 255, 255, 0.13);
+}
+
+.feed-post-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.feed-post-meta {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: var(--fs-micro, 10px);
+  color: var(--text-muted);
+}
+
+.feed-post-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.62;
+  color: var(--text-primary);
+  /* The paragraphs the author wrote, without letting them write tags - React
+     escapes the content and this keeps its shape. */
+  white-space: pre-wrap;
+  /* Typed by a stranger, so a 2000-character word cannot push the card wider
+     than the screen. */
+  overflow-wrap: anywhere;
+}
+
+/*
+ * Always present, unlike the chat's tools, which appear on hover.
+ *
+ * A message's controls are moderation, and a room full of always-visible
+ * delete buttons reads as a threat. A post's controls include reporting it and
+ * deleting your own, which are things a reader is meant to be able to find
+ * without discovering that hovering reveals them - and hover does not exist on
+ * a phone.
+ */
+.feed-post-tools {
+  display: flex;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.feed-tool {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm, 7px);
+  border: 1px solid var(--ch-hairline);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.feed-tool:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.feed-tool.danger:hover {
+  color: var(--pulse-red, #f43f5e);
+  border-color: rgba(244, 63, 94, 0.35);
+  background: rgba(244, 63, 94, 0.1);
+}
+
+/* ── The feed's place in the room list ── */
+
+.room-item.is-feed {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* A rule rather than a gap: the feed is not a sixth room, and the list should
+   say so before anyone reads the labels. */
+.room-divider {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--ch-hairline);
+}
+
+/* ── Somebody's page ── */
+
+.profile-public-back {
+  align-self: flex-start;
+}
+
+.profile-public-head {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 18px;
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(120% 70% at 100% 0%, rgba(0, 229, 255, 0.06), transparent 60%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 40%),
+    var(--ch-surface);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+  backdrop-filter: blur(16px) saturate(130%);
+  box-shadow: var(--ch-lift);
+}
+
+.profile-public-names {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.profile-public-handle {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: 0.01em;
+  background: linear-gradient(135deg, var(--pulse-cyan), var(--pulse-green));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * The address, in full and selectable.
+ *
+ * Shown because a handle can be changed and a picture can be copied, and on a
+ * site about which tokens to buy, being mistaken for somebody trusted is worth
+ * money. Half an address behind an ellipsis is exactly as forgeable as a name,
+ * so it wraps rather than truncating.
+ */
+.profile-public-address {
+  margin: 0;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.profile-public-bio {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The way from the glance to the page. */
+.chat-profile-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  background: rgba(0, 229, 255, 0.1);
+  color: var(--pulse-cyan);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.chat-profile-open:hover {
+  background: rgba(0, 229, 255, 0.18);
+}
+
+@media (max-width: 720px) {
+  .feed-panel {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .feed-post {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  /* The avatar and the text compete for a narrow row, and the text is what
+     anybody came for. */
+  .profile-public-head {
+    flex-direction: column;
+    padding: 14px;
+  }
+}

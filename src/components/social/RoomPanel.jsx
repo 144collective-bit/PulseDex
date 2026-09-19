@@ -31,7 +31,7 @@ const FOLLOWING_THRESHOLD_PX = 120
  * conversation is not the same conversation when the room changes, and saying
  * so to React is cheaper than maintaining the list.
  */
-export default function RoomPanel({ room }) {
+export default function RoomPanel({ room, onOpenProfile }) {
   const { account } = useSiweAuth()
   const isModerator = useIsModerator()
   const { messages, status, error, add, remove, hasMore, loadingOlder, loadOlder } =
@@ -223,6 +223,7 @@ export default function RoomPanel({ room }) {
           address={openProfile}
           canModerate={isModerator}
           onClose={closeProfile}
+          onOpenFullProfile={onOpenProfile}
         />
       )}
     </>
