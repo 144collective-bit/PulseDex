@@ -1,13 +1,38 @@
-/* The social page: one room, a list that scrolls, a box at the bottom. */
+/* ==========================================================================
+   THE CHAT - rooms, conversation, composer
+   Borrows the Home page's glass register rather than the Trenches terminal
+   one: blurred surfaces, a lit rim along the top edge, brand gradients and
+   the soft wide shadows that lift a panel off the page instead of outlining
+   it. Namespaced under --ch-* / .chat-* / .social-* / .room-* so nothing here
+   can collide with App.css.
+   ========================================================================== */
 
 .social-view {
-  max-width: 900px;
+  --ch-hairline: rgba(255, 255, 255, 0.08);
+  --ch-surface: rgba(16, 22, 34, 0.75);
+  /* Opaque stand-in for the surface, for anything that sits over dense text
+     where 75% would let the conversation show through it. */
+  --ch-solid: #0c111a;
+  --ch-accent: var(--pulse-cyan);
+  --ch-mine: var(--pulse-green);
+
+  /* The lit-glass recipe, in one place so every surface here reads as the
+     same material rather than as four near-misses. */
+  --ch-rim: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --ch-lift:
+    var(--ch-rim),
+    0 2px 8px rgba(0, 0, 0, 0.24),
+    0 16px 40px rgba(0, 0, 0, 0.22);
+
+  max-width: 980px;
   margin: 0 auto;
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
+
+/* ── Header ── */
 
 .social-head-title {
   display: flex;
@@ -17,13 +42,19 @@
 
 .social-head-title h1 {
   margin: 0;
-  font-size: 18px;
+  font-size: 19px;
   letter-spacing: 0.02em;
-  color: var(--text-primary);
+  /* The brand gradient on the room name, which is where the eye lands first
+     and the one place it costs nothing to be decorative. */
+  background: linear-gradient(135deg, var(--pulse-cyan), var(--pulse-green));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .social-head-icon {
   color: var(--pulse-cyan);
+  filter: drop-shadow(0 0 7px rgba(0, 229, 255, 0.5));
 }
 
 .social-head-lede {
@@ -32,12 +63,25 @@
   color: var(--text-secondary);
 }
 
-/* Rooms beside the conversation. */
+/* ── Rooms beside the conversation ── */
+
 .social-body {
   display: grid;
-  grid-template-columns: 170px minmax(0, 1fr);
+  grid-template-columns: 186px minmax(0, 1fr);
   gap: 12px;
   align-items: start;
+}
+
+.room-list {
+  padding: 8px;
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 42%),
+    var(--ch-surface);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+  backdrop-filter: blur(16px) saturate(130%);
+  box-shadow: var(--ch-lift);
 }
 
 .room-list ul {
@@ -50,63 +94,81 @@
 }
 
 .room-item {
+  position: relative;
   width: 100%;
   text-align: left;
   display: block;
-  padding: 8px 11px;
+  padding: 9px 12px;
   background: none;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: var(--text-secondary);
   font-size: 12.5px;
   cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .room-item:hover {
-  background: var(--bg-card-hover);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--text-primary);
 }
 
 .room-item.active {
-  background: var(--pulse-cyan-bg);
-  border-color: var(--border-active);
   color: var(--pulse-cyan);
+  border-color: rgba(0, 229, 255, 0.35);
+  background: linear-gradient(90deg, rgba(0, 229, 255, 0.14), rgba(0, 229, 255, 0.03) 70%);
+}
+
+/* A lit bar down the active room's leading edge - the same device the app
+   uses on active rows elsewhere, and what makes the selection readable at a
+   glance rather than by colour alone. */
+.room-item.active::before {
+  content: '';
+  position: absolute;
+  inset: 6px auto 6px 0;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--pulse-cyan), var(--pulse-green));
+  box-shadow: 0 0 7px var(--pulse-cyan);
 }
 
 .room-name {
   letter-spacing: 0.02em;
 }
 
+/* ── The conversation ── */
+
 .social-panel {
   display: flex;
   flex-direction: column;
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: 12px;
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-lg);
   overflow: hidden;
+  background:
+    radial-gradient(120% 70% at 100% 0%, rgba(0, 229, 255, 0.05), transparent 60%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 26%),
+    var(--ch-surface);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+  backdrop-filter: blur(16px) saturate(130%);
+  box-shadow: var(--ch-lift);
 }
 
 .chat-scroll {
   /*
-   * A fixed span of the viewport rather than "whatever is left".
-   *
-   * Filling the remaining height would mean every ancestor between here and
-   * the body agreeing to pass a height down, and this page hangs inside the
-   * same container as the screener and the portfolio, which are written to
-   * grow instead. Asking for that would be rewriting their layout to change
-   * this one. A clamp gets the same thing that matters - a list that scrolls
-   * inside itself with the composer pinned under it - and behaves on a short
-   * laptop screen and a tall monitor alike.
+   * A fixed span of the viewport rather than "whatever is left". Filling the
+   * remaining height would need every ancestor between here and the body to
+   * pass one down, and this page hangs in the same container as the screener
+   * and the portfolio, which are written to grow instead.
    */
-  height: clamp(320px, 58vh, 620px);
+  height: clamp(340px, 60vh, 660px);
   overflow-y: auto;
-  padding: 14px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  /* Anchored at the bottom, so the browser keeps the newest message in view
-     when the list grows rather than holding the scroll position. */
+  gap: 14px;
   overflow-anchor: auto;
 }
 
@@ -116,13 +178,32 @@
   display: flex;
   gap: 10px;
   align-items: flex-start;
+  /*
+   * Capped rather than allowed to fill the panel. A 900px line is past the
+   * width anyone reads comfortably, and an uncapped bubble stops reading as a
+   * bubble at all - it becomes a full-width band with rounded corners.
+   */
+  max-width: 76%;
 }
 
-.chat-avatar {
+/* Yours, mirrored to the right. The whole justification for bubbles over rows:
+   who is speaking is answered before a word is read. */
+.chat-row.own {
+  flex-direction: row-reverse;
+  margin-left: auto;
+}
+
+.chat-avatar,
+.chat-identicon {
   width: 32px;
   height: 32px;
   flex: 0 0 32px;
   border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid var(--ch-hairline);
+}
+
+.chat-avatar {
   display: grid;
   place-items: center;
   font-size: 15px;
@@ -138,8 +219,13 @@
   display: flex;
   align-items: baseline;
   gap: 8px;
+  margin-bottom: 4px;
   font-size: var(--fs-micro, 10px);
   color: var(--text-muted);
+}
+
+.chat-row.own .chat-meta {
+  flex-direction: row-reverse;
 }
 
 .chat-author {
@@ -147,7 +233,7 @@
   font-weight: 600;
   color: var(--text-primary);
   /* A display name is chosen by whoever typed it, so it cannot be allowed to
-     push the address it sits beside off the row. */
+     push the address beside it off the row. */
   max-width: 14em;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -155,50 +241,98 @@
 }
 
 .chat-row.own .chat-author {
-  color: var(--pulse-green);
+  color: var(--ch-mine);
 }
 
-.chat-address {
-  color: var(--text-muted);
-}
-
+.chat-address,
 .chat-time {
   color: var(--text-muted);
-  margin-left: auto;
 }
 
-.chat-remove {
-  background: none;
-  border: none;
-  padding: 2px;
-  cursor: pointer;
-  color: var(--text-muted);
-  opacity: 0;
-  transition: opacity 0.12s ease, color 0.12s ease;
+/*
+ * The bubble.
+ *
+ * Deliberately not blurred, unlike every other surface on this page. A blur is
+ * per-layer GPU work, and a conversation is the one place here that grows
+ * without bound - now that older messages load on demand, a long room would
+ * mean hundreds of blur layers in a scrolling container, which stutters badly
+ * on a phone. The gradient, hairline and rim give the same lit-glass reading
+ * against the panel that is already blurred behind them.
+ */
+.chat-bubble {
+  position: relative;
+  padding: 9px 12px;
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015));
+  box-shadow: var(--ch-rim);
 }
 
-.chat-row:hover .chat-remove,
-/* Keyboard users never hover, so the control has to appear on focus too or it
-   cannot be reached without a mouse. */
-.chat-remove:focus-visible {
-  opacity: 1;
-}
-
-.chat-remove:hover {
-  color: var(--pulse-red);
+.chat-row.own .chat-bubble {
+  border-color: rgba(0, 255, 157, 0.28);
+  background: linear-gradient(180deg, rgba(0, 255, 157, 0.12), rgba(0, 255, 157, 0.04));
 }
 
 .chat-text {
-  margin: 2px 0 0;
+  margin: 0;
   font-size: 13.5px;
-  line-height: 1.5;
+  line-height: 1.55;
   color: var(--text-primary);
-  /* Keeps the line breaks the author typed. Everything here was written by a
-     stranger and is rendered as text - React escapes it, and this only
-     affects whitespace. */
+  /* Keeps the line breaks the author typed. Everything here is rendered as
+     text - React escapes it - so this only affects whitespace. */
   white-space: pre-wrap;
   /* A 500-character word is a legal message and must not widen the page. */
   overflow-wrap: anywhere;
+}
+
+/* Moderation, revealed on hover and on focus. Tucked against the bubble's
+   trailing edge so it does not reserve space in every row for a control
+   almost nobody can use. */
+.chat-tools {
+  position: absolute;
+  top: -10px;
+  right: 6px;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-sm);
+  background: var(--ch-solid);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.chat-row.own .chat-tools {
+  right: auto;
+  left: 6px;
+}
+
+.chat-row:hover .chat-tools,
+/* Keyboard users never hover, so without this the controls cannot be reached
+   without a mouse. */
+.chat-tools:focus-within {
+  opacity: 1;
+}
+
+.chat-tool {
+  display: grid;
+  place-items: center;
+  padding: 3px;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+
+.chat-tool:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.chat-tool.danger:hover {
+  color: var(--pulse-red);
 }
 
 /* ── States that are not a conversation ── */
@@ -209,7 +343,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 32px 16px;
+  padding: 40px 16px;
   margin: 0;
   font-size: 13px;
   color: var(--text-secondary);
@@ -231,27 +365,33 @@
   }
 }
 
-.chat-older {
+/* ── Paging, jumping, presence ── */
+
+.chat-older,
+.chat-jump {
   align-self: center;
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  margin: 0 0 4px;
-  padding: 5px 12px;
   font-size: var(--fs-label, 11px);
-  color: var(--text-secondary);
-  background: none;
-  border: 1px solid var(--border-subtle);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   cursor: pointer;
-  /* The scroll area is a flex column, so without this the button stretches to
-     the full width of the conversation. */
+  /* The scroll area is a flex column, so without this these stretch to the
+     full width of the conversation. */
   flex: 0 0 auto;
+}
+
+.chat-older {
+  margin: 0 0 4px;
+  padding: 5px 14px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--ch-hairline);
 }
 
 .chat-older:hover:not(:disabled) {
   color: var(--text-primary);
-  border-color: var(--border-active);
+  border-color: rgba(0, 229, 255, 0.35);
 }
 
 .chat-older:disabled {
@@ -259,52 +399,51 @@
   cursor: default;
 }
 
+.chat-jump {
+  margin: 0 0 8px;
+  padding: 5px 14px;
+  color: var(--bg-main);
+  background: linear-gradient(135deg, var(--pulse-cyan), var(--pulse-green));
+  border: none;
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.35);
+}
+
 .chat-presence {
   display: flex;
   align-items: center;
   gap: 5px;
   margin: 0;
-  padding: 5px 12px 0;
+  padding: 6px 14px 0;
   font-size: var(--fs-micro, 10px);
   color: var(--text-muted);
-}
-
-.chat-jump {
-  align-self: center;
-  margin: 0 0 8px;
-  padding: 4px 12px;
-  font-size: var(--fs-label, 11px);
-  color: var(--bg-main);
-  background: var(--pulse-cyan);
-  border: none;
-  border-radius: 999px;
-  cursor: pointer;
 }
 
 /* ── The box you type in ── */
 
 .chat-composer {
-  border-top: 1px solid var(--border-subtle);
-  padding: 10px 12px 12px;
-  background: var(--bg-subtle);
+  border-top: 1px solid var(--ch-hairline);
+  padding: 10px 14px 14px;
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.18));
 }
 
 .chat-input {
   width: 100%;
   resize: none;
-  background: var(--bg-input);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 9px 11px;
+  background: rgba(8, 11, 17, 0.6);
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 13.5px;
   line-height: 1.5;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .chat-input:focus {
   outline: none;
-  border-color: var(--border-active);
+  border-color: rgba(0, 229, 255, 0.45);
+  box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.1);
 }
 
 .chat-composer-foot {
@@ -328,6 +467,7 @@
   font-size: var(--fs-label, 11px);
   color: var(--pulse-red);
   margin: 0;
+  padding: 0 14px;
 }
 
 .chat-send {
@@ -335,25 +475,27 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 14px;
+  padding: 8px 16px;
   font-size: 12.5px;
   font-weight: 600;
+  white-space: nowrap;
   color: var(--bg-main);
-  background: var(--pulse-green);
+  background: linear-gradient(135deg, var(--pulse-cyan), var(--pulse-green));
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
+  box-shadow: 0 0 14px rgba(0, 229, 255, 0.28);
+  transition: box-shadow 0.2s ease, opacity 0.2s ease;
 }
 
-/* The label is two or three words and reads as one thing. Left to wrap it
-   breaks across lines inside the button on a narrow phone. */
-.chat-send {
-  white-space: nowrap;
+.chat-send:hover:not(:disabled) {
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.45);
 }
 
 .chat-send:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .chat-signin {
@@ -372,16 +514,20 @@
   margin-left: auto;
 }
 
+/* ── Narrow screens ── */
+
 @media (max-width: 760px) {
   /*
-   * The rooms go along the top on a narrow screen, not down the side.
-   *
-   * A 170px column out of 375px is nearly half the width, and the thing being
-   * squeezed is the conversation - the part people came for. A scrolling strip
-   * costs one row of height instead.
+   * Rooms go along the top rather than down the side. A 186px column out of
+   * 375px is half the width, and what gets squeezed is the conversation - the
+   * part people came for. A scrolling strip costs one row of height.
    */
   .social-body {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .room-list {
+    padding: 6px;
   }
 
   .room-list ul {
@@ -389,8 +535,8 @@
     gap: 6px;
     overflow-x: auto;
     padding-bottom: 2px;
-    /* No scrollbar track eating a few pixels on the platforms that show one
-       permanently; the overflow is discoverable by dragging. */
+    /* No permanent scrollbar track eating a few pixels; the overflow is
+       discoverable by dragging. */
     scrollbar-width: none;
   }
 
@@ -400,8 +546,38 @@
 
   .room-item {
     white-space: nowrap;
-    padding: 6px 12px;
-    border: 1px solid var(--border-subtle);
+    padding: 6px 13px;
+    border: 1px solid var(--ch-hairline);
+  }
+
+  .room-item.active::before {
+    display: none;
+  }
+
+  /* Bubbles take more of the width when there is less of it. At 375px a 76%
+     cap leaves lines too short to read. */
+  .chat-row {
+    max-width: 92%;
+  }
+
+  /*
+   * Shorter, so the composer is on screen when the room opens.
+   *
+   * The desktop clamp is generous because there is room to be. On a 780px
+   * phone the same value puts the input below the fold behind the navbar, the
+   * ticker, this page's header, the room strip and the bottom nav - so
+   * arriving in a room meant scrolling the page before you could type in it.
+   * Nothing overlapped; it was simply out of sight, which is the kind of thing
+   * that reads as "the chat is broken".
+   */
+  .chat-scroll {
+    height: clamp(220px, 46vh, 440px);
+  }
+
+  /* The lede is a sentence explaining the room, and it costs a line of height
+     that the conversation wants more. The room's name stays. */
+  .social-head-lede {
+    display: none;
   }
 
   .social-view {
@@ -409,13 +585,12 @@
   }
 
   .chat-scroll {
-    padding: 10px;
+    padding: 12px;
   }
 
   /* The timestamp goes first when the row runs out of width: it is the least
      load-bearing thing on it. The address stays, because it is the only part
-     that identifies anyone - a handle is chosen, and two people can choose
-     the same one. */
+     that identifies anyone. */
   .chat-time {
     display: none;
   }

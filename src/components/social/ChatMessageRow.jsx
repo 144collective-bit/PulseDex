@@ -1,31 +1,46 @@
 import { Trash2, Ban } from 'lucide-react'
+import Identicon from './Identicon'
 import { PRESET_AVATARS } from '../../context/UserProfileContext'
 import { formatAddress, formatTimeAgo } from '../../utils/formatters'
 
 /**
- * One message.
+ * One message, as a bubble.
  *
- * The author is shown as their handle when they have set one and as a
- * shortened address when they have not - but the address is always present
- * underneath, because a handle is a display name anybody can choose and two
- * people can choose the same one. On a chat about which tokens to buy, "who
- * actually said this" has to be answerable without trusting the name.
+ * Your own sit right and tinted with the brand green; everyone else's sit left
+ * over the panel. That split is the whole reason a bubble layout is worth the
+ * horizontal space it costs - a glance tells you who is speaking before you
+ * have read a word.
+ *
+ * The author is shown as their handle when they have one and as a shortened
+ * address when they do not, with the address beside the handle whenever both
+ * exist. A handle is chosen and two people could once choose the same one;
+ * they are unique now, but the address is still what identifies anyone, and
+ * "who actually said this" should not depend on trusting a display name.
+ *
+ * Grouping is deliberately absent. Consecutive messages from one author could
+ * tuck under a single header, and on a dense row layout they should - but a
+ * bubble already carries its own edge, so a run of them reads as a run without
+ * needing the header removed.
  */
 export default function ChatMessageRow({ message, isOwn, canRemove, onRemove, onBlock }) {
-  const avatar =
-    PRESET_AVATARS.find((a) => a.id === message.avatarId) || PRESET_AVATARS[0]
-
+  const preset = PRESET_AVATARS.find((a) => a.id === message.avatarId)
   const posted = Date.parse(message.createdAt)
 
   return (
     <article className={`chat-row ${isOwn ? 'own' : ''}`}>
-      <div
-        className="chat-avatar"
-        style={{ background: avatar.bg }}
-        aria-hidden="true"
-      >
-        <span>{avatar.icon}</span>
-      </div>
+      {/*
+        The preset avatar wins when somebody chose one, and the generated mark
+        stands in when they did not - which is almost everyone. Before this,
+        an unset avatar fell back to the first preset, so a room was a wall of
+        the same icon and the eye could not use it.
+      */}
+      {preset ? (
+        <div className="chat-avatar" style={{ background: preset.bg }} aria-hidden="true">
+          <span>{preset.icon}</span>
+        </div>
+      ) : (
+        <Identicon address={message.address} size={32} />
+      )}
 
       <div className="chat-body">
         <header className="chat-meta font-mono">
@@ -33,13 +48,6 @@ export default function ChatMessageRow({ message, isOwn, canRemove, onRemove, on
             {message.handle || formatAddress(message.address)}
           </span>
 
-          {/*
-           * Shown beside a handle, and only then. The name is chosen and two
-           * people can choose the same one, so the address has to be on the
-           * row for anyone to be told apart - but when there is no handle the
-           * author is already the address, and printing it twice reads as a
-           * bug rather than as care.
-           */}
           {message.handle && (
             <span className="chat-address" title={message.address}>
               {formatAddress(message.address)}
@@ -53,12 +61,23 @@ export default function ChatMessageRow({ message, isOwn, canRemove, onRemove, on
           >
             {formatTimeAgo(Math.floor(posted / 1000))}
           </time>
+        </header>
+
+        <div className="chat-bubble">
+          {/*
+           * Rendered as text, never as markup. Everything here was typed by a
+           * stranger, and this is the one place in the app where that is true
+           * of something shown at full width. React escapes it; the
+           * `white-space: pre-wrap` in the stylesheet keeps the line breaks
+           * the author wrote without letting them write tags.
+           */}
+          <p className="chat-text">{message.body}</p>
 
           {canRemove && (
-            <>
+            <div className="chat-tools">
               <button
                 type="button"
-                className="chat-remove"
+                className="chat-tool"
                 onClick={() => onRemove(message.id)}
                 aria-label="Remove this message"
                 title="Remove this message"
@@ -66,31 +85,18 @@ export default function ChatMessageRow({ message, isOwn, canRemove, onRemove, on
                 <Trash2 size={12} />
               </button>
 
-              {/* Blocking is the heavier of the two and stops future posts
-                  rather than hiding this one, so it asks first - and says
-                  whose account it is about, since the row may have scrolled
-                  by the time the dialog appears. */}
               <button
                 type="button"
-                className="chat-remove"
+                className="chat-tool danger"
                 onClick={() => onBlock(message.address)}
                 aria-label="Block this author"
                 title="Block this author from posting"
               >
                 <Ban size={12} />
               </button>
-            </>
+            </div>
           )}
-        </header>
-
-        {/*
-         * Rendered as text, never as markup. Everything in here was typed by a
-         * stranger, and this is the one place in the app where that is true of
-         * something displayed at full width. React escapes it by default; the
-         * `white-space: pre-wrap` in the stylesheet is what keeps the line
-         * breaks the author wrote without letting them write tags.
-         */}
-        <p className="chat-text">{message.body}</p>
+        </div>
       </div>
     </article>
   )
