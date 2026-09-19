@@ -19,7 +19,11 @@ import { PAGE_SIZE, hasMoreBefore } from '../utils/chatPaging'
  * paint.
  */
 const MESSAGE_FIELDS =
-  'id, address, room, body, created_at, profiles ( handle, avatar_id, avatar_url )'
+  'id, address, room, body, created_at, edited_at, ' +
+  'profiles ( handle, avatar_id, avatar_url ), ' +
+  // Reactions come with the page rather than in a request per message. Fifty
+  // messages would otherwise be fifty round trips before anything is drawn.
+  'message_reactions ( emoji, address )'
 
 /** Flatten the joined row into something a component can render without
  *  knowing the shape of the query that produced it. */
@@ -36,7 +40,42 @@ function toMessage(row) {
     // wherever a message is drawn - somebody who went to the trouble of
     // uploading a face has said which of the two they meant.
     avatarUrl: row.profiles?.avatar_url || null,
+    // Set when the author changed it. Rendered as an "edited" marker, which is
+    // the reason editing is allowed at all: a silent edit is a way to change
+    // what you said after somebody answered it.
+    editedAt: row.edited_at || null,
+    reactions: Array.isArray(row.message_reactions) ? row.message_reactions : [],
   }
+}
+
+/**
+ * Reactions, counted, with whether you are among them.
+ *
+ * Done here rather than in the component so a row renders from a shape it can
+ * use directly, and so the "have I reacted" test is one lowercase comparison
+ * written once. Two accounts differing only in case are the same account
+ * everywhere except a string compare, and that is precisely the bug that ends
+ * with somebody unable to remove their own reaction.
+ *
+ * @param {{emoji: string, address: string}[]} reactions
+ * @param {string|null} me
+ * @returns {{emoji: string, count: number, mine: boolean}[]}
+ */
+export function tallyReactions(reactions, me) {
+  const mine = me ? me.toLowerCase() : null
+  const counts = new Map()
+
+  for (const reaction of reactions || []) {
+    if (typeof reaction?.emoji !== 'string') continue
+    const entry = counts.get(reaction.emoji) || { emoji: reaction.emoji, count: 0, mine: false }
+    entry.count += 1
+    if (mine && reaction.address === mine) entry.mine = true
+    counts.set(reaction.emoji, entry)
+  }
+
+  // Most-reacted first, then by emoji so the order is stable as counts tie -
+  // a row whose reactions reshuffle on every render is unusable.
+  return [...counts.values()].sort((a, b) => b.count - a.count || a.emoji.localeCompare(b.emoji))
 }
 
 /**
@@ -96,7 +135,7 @@ async function fetchMessage(id) {
  *
  * @param {{ onMessage: (message: object) => void, onRemoved: (id: number) => void }} handlers
  */
-export function subscribeToMessages({ room, onMessage, onRemoved }) {
+export function subscribeToMessages({ room, onMessage, onRemoved, onReaction }) {
   if (!hasSupabase) return () => {}
 
   /*
@@ -119,8 +158,49 @@ export function subscribeToMessages({ room, onMessage, onRemoved }) {
     .on(
       'postgres_changes',
       { event: 'UPDATE', schema: 'public', table: 'messages', filter: `room=eq.${room}` },
+      async (payload) => {
+        /*
+         * An update used to mean exactly one thing - a removal - because
+         * `deleted_at` was the only column anything ever wrote. Editing added
+         * a second, so the two are told apart here rather than assumed.
+         */
+        if (payload.new.deleted_at) {
+          onRemoved(payload.new.id)
+          return
+        }
+
+        // Fetched back rather than merged from the payload: the change feed
+        // publishes one table's row and knows nothing about the joined profile
+        // or the reactions, so using it directly would blank both.
+        const message = await fetchMessage(payload.new.id)
+        if (message) onMessage(message)
+      },
+    )
+    /*
+     * Reactions, on the same socket.
+     *
+     * Unfiltered, because message_reactions has no room column to filter on -
+     * a reaction knows its message and the message knows the room. The hook
+     * discards anything whose message it is not holding, which is cheap
+     * because the payload carries the message id and needs no lookup.
+     *
+     * A delete publishes only the replica identity, which for this table is
+     * the primary key - and the primary key is the message, the author and
+     * the emoji. So a removal arrives complete and can be undone locally
+     * without a round trip.
+     */
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'message_reactions' },
       (payload) => {
-        if (payload.new.deleted_at) onRemoved(payload.new.id)
+        onReaction?.({ ...payload.new, on: true })
+      },
+    )
+    .on(
+      'postgres_changes',
+      { event: 'DELETE', schema: 'public', table: 'message_reactions' },
+      (payload) => {
+        onReaction?.({ ...payload.old, on: false })
       },
     )
     .subscribe()
@@ -162,8 +242,48 @@ export async function postMessage({ room, body }) {
   return payload.message ? toMessage(payload.message) : null
 }
 
-/** Remove a message. Only a configured moderator can; for anyone else the
- *  endpoint answers as though the route does not exist. */
+/**
+ * Change one of your own messages.
+ *
+ * Yours only - the endpoint answers 404 for anybody else's, and for one that
+ * does not exist, so this cannot be used to ask who wrote a given id.
+ */
+export async function editMessage({ id, body }) {
+  const res = await fetch('/api/chat/messages', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ id, body }),
+  })
+
+  const payload = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(payload.error || 'That message could not be edited.')
+  return payload.message ? toMessage(payload.message) : null
+}
+
+/** React to a message, or take it back. Adding twice leaves one; removing
+ *  twice leaves none - neither is an error. */
+export async function setReaction({ id, emoji, on }) {
+  const res = on
+    ? await fetch('/api/chat/reactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ id, emoji }),
+      })
+    : await fetch(
+        `/api/chat/reactions?id=${encodeURIComponent(id)}&emoji=${encodeURIComponent(emoji)}`,
+        { method: 'DELETE', credentials: 'same-origin' },
+      )
+
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({}))
+    throw new Error(payload.error || 'That reaction could not be saved.')
+  }
+}
+
+/** Remove a message. Your own always; anyone's if you are a moderator. For
+ *  anyone else the endpoint answers as though the route does not exist. */
 export async function removeMessage(id) {
   const res = await fetch(`/api/chat/messages?id=${encodeURIComponent(id)}`, {
     method: 'DELETE',

@@ -62,6 +62,42 @@ export function useChatMessages(room) {
     setMessages((current) => current.filter((m) => m.id !== id))
   }, [])
 
+  /**
+   * Apply one reaction arriving from the feed.
+   *
+   * Merged into the message we already hold rather than refetching it. A
+   * reaction is three known values - message, author, emoji - and the feed
+   * delivers all three on both insert and delete, so a round trip would buy
+   * nothing.
+   *
+   * Silently ignores a reaction for a message this room is not holding, which
+   * is the common case: the subscription is every reaction in the database,
+   * because the table has no room column to filter on.
+   */
+  const applyReaction = useCallback(({ message_id: messageId, address, emoji, on }) => {
+    const message = byId.current.get(messageId)
+    if (!message || typeof emoji !== 'string' || typeof address !== 'string') return
+
+    const without = (message.reactions || []).filter(
+      (r) => !(r.emoji === emoji && r.address === address),
+    )
+
+    /*
+     * Rebuilt by removing and then conditionally re-adding, rather than by
+     * pushing on insert and filtering on delete. It makes the insert path
+     * idempotent - a duplicate event, which a reconnect can deliver, leaves
+     * one entry rather than two - and both paths share one line.
+     */
+    byId.current.set(messageId, {
+      ...message,
+      reactions: on ? [...without, { emoji, address }] : without,
+    })
+
+    setMessages((current) =>
+      current.map((m) => (m.id === messageId ? byId.current.get(messageId) : m)),
+    )
+  }, [])
+
   useEffect(() => {
     if (!hasSupabase) return undefined
 
@@ -94,13 +130,16 @@ export function useChatMessages(room) {
       onRemoved: (id) => {
         if (active) forget(id)
       },
+      onReaction: (change) => {
+        if (active) applyReaction(change)
+      },
     })
 
     return () => {
       active = false
       unsubscribe()
     }
-  }, [room, merge, forget])
+  }, [room, merge, forget, applyReaction])
 
   /**
    * Fetch the page before the oldest message held.
@@ -138,5 +177,11 @@ export function useChatMessages(room) {
      *  to bring it back around. */
     add: useCallback((message) => merge([message]), [merge]),
     remove: forget,
+    /** Replace one message in place - used by an edit, so the new text is on
+     *  screen before the feed brings the same change back around. */
+    replace: useCallback((message) => merge([message]), [merge]),
+    /** Apply a reaction locally, so pressing one feels instant rather than
+     *  waiting on the round trip and the feed. */
+    react: applyReaction,
   }
 }

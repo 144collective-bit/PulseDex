@@ -1178,3 +1178,198 @@
   line-height: 1.55;
   color: var(--text-secondary);
 }
+
+/* ==========================================================================
+   REACTIONS AND EDITING
+   ========================================================================== */
+
+/* Used by the reaction picker to label an emoji for a screen reader without
+   putting the word on screen beside it. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.chat-reactions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+/* Your own message sits on the right, so its reactions line up under it
+   rather than trailing off the wrong edge. */
+.chat-row.own .chat-reactions {
+  justify-content: flex-end;
+}
+
+.chat-reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: var(--radius-full, 999px);
+  border: 1px solid var(--ch-hairline);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 11px;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.chat-reaction:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.chat-reaction:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+/*
+ * One you are in.
+ *
+ * Outlined in the brand cyan, which is the only thing on screen that says
+ * pressing it again takes it back rather than adding another.
+ */
+.chat-reaction.is-mine {
+  border-color: rgba(0, 229, 255, 0.45);
+  background: rgba(0, 229, 255, 0.12);
+}
+
+.chat-reaction-count {
+  font-size: 9.5px;
+  color: var(--text-muted);
+}
+
+.chat-reaction.is-mine .chat-reaction-count {
+  color: var(--pulse-cyan);
+}
+
+.chat-reaction.is-add {
+  color: var(--text-muted);
+  padding: 3px 7px;
+}
+
+.chat-reaction-add {
+  position: relative;
+}
+
+/*
+ * The picker.
+ *
+ * Absolutely positioned so opening it does not push the conversation around -
+ * a message that grows when you reach for a reaction moves the thing you were
+ * aiming at. Above the button rather than below, because these sit near the
+ * bottom of a scrolling panel where below is often off-screen.
+ */
+.chat-reaction-menu {
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 0;
+  z-index: 5;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--ch-hairline);
+  /* Opaque: this sits over the conversation, and emoji read against text
+     behind them are unreadable. */
+  background: var(--ch-solid);
+  box-shadow: var(--ch-lift);
+}
+
+.chat-row.own .chat-reaction-menu {
+  left: auto;
+  right: 0;
+}
+
+.chat-reaction-option {
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--radius-sm, 7px);
+  background: none;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.chat-reaction-option:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ── Editing ── */
+
+/*
+ * Not optional and not subtle.
+ *
+ * A silent edit is a way to change what you said after somebody answered it,
+ * and in a room about what to buy that is worth money. This marker is the
+ * reason editing is allowed at all, so it is rendered on every edited message
+ * whether or not anybody is looking for it.
+ */
+.chat-edited {
+  font-style: italic;
+  color: var(--text-muted);
+  cursor: help;
+}
+
+.chat-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chat-edit-input {
+  width: 100%;
+  resize: vertical;
+  background: rgba(8, 11, 17, 0.75);
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  border-radius: var(--radius-sm, 7px);
+  padding: 7px 9px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.chat-edit-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.12);
+}
+
+.chat-edit-tools {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+/* Editing controls are always visible while editing - unlike the hover tools,
+   which is where they came from. There is no way out of an edit otherwise. */
+.chat-edit-tools .chat-tool {
+  opacity: 1;
+}
+
+/*
+ * Where there is no hover, the tools are simply there.
+ *
+ * They reveal on hover because a room of always-visible delete buttons reads
+ * as a threat - which was the right call while they were moderator controls
+ * and only a moderator saw them. Editing and deleting your own message are
+ * everybody's now, and on a touch screen a control that appears on hover is a
+ * control that does not exist. `hover: none` is the precise signal for that,
+ * rather than guessing from width: a narrow desktop window still has a mouse.
+ */
+@media (hover: none) {
+  .chat-tools {
+    opacity: 1;
+  }
+}
