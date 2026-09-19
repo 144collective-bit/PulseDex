@@ -360,6 +360,34 @@ await run('races / hammer the social tabs', {
   },
 })
 
+/*
+ * A phone with no wallet on it.
+ *
+ * The commonest way anybody reaches this app from a phone, and it used to end
+ * at a sentence telling the reader to open the page inside their wallet app
+ * with nothing to tap that would do it: the links that do live in the wallet
+ * modal, and nothing on a phone opened that. A dead end describing the way out
+ * is still a dead end.
+ */
+await run('phone / no wallet has a way out', {
+  viewport: PHONE,
+  signedIn: false,
+  steps: async (page) => {
+    const btn = page.locator('.account-btn').first()
+    if (!(await btn.count())) throw new Error('no sign-in button on a phone')
+    await btn.click()
+    await page.waitForTimeout(2500)
+
+    const route = page.locator('.account-wallet-route').first()
+    if (!(await route.count())) throw new Error('no wallet found, and no way offered to get one')
+    await route.click()
+    await page.waitForTimeout(1200)
+
+    const offers = await page.locator('.wallet-option-item').count()
+    if (offers === 0) throw new Error('the way out opens on an empty list')
+  },
+})
+
 /* Back and forward across a route that takes over the content area. */
 await run('history / back out of a profile', {
   steps: async (page) => {

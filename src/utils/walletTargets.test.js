@@ -4,6 +4,7 @@ import {
   detectWallet,
   walletHandoffLink,
   providerIsWallet,
+  otherInjectedWallets,
 } from './walletTargets'
 
 /*
@@ -124,9 +125,6 @@ describe('walletHandoffLink', () => {
   })
 
   it('offers no handoff for a wallet this app does not list', () => {
-    // Trust and Coinbase were dropped with MetaMask: the four wallets are
-    // Rabby, Internet Money, OKX and ZKX, and a link to anything else invites
-    // a connection nobody wanted.
     expect(walletHandoffLink('trust-app', HREF)).toBeNull()
     expect(walletHandoffLink('coinbase-app', HREF)).toBeNull()
   })
@@ -137,17 +135,27 @@ describe('walletHandoffLink', () => {
     expect(walletHandoffLink('nonesuch', HREF)).toBeNull()
   })
 
-  it('no longer offers a MetaMask handoff', () => {
-    expect(walletHandoffLink('metamask-app', HREF)).toBeNull()
+  /*
+   * These two used to assert the opposite: that MetaMask had no handoff and
+   * that OKX was the only wallet a phone could reach. That was true and was
+   * the bug - with no WalletConnect project id configured, somebody on a phone
+   * without OKX installed had no route to a wallet at all.
+   */
+  it('offers a handoff to each wallet that publishes a link format', () => {
+    const offered = ['rabby', 'internetmoney', 'zkxwallet', 'okx-app', 'metamask-app']
+      .filter((id) => walletHandoffLink(id, HREF) !== null)
+    expect(offered).toEqual(['okx-app', 'metamask-app'])
   })
 
-  it('leaves OKX as the only wallet with a mobile handoff', () => {
-    // Worth stating plainly: of the four, OKX is the only one publishing a
-    // link format, so it is the only one a phone can reach without
-    // WalletConnect configured.
-    const offered = ['rabby', 'internetmoney', 'okx-app', 'zkxwallet', 'trust-app', 'coinbase-app']
-      .filter((id) => walletHandoffLink(id, HREF) !== null)
-    expect(offered).toEqual(['okx-app'])
+  it('offers nothing for a wallet with no published format, rather than guessing one', () => {
+    // Rabby and ZKX were asked for and are deliberately absent. Neither
+    // publishes a format this could be written against, and a link invented
+    // rather than documented opens the wallet on its own home screen - which
+    // to the person holding the phone looks exactly like the app being broken.
+    // Both speak WalletConnect, so both are reached that way instead.
+    expect(walletHandoffLink('rabby', HREF)).toBeNull()
+    expect(walletHandoffLink('zkxwallet', HREF)).toBeNull()
+    expect(walletHandoffLink('nonsense', HREF)).toBeNull()
   })
 })
 
@@ -176,5 +184,83 @@ describe('providerIsWallet', () => {
     expect(providerIsWallet({}, 'rabby')).toBe(false)
     expect(providerIsWallet(null, 'rabby')).toBe(false)
     expect(providerIsWallet({ isMetaMask: true }, 'metamask')).toBe(false)
+  })
+})
+
+describe('otherInjectedWallets', () => {
+  const eip6963 = (id, name) => ({ id, name, icon: 'data:image/svg+xml,x' })
+
+  it('offers a wallet that announced itself but is not one of the four', () => {
+    const found = otherInjectedWallets([eip6963('io.metamask', 'MetaMask')])
+    expect(found).toEqual([{ id: 'io.metamask', name: 'MetaMask', icon: 'data:image/svg+xml,x' }])
+  })
+
+  it('is the whole fix for a wallet in-app browser, which is how phones get here', () => {
+    // Trust, Coinbase and Rainbow all inject a provider and none of them is
+    // curated. Before this they produced an empty list and four install links.
+    const inApp = [
+      eip6963('com.trustwallet.app', 'Trust Wallet'),
+      eip6963('com.coinbase.wallet', 'Coinbase Wallet'),
+      eip6963('me.rainbow', 'Rainbow'),
+    ]
+    expect(otherInjectedWallets(inApp).map((w) => w.name)).toEqual([
+      'Trust Wallet',
+      'Coinbase Wallet',
+      'Rainbow',
+    ])
+  })
+
+  it('does not list a wallet the curated list already names', () => {
+    const found = otherInjectedWallets([
+      eip6963('io.rabby', 'Rabby Wallet'),
+      eip6963('com.okex.wallet', 'OKX Wallet'),
+      eip6963('io.metamask', 'MetaMask'),
+    ])
+    expect(found.map((w) => w.name)).toEqual(['MetaMask'])
+  })
+
+  it('falls back to the shared provider only when nothing announced', () => {
+    const generic = { id: 'injected', name: 'Injected' }
+    expect(otherInjectedWallets([generic], { hasInjected: true })).toEqual([
+      { id: 'injected', name: 'Browser wallet', icon: null },
+    ])
+    // Something announced, so the shared object is that same wallet again.
+    expect(
+      otherInjectedWallets([generic, eip6963('io.metamask', 'MetaMask')], { hasInjected: true }).map(
+        (w) => w.name
+      )
+    ).toEqual(['MetaMask'])
+  })
+
+  it('offers nothing when there is no provider at all - a plain phone browser', () => {
+    expect(otherInjectedWallets([{ id: 'injected', name: 'Injected' }], { hasInjected: false })).toEqual([])
+    expect(otherInjectedWallets([])).toEqual([])
+    expect(otherInjectedWallets()).toEqual([])
+  })
+
+  it('keeps a wallet that announces twice from appearing twice', () => {
+    const found = otherInjectedWallets([eip6963('io.metamask', 'MetaMask'), eip6963('io.metamask.mobile', 'MetaMask')])
+    expect(found).toHaveLength(1)
+  })
+})
+
+describe('walletHandoffLink, the routes off a phone', () => {
+  const page = 'https://pulsedex.net/u/0xabc?tab=posts'
+
+  it('hands MetaMask the address without its scheme, which is the format it takes', () => {
+    expect(walletHandoffLink('metamask-app', page)).toBe(
+      'https://metamask.app.link/dapp/pulsedex.net/u/0xabc?tab=posts'
+    )
+  })
+
+  it('still refuses anything that is not a web address', () => {
+    for (const id of ['metamask-app', 'okx-app']) {
+      // `new URL` accepts javascript: quite happily, which is how this got
+      // through before: the wallet was handed a link whose target was a script.
+      expect(walletHandoffLink(id, 'javascript:alert(1)')).toBe(null)
+      expect(walletHandoffLink(id, 'data:text/html,<script>alert(1)</script>')).toBe(null)
+      expect(walletHandoffLink(id, 'file:///etc/passwd')).toBe(null)
+      expect(walletHandoffLink(id, '')).toBe(null)
+    }
   })
 })

@@ -293,6 +293,7 @@ export default function Navbar({
           <AccountButton
             onOpenProfile={() => setActiveTab('profile')}
             onOpenPublicProfile={onOpenPublicProfile}
+            onOpenWalletModal={onOpenWalletModal}
           />
 
 
