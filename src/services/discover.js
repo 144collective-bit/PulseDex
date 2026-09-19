@@ -1,6 +1,7 @@
 import { supabase, hasSupabase } from '../config/supabase'
 import { containsPattern } from '../utils/likePattern'
 import { normaliseLinks } from '../utils/profileFields'
+import { dbError } from '../utils/dbError'
 
 /**
  * Finding people worth following.
@@ -53,7 +54,7 @@ export async function searchProfiles(term, limit = 20) {
     .like('handle_lower', pattern.toLowerCase())
     .limit(limit)
 
-  if (error) throw new Error(error.message)
+  if (error) throw dbError(error, 'search profiles')
   return (data || []).map(toProfile)
 }
 
@@ -78,7 +79,7 @@ export async function fetchActiveProfiles({ limit = 20, sample = 120 } = {}) {
     .order('created_at', { ascending: false })
     .limit(sample)
 
-  if (recent.error) throw new Error(recent.error.message)
+  if (recent.error) throw dbError(recent.error, 'find recently active people')
 
   // Insertion order is recency order, so the most recently active come first
   // and the cap keeps the busiest few from filling the page.
@@ -90,7 +91,7 @@ export async function fetchActiveProfiles({ limit = 20, sample = 120 } = {}) {
     .select(PROFILE_FIELDS)
     .in('address', addresses)
 
-  if (error) throw new Error(error.message)
+  if (error) throw dbError(error, 'load profiles for Discover')
 
   /*
    * Put back into the order the posts gave, because `in` returns rows in

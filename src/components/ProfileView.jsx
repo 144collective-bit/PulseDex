@@ -178,6 +178,19 @@ export default function ProfileView({ onOpenPublicProfile }) {
    * has only ever existed on the server, so picking one publishes it and there
    * is nothing to keep in step.
    */
+  /*
+   * Did the server's copy of this profile actually arrive?
+   *
+   * It matters because of the links, which exist only on the server. When the
+   * read failed this form held the empty set it starts with, and Save sent
+   * that empty set as the new truth - so a database hiccup while somebody
+   * opened this page, followed by them changing their display name, silently
+   * deleted every link they had. The write endpoint leaves out what a request
+   * does not mention, so not knowing is a reason to say nothing about links
+   * rather than to assert there are none.
+   */
+  const [serverLoaded, setServerLoaded] = useState(false)
+
   const [banner, setBanner] = useState(null)
   const [bannerBusy, setBannerBusy] = useState(false)
   const [bannerError, setBannerError] = useState('')
@@ -197,16 +210,22 @@ export default function ProfileView({ onOpenPublicProfile }) {
     fetchMyProfile()
       .then((server) => {
         if (!active) return
+        setServerLoaded(true)
         setPublished(server.avatarUrl || null)
         setBanner(server.bannerUrl || null)
         // The server is the authority on links, since they only exist there.
         const saved = (server.links || []).map((l) => l.url)
         setLinks([...saved, ...EMPTY_LINKS].slice(0, MAX_LINKS))
       })
-      // Silent. Not knowing what is published is a worse profile page, not a
-      // broken one, and an error banner about the chat on the settings screen
-      // would be noise to somebody who came here to change their slippage.
-      .catch(() => {})
+      /*
+       * Still no page-level banner: somebody who came here to change their
+       * slippage does not need an alert about the chat. But it is no longer
+       * silent either - the links field says so, because that is the one part
+       * of this form a failed read would otherwise quietly destroy.
+       */
+      .catch(() => {
+        if (active) setServerLoaded(false)
+      })
 
     return () => {
       active = false
@@ -286,11 +305,17 @@ export default function ProfileView({ onOpenPublicProfile }) {
          * this form nobody else is meant to see, and this request writes to a
          * table any visitor can read.
          */
+        /*
+         * Links are mentioned only when we know what they were. The endpoint
+         * writes a field when the request names it and leaves it alone when it
+         * does not, which is exactly the distinction needed here: having failed
+         * to read somebody's links is not the same as their having none.
+         */
         await saveMyProfile({
           handle: name,
           avatarId: profile.avatarId || null,
           bio: text,
-          links: links.filter(Boolean),
+          ...(serverLoaded ? { links: links.filter(Boolean) } : {}),
         })
         message = 'Saved and published'
       } catch (err) {
@@ -641,7 +666,14 @@ export default function ProfileView({ onOpenPublicProfile }) {
                 )}
 
                 {canPublish && (
-                  <FormField label="Profile Links" hint={`Up to ${MAX_LINKS} · https only · shown in chat`}>
+                  <FormField
+                    label="Profile Links"
+                    hint={
+                      serverLoaded
+                        ? `Up to ${MAX_LINKS} · https only · shown in chat`
+                        : 'Your published links could not be loaded, so saving will leave them as they are.'
+                    }
+                  >
                     <div className="profile-links-stack">
                       {links.map((value, i) => (
                         <StyledInput

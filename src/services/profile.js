@@ -1,6 +1,7 @@
 import { supabase, hasSupabase } from '../config/supabase'
 import { normaliseLinks } from '../utils/profileFields'
 import { PUBLIC_PROFILE_FIELDS } from '../config/queries'
+import { dbError } from '../utils/dbError'
 
 /**
  * The signed-in wallet's chat identity, held by the server.
@@ -155,7 +156,7 @@ export async function fetchProfileByHandle(handle) {
 async function runProfileQuery(query) {
   const { data, error } = await query.maybeSingle()
 
-  if (error) throw new Error(error.message)
+  if (error) throw dbError(error, 'load a profile')
   if (!data) return null
 
   return {

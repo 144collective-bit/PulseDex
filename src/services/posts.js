@@ -1,6 +1,7 @@
 import { supabase, hasSupabase } from '../config/supabase'
 import { PAGE_SIZE, hasMoreBefore } from '../utils/chatPaging'
 import { POST_FIELDS } from '../config/queries'
+import { dbError } from '../utils/dbError'
 
 /**
  * Reading and writing posts.
@@ -81,7 +82,7 @@ export async function fetchPostPage({
   if (before) query = query.lt('created_at', before)
 
   const { data, error } = await query
-  if (error) throw new Error(error.message)
+  if (error) throw dbError(error, 'load the feed')
 
   const rows = data || []
   return { posts: rows.map(toPost), hasMore: hasMoreBefore(rows, limit) }
@@ -264,7 +265,7 @@ export async function fetchReplies(parentId, limit = 100) {
     .order('created_at', { ascending: true })
     .limit(limit)
 
-  if (error) throw new Error(error.message)
+  if (error) throw dbError(error, 'load replies')
   return (data || []).map(toPost)
 }
 

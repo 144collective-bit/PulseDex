@@ -10,6 +10,7 @@
     "check:api": "node scripts/check-api-imports.mjs",
     "smoke": "node scripts/smoke.mjs",
     "smoke:browser": "node scripts/smoke-browser.mjs",
+    "stress": "node scripts/stress.mjs",
     "measure:queries": "node scripts/measure-queries.mjs",
     "preview": "vite preview",
     "logos": "node scripts/build-token-logos.mjs",

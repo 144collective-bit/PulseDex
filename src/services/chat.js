@@ -1,6 +1,7 @@
 import { supabase, hasSupabase } from '../config/supabase'
 import { PAGE_SIZE, hasMoreBefore } from '../utils/chatPaging'
 import { MESSAGE_FIELDS } from '../config/queries'
+import { dbError } from '../utils/dbError'
 
 /**
  * Reading and writing the chat.
@@ -89,7 +90,7 @@ export async function fetchMessagePage({ room, before = null, limit = PAGE_SIZE 
   if (before) query = query.lt('created_at', before)
 
   const { data, error } = await query
-  if (error) throw new Error(error.message)
+  if (error) throw dbError(error, 'load chat messages')
 
   const rows = data || []
   return { messages: rows.map(toMessage).reverse(), hasMore: hasMoreBefore(rows, limit) }
