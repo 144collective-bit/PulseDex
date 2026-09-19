@@ -77,8 +77,18 @@ create index if not exists posts_author_idx
 
 alter table public.posts enable row level security;
 
--- Read is public, like the chat: a post is readable without connecting a
--- wallet. That is the point of it being a post.
+/*
+ * Read is public, like the chat: a post is readable without connecting a
+ * wallet. That is the point of it being a post.
+ *
+ * Dropped first, because `create policy` has no `if not exists` - it is the
+ * one statement in this file that would otherwise raise on a second run, and
+ * every other one here is written to be re-runnable. A drop-then-create is
+ * safe on a table nothing can write to anyway: the window between the two
+ * statements is inside this transaction, and the only thing a missing select
+ * policy does is refuse reads.
+ */
+drop policy if exists "anyone may read posts that are not removed" on public.posts;
 create policy "anyone may read posts that are not removed"
   on public.posts for select to anon, authenticated using (deleted_at is null);
 
