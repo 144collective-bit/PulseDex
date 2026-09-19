@@ -2,7 +2,7 @@ import {
   Home,
   TrendingUp,
   Flame,
-  Zap,
+  MessagesSquare,
   Radio,
   PieChart,
 } from 'lucide-react'
@@ -48,16 +48,18 @@ export default function MobileBottomNav({
         <span className="mobile-nav-label">Trenches</span>
       </button>
 
-      <button
-        className={`mobile-nav-item ${activeTab === 'dex' ? 'active' : ''}`}
-        aria-current={activeTab === 'dex' ? 'page' : undefined}
-        onClick={() => setActiveTab('dex')}
-      >
-        <div className="mobile-nav-icon-wrapper">
-          <Zap size={22} />
-        </div>
-        <span className="mobile-nav-label">DEX</span>
-      </button>
+      {FEATURES.social && (
+        <button
+          className={`mobile-nav-item ${activeTab === 'social' ? 'active' : ''}`}
+          aria-current={activeTab === 'social' ? 'page' : undefined}
+          onClick={() => setActiveTab('social')}
+        >
+          <div className="mobile-nav-icon-wrapper">
+            <MessagesSquare size={22} />
+          </div>
+          <span className="mobile-nav-label">Lounge</span>
+        </button>
+      )}
 
       {FEATURES.markets && (
         <button

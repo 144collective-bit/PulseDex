@@ -12,6 +12,7 @@ import {
   ChevronDown,
   LogOut,
   Zap,
+  MessagesSquare,
   Radio,
   User,
   UserPlus,
@@ -178,14 +179,16 @@ export default function Navbar({
               <Flame size={16} />
               <span>Trenches</span>
             </button>
-            <button
-              className={`btn-tab ${activeTab === 'dex' ? 'active' : ''}`}
-              aria-current={activeTab === 'dex' ? 'page' : undefined}
-              onClick={() => setActiveTab('dex')}
-            >
-              <Zap size={16} />
-              <span>DEX</span>
-            </button>
+            {FEATURES.social && (
+              <button
+                className={`btn-tab ${activeTab === 'social' ? 'active' : ''}`}
+                aria-current={activeTab === 'social' ? 'page' : undefined}
+                onClick={() => setActiveTab('social')}
+              >
+                <MessagesSquare size={16} />
+                <span>Lounge</span>
+              </button>
+            )}
             {FEATURES.markets && (
               <button
                 className={`btn-tab ${activeTab === 'markets' ? 'active' : ''}`}

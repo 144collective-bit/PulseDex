@@ -42,10 +42,17 @@ export const FEATURES = {
   /** Markets tab. */
   markets: false,
 
-  /** The DEX terminal. When false the DEX tab shows the launch notice instead.
-   *  The terminal reads live quotes from the PulseX router. Whether it can also
-   *  execute a trade is a separate flag - see `dexSwapLive`. */
-  dexLive: true,
+  /** The DEX terminal and the swap inside it.
+   *
+   *  Off, and no longer reachable: the tab it lived in is the social page now.
+   *  Nothing is deleted - DexTerminal.jsx, SwapPanel.jsx, the swap services
+   *  and their two thousand lines of tests are all still here, and the flag is
+   *  still read - but there is no longer a nav item that leads to them.
+   *
+   *  Restoring the terminal therefore takes more than flipping this back: it
+   *  needs a tab again. What this flag still does on its own is guarantee the
+   *  code cannot render by accident while that is true. */
+  dexLive: false,
 
   /** Signing in the swap panel: approvals and the swap call itself.
    *
@@ -62,10 +69,20 @@ export const FEATURES = {
    *  mutation-checked, and none of that is the same as a trade made with real
    *  money on a real wallet.
    *
-   *  This site is public, so it is on for everyone who visits, not only for
-   *  whoever is testing. Setting it back to false is the whole rollback - the
-   *  button returns to "Trading not enabled" and nothing can be signed. */
-  dexSwapLive: true,
+   *  Now false, and the reason is worth keeping rather than deleting. It was
+   *  switched on deliberately with the gap named: everything below was tested,
+   *  simulated and mutation-checked, and no transaction had ever been signed
+   *  through it. That gap never closed, and the swap is now gone from the app,
+   *  so this is off - two independent reasons nothing here can move funds. */
+  dexSwapLive: false,
+
+  /** The social page: one chat room, open to read, wallet signature to post.
+   *
+   *  Needs a database, unlike everything else here. With the Supabase
+   *  variables unset the page says chat is not configured on this deployment
+   *  rather than failing in the browser, so this flag can be on before the
+   *  configuration exists. */
+  social: true,
 
   /** The Trenches tab shows the live pump.tires bonding-curve board. When
    *  false it falls back to the curated ecosystem link directory, which is
@@ -79,7 +96,9 @@ export const VISIBLE_TABS = [
   'dashboard',
   'screener',
   'trenches',
-  'dex',
+  // Where 'dex' was. The swap terminal is switched off and unreachable; the
+  // slot it occupied is the conversation now.
+  ...(FEATURES.social ? ['social'] : []),
   ...(FEATURES.markets ? ['markets'] : []),
   'portfolio',
   // Profile is deliberately absent. It is reachable from the account button

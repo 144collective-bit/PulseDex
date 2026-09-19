@@ -30,8 +30,7 @@ import { SiweAuthProvider, useSiweAuth } from './context/SiweAuthContext'
  */
 const TokenPage = lazy(() => import('./components/TokenPage'))
 const TrenchesView = lazy(() => import('./components/TrenchesView'))
-const DexTerminal = lazy(() => import('./components/DexTerminal'))
-const DexComingSoon = lazy(() => import('./components/DexComingSoon'))
+const SocialView = lazy(() => import('./components/SocialView'))
 const MarketOverview = lazy(() => import('./components/MarketOverview'))
 const PortfolioSection = lazy(() => import('./components/PortfolioSection'))
 const ProfileView = lazy(() => import('./components/ProfileView'))
@@ -393,16 +392,7 @@ function MainApp() {
           <TrenchesView onSelectPairForChart={handleSelectPair} onOpenTokenPage={openToken} />
         )}
 
-        {activeTab === 'dex' &&
-          (FEATURES.dexLive ? (
-            <DexTerminal
-              pairs={topPairs}
-              isLoadingPairs={isLoadingTopPairs}
-              onSelectPair={handleSelectPair}
-            />
-          ) : (
-            <DexComingSoon />
-          ))}
+        {FEATURES.social && activeTab === 'social' && <SocialView />}
 
         {FEATURES.markets && activeTab === 'markets' && (
           <MarketOverview
