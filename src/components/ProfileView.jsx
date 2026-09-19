@@ -9,7 +9,8 @@ import {
 import { useUserProfile } from '../context/UserProfileContext'
 import { useSiweAuth } from '../context/SiweAuthContext'
 import { fileToAvatarDataUrl, isSafeAvatarUrl, ACCEPT_ATTRIBUTE } from '../utils/avatarImage'
-import { fetchMyProfile, saveMyProfile, uploadMyAvatar, removeAvatar } from '../services/profile'
+import { fetchMyProfile, saveMyProfile, uploadMyAvatar, removeAvatar, startXLink, unlinkX } from '../services/profile'
+import { XLogo } from './social/XLink'
 import { MAX_LINKS, normaliseLink } from '../utils/profileFields'
 import { hasSupabase } from '../config/supabase'
 
@@ -44,6 +45,28 @@ const LIMITS = {
   // Well under the 500 normaliseLink refuses at. A URL this long in a profile
   // card is a tracking parameter train, not a link somebody meant to share.
   link: 200,
+}
+
+/**
+ * What each callback outcome means to the person who just came back from X.
+ *
+ * Written out rather than shown as a code, and deliberately specific where
+ * being specific helps: "already linked to another wallet" is the one failure
+ * somebody can actually act on. The rest collapse to a generic failure on
+ * purpose - a callback that failed a state check should not explain which
+ * check it failed.
+ */
+const X_OUTCOMES = {
+  linked: { tone: 'ok', text: 'X account linked.' },
+  cancelled: { tone: 'muted', text: 'X linking cancelled.' },
+  expired: { tone: 'error', text: 'That took too long. Start again.' },
+  'signed-out': { tone: 'error', text: 'Your wallet session changed. Sign in and try again.' },
+  'already-linked': {
+    tone: 'error',
+    text: 'That X account is already linked to another wallet. Unlink it there first.',
+  },
+  unconfigured: { tone: 'error', text: 'X linking is not available on this deployment.' },
+  failed: { tone: 'error', text: 'X linking failed. Nothing was changed.' },
 }
 
 /** Three empty boxes, which is what an account with no links looks like. */
@@ -157,6 +180,12 @@ export default function ProfileView() {
   const [published, setPublished] = useState(null)
   const [publishBusy, setPublishBusy] = useState(false)
 
+  // The linked X account as the server sees it, plus whatever the last
+  // callback had to say about the attempt.
+  const [xLink, setXLink] = useState(null)
+  const [xBusy, setXBusy] = useState(false)
+  const [xNote, setXNote] = useState(null)
+
   // Whether publishing is possible at all here. On a deployment with no
   // database the chat is not offered, so neither is this.
   const canPublish = isSignedIn && hasSupabase
@@ -172,6 +201,7 @@ export default function ProfileView() {
       .then((server) => {
         if (!active) return
         setPublished(server.avatarUrl || null)
+        setXLink(server.xHandle ? { handle: server.xHandle, verifiedType: server.xVerifiedType } : null)
         // The server is the authority on links, since they only exist there.
         const saved = (server.links || []).map((l) => l.url)
         setLinks([...saved, ...EMPTY_LINKS].slice(0, MAX_LINKS))
@@ -185,6 +215,50 @@ export default function ProfileView() {
       active = false
     }
   }, [canPublish])
+
+  /*
+   * What the X callback had to say, read once and then removed from the URL.
+   *
+   * The callback is a top-level redirect, so the only channel it has back to
+   * the app is the address bar. Left there, the message would reappear on
+   * every refresh and would still be in the URL if somebody copied it.
+   */
+  useEffect(() => {
+    const outcome = new URLSearchParams(window.location.search).get('x')
+    if (!outcome) return
+
+    setXNote(X_OUTCOMES[outcome] || X_OUTCOMES.failed)
+    window.history.replaceState({}, '', window.location.pathname)
+  }, [])
+
+  const connectX = async () => {
+    setXNote(null)
+    setXBusy(true)
+    try {
+      // A full navigation, not a popup: X's consent screen refuses to be
+      // framed, and a popup is the thing every browser blocks by default.
+      window.location.assign(await startXLink())
+    } catch (err) {
+      setXNote({ tone: 'error', text: err.message })
+      setXBusy(false)
+    }
+  }
+
+  const disconnectX = async () => {
+    if (!window.confirm('Unlink your X account? Your profile will stop showing it.')) return
+
+    setXNote(null)
+    setXBusy(true)
+    try {
+      await unlinkX()
+      setXLink(null)
+      setXNote({ tone: 'ok', text: 'X account unlinked.' })
+    } catch (err) {
+      setXNote({ tone: 'error', text: err.message })
+    } finally {
+      setXBusy(false)
+    }
+  }
 
   /**
    * Read a picked file, shrink it, and hold it until Save.
@@ -501,6 +575,58 @@ export default function ProfileView() {
                     </div>
                   </FormField>
                 )}
+                {/*
+                  Its own row, outside the save flow, because linking X is not
+                  a field - it is a round trip to another site and back, and
+                  pressing Save should never be what sends somebody there.
+                */}
+                {canPublish && (
+                  <FormField label="X Account" hint="Proves you control the handle">
+                    <div className="x-connect">
+                      {xLink ? (
+                        <>
+                          <span className="x-connect-current font-mono">
+                            <XLogo size={12} />@{xLink.handle}
+                          </span>
+                          <button
+                            type="button"
+                            className="profile-avatar-remove"
+                            onClick={disconnectX}
+                            disabled={xBusy}
+                          >
+                            {xBusy ? <Loader2 size={11} className="tch-spin" /> : <Trash2 size={11} />}
+                            Unlink
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          className="x-connect-btn"
+                          onClick={connectX}
+                          disabled={xBusy}
+                        >
+                          {xBusy ? <Loader2 size={12} className="tch-spin" /> : <XLogo size={12} />}
+                          {xBusy ? 'Opening X' : 'Connect X'}
+                        </button>
+                      )}
+
+                      {xNote && (
+                        <span className={`x-connect-note is-${xNote.tone}`} role="status">
+                          {xNote.text}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Said before they press it, not after. This is the one
+                        control on the page that publishes a second identity. */}
+                    <p className="x-connect-lede">
+                      You sign in at x.com and we never see your password. Your handle,
+                      follower count and account age are shown on your PulseDex profile.
+                      No posting access is requested and no X tokens are stored.
+                    </p>
+                  </FormField>
+                )}
+
                 <div className="profile-form-action-row">
                   <button type="submit" className="profile-save-btn" disabled={isSaving}><Save size={14} />{isSaving ? 'Saving…' : 'Save Changes'}</button>
                   {saveMsg && <span className="profile-success-chip animate-fade-in"><CheckCircle2 size={12} />{saveMsg}</span>}

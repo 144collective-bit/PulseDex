@@ -22,8 +22,25 @@ import { SignJWT, jwtVerify } from 'jose'
 export const SESSION_COOKIE = 'pd_session'
 export const NONCE_COOKIE = 'pd_nonce'
 
+/*
+ * The in-flight X OAuth attempt: its `state`, its PKCE verifier, and the
+ * wallet that started it, in one signed token.
+ *
+ * One cookie rather than three, and signed rather than raw, because the three
+ * values are only meaningful together. What the callback has to establish is
+ * not "is this state familiar" but "is this the same browser, the same wallet
+ * and the same verifier that began this exact attempt" - and a single signed
+ * object either answers all of that or fails to verify. Three separate
+ * cookies could be mixed and matched.
+ */
+export const X_OAUTH_COOKIE = 'pd_x_oauth'
+
 const SESSION_TTL = '7d'
 const NONCE_TTL = '10m'
+
+/** Long enough to read a consent screen and sign in to X; short enough that a
+ *  cookie left on a shared machine is not a standing invitation. */
+const X_OAUTH_TTL = '10m'
 
 /** Fail loudly rather than signing with a default nobody changed. */
 function secret() {
@@ -58,6 +75,9 @@ export const readSession = (token) => read(token)
 
 export const signNonce = (nonce) => sign({ nonce }, NONCE_TTL)
 export const readNonce = (token) => read(token)
+
+export const signXOAuth = (payload) => sign(payload, X_OAUTH_TTL)
+export const readXOAuth = (token) => read(token)
 
 /** Parse a Cookie header without pulling in a dependency for it. */
 export function getCookie(req, name) {

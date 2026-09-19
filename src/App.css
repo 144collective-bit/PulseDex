@@ -14895,3 +14895,71 @@ a.wallet-option-item {
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+
+/* --------------------------------------------------------------------------
+   Connecting an X account, in Profile settings
+   -------------------------------------------------------------------------- */
+.x-connect {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.x-connect-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  font-family: var(--font-instrument);
+  font-size: 12px;
+  font-weight: 600;
+  color: #f0f4f8;
+  /* X's own black, which is what people look for, on a control that is only
+     ever pressed by somebody who already decided to link an account. */
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.x-connect-btn:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+.x-connect-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.x-connect-current {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-full);
+}
+
+.x-connect-note {
+  font-family: var(--font-instrument);
+  font-size: 11px;
+}
+
+.x-connect-note.is-ok { color: var(--pulse-green); }
+.x-connect-note.is-error { color: var(--pulse-red); }
+.x-connect-note.is-muted { color: var(--text-muted); }
+
+/* Said before the button is pressed, because this is the one control on the
+   page that publishes a second identity. */
+.x-connect-lede {
+  margin: 8px 0 0;
+  font-family: var(--font-instrument);
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: var(--text-muted);
+}

@@ -58,7 +58,7 @@ async function signedInAddress(req) {
 async function read(res, db, address) {
   const { data, error } = await db
     .from('profiles')
-    .select('address, handle, avatar_id, avatar_url, bio, links')
+    .select('address, handle, avatar_id, avatar_url, bio, links, x_handle, x_verified_type')
     .eq('address', address)
     .maybeSingle()
 
@@ -76,6 +76,11 @@ async function read(res, db, address) {
     avatarUrl: data?.avatar_url || null,
     bio: data?.bio || null,
     links: Array.isArray(data?.links) ? data.links : [],
+    // Enough for the settings page to show what is linked and offer to
+    // unlink it. The full picture - follower count, account age - is read
+    // from the public profile, where it is displayed.
+    xHandle: data?.x_handle || null,
+    xVerifiedType: data?.x_verified_type || null,
   })
 }
 

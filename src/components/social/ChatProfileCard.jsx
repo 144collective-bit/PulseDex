@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, ExternalLink, ImageOff, Loader2, UserRound, X } from 'lucide-react'
 import ChatAvatar from './ChatAvatar'
+import XLink from './XLink'
 import { fetchPublicProfile, removeAvatar } from '../../services/profile'
 import { useEscapeKey } from '../../hooks/useEscapeKey'
 import { formatAddress } from '../../utils/formatters'
@@ -120,6 +121,8 @@ export default function ChatProfileCard({ address, canModerate, onClose, onOpenF
 
             {profile?.bio && <p className="chat-profile-bio">{profile.bio}</p>}
 
+            <XLink x={profile?.x} />
+
             {profile?.links?.length > 0 && (
               <ul className="chat-profile-links">
                 {profile.links.map((link) => (
@@ -151,7 +154,7 @@ export default function ChatProfileCard({ address, canModerate, onClose, onOpenF
 
             {/* Said out loud rather than left to be inferred from an empty
                 card, which reads as something failing to load. */}
-            {!profile?.bio && !profile?.links?.length && (
+            {!profile?.bio && !profile?.links?.length && !profile?.x && (
               <p className="chat-profile-note">Nothing else here yet.</p>
             )}
 

@@ -142,7 +142,17 @@ function MainApp() {
   // Read here so the profile modal can be mounted only while it is open, which
   // is what keeps its code out of the first download.
   const { isProfileModalOpen } = useUserProfile()
-  const [activeTab, setActiveTab] = useState('home')
+  /*
+   * Home, unless we have just come back from linking an X account.
+   *
+   * The callback can only talk to the app through the address bar, and the
+   * message it sends is rendered by ProfileView - which is not mounted on the
+   * home tab. Without this the round trip ends on a page that says nothing,
+   * whether it worked or not.
+   */
+  const [activeTab, setActiveTab] = useState(() =>
+    new URLSearchParams(window.location.search).has('x') ? 'profile' : 'home',
+  )
 
   // /token/<address> renders the full token page over the tab shell.
   const { tokenAddress, openToken, closeToken } = useTokenRoute()

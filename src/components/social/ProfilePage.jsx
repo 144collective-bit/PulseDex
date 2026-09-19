@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, ArrowLeft, ExternalLink, ImageOff, Loader2 } from 'lucide-react'
 import ChatAvatar from './ChatAvatar'
 import FeedPanel from './FeedPanel'
+import XLink from './XLink'
 import { fetchPublicProfile, fetchProfileByHandle, removeAvatar } from '../../services/profile'
 import { useIsModerator } from '../../hooks/useIsModerator'
 import { formatAddress } from '../../utils/formatters'
@@ -120,6 +121,10 @@ export default function ProfilePage({ route, onOpenProfile, onClose }) {
           <p className="profile-public-address font-mono">{shown.address}</p>
 
           {shown.bio && <p className="profile-public-bio">{shown.bio}</p>}
+
+          {/* Above the links, because a proven handle is a stronger claim than
+              anything somebody typed into a URL box themselves. */}
+          <XLink x={shown.x} />
 
           {shown.links?.length > 0 && (
             <ul className="chat-profile-links">

@@ -1122,3 +1122,98 @@
     padding: 14px;
   }
 }
+
+/* ==========================================================================
+   A LINKED X ACCOUNT
+
+   The whole point of this block is that two things here must never read as
+   one. The handle carries a control mark, which OAuth established and money
+   cannot buy. The subscription badge is a purchase. Drawn as a single tick
+   they would be indistinguishable, which is precisely the confusion a scam
+   account pays X for - so the first gets the brand green and a shield, and
+   the second is grey, lowercase and captioned "paid".
+   ========================================================================== */
+
+.x-link {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.x-link-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.x-link-handle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: var(--radius-full, 999px);
+  border: 1px solid var(--ch-hairline);
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 11.5px;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.x-link-handle:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+/* The proven half: brand green, the colour this app uses for "this is real". */
+.x-link-proof {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--pulse-green);
+}
+
+.x-link-signals {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/*
+ * The purchased half.
+ *
+ * Grey, no tick, no brand blue, and the word "paid" in the label itself so it
+ * survives being screenshotted without its tooltip. It is real information and
+ * it is shown - it just is not allowed to look like the line above it.
+ */
+.x-link-premium {
+  padding: 2px 7px;
+  border-radius: var(--radius-full, 999px);
+  border: 1px solid var(--ch-hairline);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  cursor: help;
+}
+
+.x-link-stat {
+  padding: 2px 7px;
+  border-radius: var(--radius-full, 999px);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* An account younger than three months, which is the shape nearly every
+   impersonation takes. Amber rather than red: new is not the same as bad. */
+.x-link-stat.is-young {
+  color: var(--pulse-yellow, #fbbf24);
+  background: rgba(251, 191, 36, 0.1);
+}
+
+.x-link-asof {
+  font-style: italic;
+  cursor: help;
+}

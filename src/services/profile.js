@@ -156,7 +156,9 @@ export async function fetchProfileByHandle(handle) {
  * `updated_at`, which would say when somebody last touched their profile -
  * harmless-looking, and a way of telling who is active right now.
  */
-const PUBLIC_PROFILE_FIELDS = 'address, handle, avatar_id, avatar_url, bio, links, created_at'
+const PUBLIC_PROFILE_FIELDS =
+  'address, handle, avatar_id, avatar_url, bio, links, created_at, ' +
+  'x_user_id, x_handle, x_name, x_verified_type, x_followers, x_account_created_at, x_linked_at'
 
 async function runProfileQuery(query) {
   const { data, error } = await query.maybeSingle()
@@ -176,5 +178,66 @@ async function runProfileQuery(query) {
     // a link rendered as an anchor should be one this build approved.
     links: normaliseLinks(data.links),
     createdAt: data.created_at || null,
+    x: readXLink(data),
+  }
+}
+
+/**
+ * The linked X account, or null.
+ *
+ * Gathered into one object rather than left as six loose fields, because they
+ * are only ever used together and because the presence of `x_user_id` is what
+ * makes any of the rest meaningful - a handle without the id behind it is a
+ * claim rather than a proof, and nothing should be able to render one by
+ * reading the wrong field.
+ */
+function readXLink(row) {
+  if (!row.x_user_id || !row.x_handle) return null
+
+  return {
+    id: row.x_user_id,
+    handle: row.x_handle,
+    name: row.x_name || null,
+    // What X charges for. Kept separate from everything above it here and in
+    // every component that renders it.
+    verifiedType: row.x_verified_type || null,
+    followers: typeof row.x_followers === 'number' ? row.x_followers : null,
+    accountCreatedAt: row.x_account_created_at || null,
+    // When the snapshot was taken, so the interface can age it rather than
+    // implying the numbers are live.
+    linkedAt: row.x_linked_at || null,
+  }
+}
+
+/**
+ * Begin linking an X account.
+ *
+ * Answers the URL to navigate to. Deliberately not a redirect from the
+ * endpoint: the page has to know whether this deployment has X configured
+ * before it commits to sending somebody away, and a fetch that fails shows an
+ * error in the interface rather than on an error page at x.com.
+ */
+export async function startXLink() {
+  const res = await fetch('/api/auth/x/start', {
+    method: 'POST',
+    credentials: 'same-origin',
+  })
+
+  const payload = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(payload.error || 'X could not be reached right now.')
+  if (!payload.url) throw new Error('X could not be reached right now.')
+  return payload.url
+}
+
+/** Remove the link. Your own only - there is no moderator version. */
+export async function unlinkX() {
+  const res = await fetch('/api/auth/x/unlink', {
+    method: 'POST',
+    credentials: 'same-origin',
+  })
+
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({}))
+    throw new Error(payload.error || 'That could not be unlinked.')
   }
 }
