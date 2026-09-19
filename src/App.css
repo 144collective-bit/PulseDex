@@ -14964,6 +14964,44 @@ a.wallet-option-item {
   flex-wrap: wrap;
 }
 
+/* Matched to .profile-publish-btn rather than given its own look: picking a
+   banner and publishing a picture are the same kind of action, one row apart.
+   Both of these were named for a control on a branch that has not landed, so
+   they resolved to no rule at all and the button rendered as the browser's
+   own - grey, square and a size nothing else here is. */
+.banner-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  font-family: var(--font-instrument);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--pulse-cyan);
+  background: rgba(0, 229, 255, 0.1);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.banner-upload-btn:hover:not(:disabled) {
+  background: rgba(0, 229, 255, 0.18);
+}
+
+.banner-upload-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.banner-note {
+  margin: 0;
+  font-family: var(--font-instrument);
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
 /* ===========================================================
    Route error boundary
    What a failed tab looks like instead of a white screen. Sized

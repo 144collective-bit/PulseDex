@@ -43,7 +43,7 @@ const browser = await chromium.launch({
 const results = []
 
 /** Open one route, do something, and report every error and request. */
-async function visit(name, steps, setup, expect = {}) {
+async function visit(name, steps, setup, opts = {}) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   const errors = []
   const failed = []
@@ -97,7 +97,7 @@ async function visit(name, steps, setup, expect = {}) {
   if (setup) await setup(page)
 
   const started = Date.now()
-  await page.goto(BASE, { waitUntil: 'domcontentloaded', timeout: 20000 })
+  await page.goto(`${BASE}${opts.path || '/'}`, { waitUntil: 'domcontentloaded', timeout: 20000 })
   // Let React mount and any on-mount effects fire.
   await page.waitForTimeout(1500)
 
@@ -110,6 +110,25 @@ async function visit(name, steps, setup, expect = {}) {
   }
   await page.waitForTimeout(1200)
 
+  /*
+   * Is the page styled, not just present?
+   *
+   * A stylesheet lives on whichever chunk imports it, so a component reachable
+   * by two routes can load its code on one of them and none of its CSS - which
+   * renders every element with a browser default and reads, from the outside,
+   * as a page that worked. Asserting on text cannot see it; a computed value
+   * that should never be the unstyled one can.
+   */
+  const styles = []
+  for (const check of opts.styles || []) {
+    const got = await page.evaluate(({ selector, prop }) => {
+      const el = document.querySelector(selector)
+      return el ? getComputedStyle(el)[prop] : null
+    }, check)
+    if (got === null) styles.push(`${check.selector} is not on the page`)
+    else if (got === check.reject) styles.push(`${check.selector} ${check.prop} is ${got} - stylesheet missing?`)
+  }
+
   const rendered = await page.evaluate(() => {
     const root = document.getElementById('root')
     const text = root?.innerText || ''
@@ -121,11 +140,12 @@ async function visit(name, steps, setup, expect = {}) {
     ms: Date.now() - started,
     // A case that provokes a failure on purpose says which one, so the noise it
     // creates is not read as the app breaking - and anything else still is.
-    errors: expect.allow ? errors.filter((e) => !expect.allow.test(e)) : errors,
-    failed: expect.allow ? failed.filter((f) => !expect.allow.test(f)) : failed,
+    errors: opts.allow ? errors.filter((e) => !opts.allow.test(e)) : errors,
+    failed: opts.allow ? failed.filter((f) => !opts.allow.test(f)) : failed,
     local: requests.filter((u) => u.startsWith(BASE)).length,
     rendered,
-    missing: expect.text && !rendered.full.includes(expect.text) ? expect.text : null,
+    missing: opts.text && !rendered.full.includes(opts.text) ? opts.text : null,
+    styles,
   })
 
   await page.close()
@@ -238,9 +258,34 @@ await visit('social: Discover', clickTab('Discover'))
 // satisfied by the shell around it staying on screen.
 await visit('account: Profile settings', fromAccountMenu('Profile settings'), signedIn, {
   text: 'Identity & Profile',
+  styles: [
+    { selector: '.banner-preview', prop: 'borderTopStyle', reject: 'none' },
+    // Named for a control on a branch that never landed, this resolved to no
+    // rule at all and rendered as the browser's own grey button.
+    { selector: '.banner-upload-btn', prop: 'borderRadius', reject: '0px' },
+  ],
 })
 await visit('account: My public profile', fromAccountMenu('My public profile'), signedIn, {
   text: 'Followers',
+  styles: [{ selector: '.xp-banner', prop: 'height', reject: '0px' }],
+})
+
+/*
+ * A pasted link, opened cold.
+ *
+ * The one entry to this app that skips the tab shell entirely: no Chat tab
+ * clicked first, so nothing has pulled SocialView's chunk in on the way past.
+ * That is the difference that hid a missing stylesheet - the page looked right
+ * to anyone who reached it through the app and arrived as unstyled HTML for
+ * anyone who followed the link somebody sent them.
+ */
+await visit('direct link: /u/<address>', null, signedIn, {
+  path: `/u/${ADDRESS}`,
+  text: 'Followers',
+  styles: [
+    { selector: '.xp-banner', prop: 'height', reject: '0px' },
+    { selector: '.xp-tabs', prop: 'display', reject: 'block' },
+  ],
 })
 
 /*
@@ -285,12 +330,14 @@ await browser.close()
 
 let bad = 0
 for (const r of results) {
-  const ok = r.errors.length === 0 && r.failed.length === 0 && r.rendered.hasContent && !r.missing
+  const ok =
+    r.errors.length === 0 && r.failed.length === 0 && r.rendered.hasContent && !r.missing && r.styles.length === 0
   if (!ok) bad += 1
   console.log(`\n${ok ? 'PASS' : 'FAIL'}  ${r.name}  (${r.ms}ms, ${r.local} local requests)`)
   console.log(`      rendered: ${JSON.stringify(r.rendered.text.replace(/\n/g, ' | ').slice(0, 90))}`)
   if (!r.rendered.hasContent) console.log('      RENDERED NOTHING - blank page')
   if (r.missing) console.log(`      EXPECTED TEXT NOT FOUND: ${JSON.stringify(r.missing)}`)
+  for (const st of r.styles) console.log(`      UNSTYLED: ${st}`)
   for (const e of r.errors) console.log(`      console error: ${e}`)
   for (const f of r.failed) console.log(`      request failed: ${f}`)
 }
