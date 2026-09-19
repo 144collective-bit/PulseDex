@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, ArrowLeft, ExternalLink, ImageOff, Loader2, Settings2, CalendarDays, PenLine } from 'lucide-react'
-import ChatAvatar from './ChatAvatar'
+import { AlertTriangle, ArrowLeft, Loader2 } from 'lucide-react'
 import FeedPanel from './FeedPanel'
+import ProfileHeader from './ProfileHeader'
 import { fetchPublicProfile, fetchProfileByHandle, removeAvatar } from '../../services/profile'
 import { useIsModerator } from '../../hooks/useIsModerator'
 import { useSiweAuth } from '../../context/SiweAuthContext'
@@ -32,6 +32,7 @@ export default function ProfilePage({ route, onOpenProfile, onClose, onEditProfi
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState(null)
   const [postCount, setPostCount] = useState(null)
+  const [tab, setTab] = useState('posts')
 
   const { address, handle } = route
 
@@ -137,117 +138,44 @@ export default function ProfilePage({ route, onOpenProfile, onClose, onEditProfi
 
   return (
     <Frame onClose={onClose}>
-      <header className="profile-public-head">
-        <ChatAvatar
-          address={shown.address}
-          avatarUrl={shown.avatarUrl}
-          avatarId={shown.avatarId}
-          size={72}
-        />
+      <ProfileHeader
+        profile={profile}
+        address={shown.address}
+        postCount={postCount}
+        replyCount={null}
+        isMine={isMine}
+        isModerator={isModerator}
+        onEditProfile={onEditProfile}
+        onRemovePicture={onRemovePicture}
+        tab={tab}
+        onTab={setTab}
+      />
 
-        <div className="profile-public-names">
-          <h1 className="profile-public-handle">
-            {shown.handle || formatAddress(shown.address)}
-          </h1>
-          {/* Selectable and shown in full, because the reason to show it is so
-              somebody can compare it against one they already have. Half an
-              address with an ellipsis is exactly as forgeable as a name. */}
-          <p className="profile-public-address font-mono">{shown.address}</p>
+      {/* A next step rather than a blank space. Every new account lands here
+          with nothing on it, so this is the version of the page most people
+          see first, and "nothing here" is a dead end. */}
+      {isBare && (
+        <p className="profile-public-prompt">
+          This is your page, and it is empty. Add a picture, a line about
+          yourself and up to three links in profile settings - then post
+          something below and it stays here.
+        </p>
+      )}
 
-          {shown.bio && <p className="profile-public-bio">{shown.bio}</p>}
+      {error && (
+        <p className="chat-error" role="alert">
+          {error}
+        </p>
+      )}
 
-          {shown.links?.length > 0 && (
-            <ul className="chat-profile-links">
-              {shown.links.map((link) => (
-                <li key={link.url}>
-                  {/*
-                   * The host is the label, always. Letting an account supply
-                   * its own text is how a link reading "pulsex.com" arrives
-                   * somewhere that is not pulsex.com - and on a site about
-                   * which tokens to buy, that is the whole game.
-                   *
-                   * noopener because the opened page can otherwise reach back
-                   * through window.opener and navigate this one; noreferrer
-                   * because a stranger's link does not need to be told which
-                   * profile its reader came from.
-                   */}
-                  <a
-                    href={link.url}
-                    target="_blank"
-                    rel="noopener noreferrer nofollow ugc"
-                    className="chat-profile-link font-mono"
-                  >
-                    <ExternalLink size={11} />
-                    {link.host}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <div className="profile-public-stats font-mono">
-            {postCount !== null && (
-              <span className="profile-public-stat">
-                <PenLine size={11} />
-                {postCount} {postCount === 1 ? 'post' : 'posts'}
-              </span>
-            )}
-
-            {shown.createdAt && (
-              <span
-                className="profile-public-stat"
-                title={new Date(shown.createdAt).toLocaleString()}
-              >
-                <CalendarDays size={11} />
-                joined {formatJoined(shown.createdAt)}
-              </span>
-            )}
-          </div>
-
-          {/*
-            Shown on everybody's page including your own. A reader checking a
-            stranger needs it; you seeing it on your own page is how you learn
-            that this is what strangers see, which is worth knowing before you
-            decide what to put here.
-          */}
-          <p className="chat-profile-warning">
-            <AlertTriangle size={11} />
-            Anyone can write anything here. Check the address, not the name.
-          </p>
-
-          {isMine && (
-            <button type="button" className="profile-public-edit font-mono" onClick={onEditProfile}>
-              <Settings2 size={11} />
-              Edit profile
-            </button>
-          )}
-
-          {/* A next step rather than a blank space. Every new account lands
-              here with nothing on it, and "nothing here" is a dead end. */}
-          {isBare && (
-            <p className="profile-public-prompt">
-              This is your page, and it is empty. Add a picture, a line about
-              yourself and up to three links in profile settings - then post
-              something below and it stays here.
-            </p>
-          )}
-
-          {isModerator && shown.avatarUrl && (
-            <button type="button" className="chat-profile-moderate font-mono" onClick={onRemovePicture}>
-              <ImageOff size={11} />
-              Remove picture
-            </button>
-          )}
-
-          {error && (
-            <p className="chat-error" role="alert">
-              {error}
-            </p>
-          )}
-        </div>
-      </header>
-
-      <FeedPanel author={shown.address} onOpenProfile={onOpenProfile} />
+      {/* Keyed by the tab, so switching rebuilds the list rather than
+          merging replies into the posts already held. */}
+      <FeedPanel
+        key={tab}
+        author={shown.address}
+        replies={tab === 'replies'}
+        onOpenProfile={onOpenProfile}
+      />
     </Frame>
   )
 }

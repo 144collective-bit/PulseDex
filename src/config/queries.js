@@ -54,5 +54,11 @@ export const MESSAGE_FIELDS =
  */
 export const MESSAGE_WRITE_FIELDS = `id, address, room, body, created_at, edited_at, ${MESSAGE_AUTHOR}`
 
-/** A post, the same shape on both sides. */
-export const POST_FIELDS = `id, address, body, created_at, ${POST_AUTHOR}`
+/**
+ * A post, the same shape on both sides.
+ *
+ * `parent_id` rides along because a reply is a post with a parent, and the
+ * feed has to tell them apart to know whether it is looking at something that
+ * belongs at the top level or under something else.
+ */
+export const POST_FIELDS = `id, address, body, created_at, parent_id, ${POST_AUTHOR}`

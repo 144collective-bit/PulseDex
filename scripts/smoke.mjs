@@ -65,6 +65,7 @@ const ROUTES = [
   { path: '/api/chat/messages', accept: [401, 405], describe: 'messages' },
   { path: '/api/chat/reactions', accept: [401, 405], describe: 'reactions' },
   { path: '/api/chat/block', accept: [401, 404, 405], describe: 'block' },
+  { path: '/api/follows', accept: [401, 405], describe: 'follows' },
   { path: '/api/candles', accept: [200, 400], describe: 'candles' },
   // A path that is not a route must 404, or the router is matching too much
   // and something is reaching a handler it should not.

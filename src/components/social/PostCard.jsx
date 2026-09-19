@@ -1,4 +1,4 @@
-import { Trash2, Flag, Ban } from 'lucide-react'
+import { Trash2, Flag, Ban, MessageCircle } from 'lucide-react'
 import ChatAvatar from './ChatAvatar'
 import { formatAddress, formatTimeAgo } from '../../utils/formatters'
 
@@ -17,7 +17,18 @@ import { formatAddress, formatTimeAgo } from '../../utils/formatters'
  * mistaken for somebody trusted is worth money - so "who actually wrote this"
  * never depends on trusting a display name.
  */
-export default function PostCard({ post, isOwn, isModerator, onOpenProfile, onRemove, onReport, onBlock }) {
+export default function PostCard({
+  post,
+  isOwn,
+  isModerator,
+  onOpenProfile,
+  onRemove,
+  onReport,
+  onBlock,
+  onToggleReplies,
+  replyCount,
+  threadOpen,
+}) {
   const written = Date.parse(post.createdAt)
 
   // Your own post you can always take down; a moderator can take down
@@ -77,6 +88,26 @@ export default function PostCard({ post, isOwn, isModerator, onOpenProfile, onRe
         <p className="feed-post-text">{post.body}</p>
 
         <div className="feed-post-tools">
+          {/*
+            First, and the only one of these that is an invitation rather than
+            a moderation control. It carries the count, so a post with a
+            conversation under it says so without being opened - which is what
+            makes a feed worth scanning.
+          */}
+          {onToggleReplies && (
+            <button
+              type="button"
+              className={`feed-tool is-reply ${threadOpen ? 'is-open' : ''}`}
+              onClick={() => onToggleReplies(post)}
+              aria-expanded={Boolean(threadOpen)}
+              aria-label={threadOpen ? 'Hide replies' : 'Show replies and reply'}
+              title={threadOpen ? 'Hide replies' : 'Reply'}
+            >
+              <MessageCircle size={12} />
+              {replyCount > 0 && <span className="feed-tool-count font-mono">{replyCount}</span>}
+            </button>
+          )}
+
           {/*
            * Reporting is offered on everyone else's posts and not on your own,
            * which is not a permission check - the endpoint would take it - but

@@ -99,6 +99,50 @@ async function publish(req, res) {
     return res.status(400).json({ error: REFUSALS[post.reason] || 'That post cannot be published.' })
   }
 
+  /*
+   * A reply is a post with a parent, so this endpoint publishes both and the
+   * only difference is one column.
+   *
+   * The parent is checked for existence rather than trusted, because it
+   * arrives in a body. A parent_id pointing at nothing would insert fine - the
+   * foreign key would refuse it, but as a 500 rather than a sentence - and one
+   * pointing at a reply would build a thread the feed does not render.
+   */
+  let parentId = null
+  if (req.body?.parentId !== undefined && req.body?.parentId !== null) {
+    parentId = Number(req.body.parentId)
+    if (!Number.isInteger(parentId) || parentId <= 0) {
+      return res.status(400).json({ error: 'That is not a post to reply to.' })
+    }
+
+    const parent = await db
+      .from('posts')
+      .select('id, parent_id')
+      .eq('id', parentId)
+      .is('deleted_at', null)
+      .maybeSingle()
+
+    if (parent.error) {
+      console.error('posts: reading the parent failed:', parent.error.message)
+      return res.status(503).json({ error: 'Posting is unavailable right now.' })
+    }
+
+    // Gone, or never there. The same 404 a removed post gives elsewhere, so
+    // this does not become a way to ask which ids exist.
+    if (!parent.data) return res.status(404).json({ error: 'Not found.' })
+
+    /*
+     * Replies are one level deep. The column would allow a tree; the feed
+     * renders a post and its replies and nothing below that, so a reply to a
+     * reply would be written and then never shown. Refused rather than
+     * silently reparented, because quietly moving somebody's words under a
+     * different post is worse than telling them it did not go.
+     */
+    if (parent.data.parent_id) {
+      return res.status(400).json({ error: 'You cannot reply to a reply.' })
+    }
+  }
+
   const since = new Date(Date.now() - longestWindowMs(FEED_POST_LIMITS)).toISOString()
   const recent = await db
     .from('posts')
@@ -150,7 +194,7 @@ async function publish(req, res) {
 
   const inserted = await db
     .from('posts')
-    .insert({ address, body: post.body })
+    .insert({ address, body: post.body, parent_id: parentId })
     .select(POST_FIELDS)
     .single()
 

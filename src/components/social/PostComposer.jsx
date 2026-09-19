@@ -17,7 +17,7 @@ const COUNTER_APPEARS_AT = MAX_POST_LENGTH - 300
  * characters is that it can have shape. One component taking that as a prop
  * would be a component whose only real content is a conditional.
  */
-export default function PostComposer({ onPosted }) {
+export default function PostComposer({ onPosted, parentId = null }) {
   const { isSignedIn, isBusy, signIn } = useSiweAuth()
 
   const [draft, setDraft] = useState('')
@@ -36,7 +36,7 @@ export default function PostComposer({ onPosted }) {
     setError(null)
 
     try {
-      const post = await createPost(draft)
+      const post = await createPost(draft, parentId)
 
       /*
        * Cleared only after the post succeeds. Clearing optimistically reads
@@ -57,7 +57,9 @@ export default function PostComposer({ onPosted }) {
   if (!isSignedIn) {
     return (
       <div className="feed-composer feed-signin">
-        <p className="chat-signin-text">Sign in with your wallet to post.</p>
+        <p className="chat-signin-text">
+          Sign in with your wallet to {parentId ? 'reply' : 'post'}.
+        </p>
         <button type="button" className="chat-send" onClick={signIn} disabled={isBusy}>
           {isBusy ? <Loader2 size={14} className="chat-spin" /> : null}
           {isBusy ? 'Signing in' : 'Sign in'}
@@ -72,8 +74,8 @@ export default function PostComposer({ onPosted }) {
         className="feed-input"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
-        placeholder="What's happening on PulseChain?"
-        rows={3}
+        placeholder={parentId ? 'Post your reply' : "What's happening on PulseChain?"}
+        rows={parentId ? 2 : 3}
         /*
          * Twice the limit, so paste is not silently truncated at exactly the
          * boundary. What the counter says and what the server enforces is the
@@ -89,7 +91,9 @@ export default function PostComposer({ onPosted }) {
             {error}
           </span>
         ) : (
-          <span className="chat-hint font-mono">Posts stay on your profile</span>
+          <span className="chat-hint font-mono">
+            {parentId ? 'Replies show on your profile too' : 'Posts stay on your profile'}
+          </span>
         )}
 
         {/*
@@ -104,7 +108,7 @@ export default function PostComposer({ onPosted }) {
 
         <button type="submit" className="chat-send" disabled={!canSend}>
           {sending ? <Loader2 size={14} className="chat-spin" /> : <PenLine size={14} />}
-          {sending ? 'Posting' : 'Post'}
+          {sending ? 'Posting' : parentId ? 'Reply' : 'Post'}
         </button>
       </div>
     </form>
