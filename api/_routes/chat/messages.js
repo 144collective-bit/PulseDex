@@ -9,6 +9,7 @@ import {
   retryAfterSeconds,
   LONGEST_WINDOW_MS,
 } from '../../../src/utils/chatRate.js'
+import { MESSAGE_WRITE_FIELDS } from '../../../src/config/queries.js'
 
 /**
  * Posting and removing chat messages.
@@ -210,10 +211,7 @@ async function post(req, res) {
      * the profile attached - a visible flicker, on your own message, every
      * time you post.
      */
-    .select(
-      'id, address, room, body, created_at, ' +
-        'profiles!messages_address_fkey ( handle, avatar_id, avatar_url )',
-    )
+    .select(MESSAGE_WRITE_FIELDS)
     .single()
 
   if (inserted.error) {
@@ -264,10 +262,7 @@ async function edit(req, res) {
     .eq('id', id)
     .eq('address', address)
     .is('deleted_at', null)
-    .select(
-      'id, address, room, body, created_at, edited_at, ' +
-        'profiles!messages_address_fkey ( handle, avatar_id, avatar_url )',
-    )
+    .select(MESSAGE_WRITE_FIELDS)
 
   if (updated.error) {
     console.error('chat: the edit failed:', updated.error.message)

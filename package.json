@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "oxlint",
     "check:api": "node scripts/check-api-imports.mjs",
+    "smoke": "node scripts/smoke.mjs",
     "preview": "vite preview",
     "logos": "node scripts/build-token-logos.mjs",
     "test": "vitest run",

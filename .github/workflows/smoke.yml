@@ -1,0 +1,63 @@
+# Ask a deployment whether it works, once Vercel says it is ready.
+#
+# ci.yml checks the code. This checks the thing the code became. The
+# distinction is not academic: two failures reached production in one
+# afternoon - a route Vercel declined to match, and a select string that was
+# valid JavaScript and invalid SQL - and both passed lint, the suite, the
+# import check and the build, because not one of those makes an HTTP request.
+#
+# Triggered by deployment_status rather than by push, because the thing being
+# tested does not exist until Vercel has finished. Vercel posts a GitHub
+# deployment status when it is done, and that status carries the URL.
+
+name: Smoke
+
+on: deployment_status
+
+jobs:
+  smoke:
+    name: hit the deployment
+    runs-on: ubuntu-latest
+
+    # Only when a deployment actually succeeded. A failed or in-progress one
+    # has nothing to test, and this event fires for every state change.
+    if: github.event.deployment_status.state == 'success'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      # No install step: scripts/smoke.mjs uses only what Node ships with, so
+      # there is nothing to install and nothing that can be out of date. That
+      # is deliberate - a check that fails for its own reasons gets ignored.
+      - name: Smoke the deployment
+        env:
+          # Preview deployments sit behind Vercel's protection and answer every
+          # request with a redirect to vercel.com. This is Vercel's documented
+          # way past that for automation: project settings -> Deployment
+          # Protection -> Protection Bypass for Automation, then add the value
+          # here as a repository secret of the same name.
+          #
+          # Unset, previews are skipped rather than reported as broken - see
+          # the step below - and production, which is not protected, is still
+          # smoked. So this workflow is useful before the secret exists and
+          # more useful after.
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          TARGET: ${{ github.event.deployment_status.environment_url }}
+        run: |
+          if [ -z "$TARGET" ]; then
+            echo "No environment_url on this deployment status; nothing to smoke."
+            exit 0
+          fi
+
+          if [ -z "$VERCEL_AUTOMATION_BYPASS_SECRET" ] \
+             && [ "${{ github.event.deployment_status.environment }}" != "Production" ]; then
+            echo "Preview deployment and no bypass secret configured - skipping."
+            echo "Set VERCEL_AUTOMATION_BYPASS_SECRET to smoke previews too."
+            exit 0
+          fi
+
+          npm run smoke -- "$TARGET"

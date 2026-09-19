@@ -3,6 +3,7 @@ import me from './_routes/auth/me.js'
 import nonce from './_routes/auth/nonce.js'
 import verify from './_routes/auth/verify.js'
 import candles from './_routes/candles.js'
+import health from './_routes/health.js'
 import chatBlock from './_routes/chat/block.js'
 import chatMessages from './_routes/chat/messages.js'
 import chatReactions from './_routes/chat/reactions.js'
@@ -57,6 +58,7 @@ const ROUTES = {
   'auth/nonce': nonce,
   'auth/verify': verify,
   candles,
+  health,
   'chat/block': chatBlock,
   'chat/messages': chatMessages,
   'chat/reactions': chatReactions,
