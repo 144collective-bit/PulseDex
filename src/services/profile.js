@@ -112,18 +112,54 @@ export async function removeAvatar(address = null) {
  * already says these columns are public, so a function in front of them would
  * be a second copy of that decision to keep in step with the first.
  *
- * Only the columns that are meant to be seen. The table also holds
- * `updated_at`, which would say when somebody last touched their profile -
- * harmless-looking, and a way of telling who is active right now.
+ * Answers null for an address nobody has a profile for, which is the ordinary
+ * state of somebody who has read the site and never posted - not an error.
  */
 export async function fetchPublicProfile(address) {
   if (!hasSupabase || !address) return null
+  return runProfileQuery(
+    supabase.from('profiles').select(PUBLIC_PROFILE_FIELDS).eq('address', address.toLowerCase()),
+  )
+}
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('address, handle, avatar_id, avatar_url, bio, links, created_at')
-    .eq('address', address.toLowerCase())
-    .maybeSingle()
+/**
+ * The same profile, found by the name instead of the address.
+ *
+ * Exists because /u/@handle is the URL people actually share - an address is
+ * unreadable and unmemorable, and nobody pastes one into a conversation to say
+ * "this person". The address spelling still works and always will, because a
+ * handle can be changed or given up and a link that rots is worse than an ugly
+ * one.
+ *
+ * An equality test on `handle_lower`, never `ilike`. PostgREST hands an ilike
+ * value to SQL LIKE, where `%` and `_` are wildcards - so /u/@%25 would match
+ * every profile in the table and resolve to whichever sorted first. The
+ * generated column in 0005_posts.sql exists so there is no pattern here to get
+ * wrong.
+ *
+ * Case-insensitive because "Satoshi" and "satoshi" are the same claim to
+ * everyone except a database, and `profiles_handle_unique` already treats them
+ * as one.
+ */
+export async function fetchProfileByHandle(handle) {
+  if (!hasSupabase || !handle) return null
+  return runProfileQuery(
+    supabase
+      .from('profiles')
+      .select(PUBLIC_PROFILE_FIELDS)
+      .eq('handle_lower', handle.toLowerCase()),
+  )
+}
+
+/*
+ * Only the columns that are meant to be seen, named once. The table also holds
+ * `updated_at`, which would say when somebody last touched their profile -
+ * harmless-looking, and a way of telling who is active right now.
+ */
+const PUBLIC_PROFILE_FIELDS = 'address, handle, avatar_id, avatar_url, bio, links, created_at'
+
+async function runProfileQuery(query) {
+  const { data, error } = await query.maybeSingle()
 
   if (error) throw new Error(error.message)
   if (!data) return null

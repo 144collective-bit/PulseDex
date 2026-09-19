@@ -8,6 +8,7 @@ import { TrendingUp, Zap, Layers, Flame } from 'lucide-react'
 
 import HomeView from './components/HomeView'
 import { useTokenRoute } from './hooks/useTokenRoute'
+import { useProfileRoute } from './hooks/useProfileRoute'
 import { usePlsPrice } from './hooks/usePumpTires'
 import Navbar from './components/Navbar'
 import MobileBottomNav from './components/MobileBottomNav'
@@ -31,6 +32,7 @@ import { SiweAuthProvider, useSiweAuth } from './context/SiweAuthContext'
 const TokenPage = lazy(() => import('./components/TokenPage'))
 const TrenchesView = lazy(() => import('./components/TrenchesView'))
 const SocialView = lazy(() => import('./components/SocialView'))
+const ProfilePage = lazy(() => import('./components/social/ProfilePage'))
 const MarketOverview = lazy(() => import('./components/MarketOverview'))
 const PortfolioSection = lazy(() => import('./components/PortfolioSection'))
 const ProfileView = lazy(() => import('./components/ProfileView'))
@@ -145,6 +147,11 @@ function MainApp() {
   // /token/<address> renders the full token page over the tab shell.
   const { tokenAddress, openToken, closeToken } = useTokenRoute()
 
+  // /u/@handle and /u/0x... do the same for somebody's profile. The second
+  // route to earn an exception from this app's state-based navigation, and for
+  // the same reason as the first: it is a page people paste to each other.
+  const { profileRoute, openProfile, closeProfile } = useProfileRoute()
+
   // Curve prices are PLS-denominated, so the token page needs the live rate.
   const { data: plsPrice } = usePlsPrice()
 
@@ -156,6 +163,9 @@ function MainApp() {
    */
   const selectTab = (tab) => {
     closeToken()
+    // Same reasoning for the profile page: it gates the content area too, so
+    // leaving it mounted would give a nav that changes state and shows nothing.
+    closeProfile()
     setActiveTab(tab)
   }
   const [currentPair, setCurrentPair] = useState(null)
@@ -280,7 +290,13 @@ function MainApp() {
         <Suspense fallback={<TabLoading />}>
         {/* A direct /token/<address> link takes over the content area; the tab
             shell stays mounted underneath so Back returns to it instantly. */}
-        {tokenAddress ? (
+        {profileRoute ? (
+          <ProfilePage
+            route={profileRoute}
+            onOpenProfile={openProfile}
+            onClose={closeProfile}
+          />
+        ) : tokenAddress ? (
           <TokenPage
             address={tokenAddress}
             plsPrice={plsPrice}
@@ -392,7 +408,7 @@ function MainApp() {
           <TrenchesView onSelectPairForChart={handleSelectPair} onOpenTokenPage={openToken} />
         )}
 
-        {FEATURES.social && activeTab === 'social' && <SocialView />}
+        {FEATURES.social && activeTab === 'social' && <SocialView onOpenProfile={openProfile} />}
 
         {FEATURES.markets && activeTab === 'markets' && (
           <MarketOverview

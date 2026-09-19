@@ -13,34 +13,14 @@
  * talking to them. The rules below exist for that and not for tidiness.
  */
 
+import { stripInvisible, normaliseNewlines, capNewlines, trimLineEnds } from './textClean.js'
+
 /** Longest a bio may be. Enough for a sentence about yourself, short enough
  *  that a profile card stays a card. */
 export const MAX_BIO_LENGTH = 300
 
 /** How many links a profile may list. */
 export const MAX_LINKS = 3
-
-/*
- * The same invisible characters the chat strips from messages, for the same
- * reasons: a bio is displayed text, and direction overrides in one can make it
- * render in an order it is not stored in.
- */
-const INVISIBLE_RANGES = [
-  [0x00, 0x09],
-  [0x0b, 0x1f],
-  [0x7f, 0x9f],
-  [0x202a, 0x202e],
-  [0x2066, 0x2069],
-  [0x200b, 0x200d],
-  [0xfeff, 0xfeff],
-]
-
-const INVISIBLE = new RegExp(
-  `[${INVISIBLE_RANGES.map(
-    ([lo, hi]) => `\\u${lo.toString(16).padStart(4, '0')}-\\u${hi.toString(16).padStart(4, '0')}`,
-  ).join('')}]`,
-  'gu',
-)
 
 /**
  * Tidy a bio, or decide there isn't one.
@@ -55,14 +35,9 @@ const INVISIBLE = new RegExp(
 export function normaliseBio(raw) {
   if (typeof raw !== 'string') return null
 
-  const cleaned = raw
-    .replace(/\r\n?/g, '\n')
-    .replace(INVISIBLE, '')
-    // Two lines at most: a bio sits in a fixed-height card, and a wall of
-    // newlines is a way to push everything around it off the screen.
-    .replace(/\n{2,}/g, '\n')
-    .replace(/[ \t]+$/gm, '')
-    .trim()
+  // One newline at most: a bio sits in a fixed-height card, and a wall of
+  // blank lines is a way to push everything around it off the screen.
+  const cleaned = trimLineEnds(capNewlines(stripInvisible(normaliseNewlines(raw)), 1)).trim()
 
   if (cleaned.length === 0) return null
   if ([...cleaned].length > MAX_BIO_LENGTH) return null
@@ -88,7 +63,7 @@ export function normaliseBio(raw) {
 export function normaliseLink(raw) {
   if (typeof raw !== 'string') return null
 
-  const trimmed = raw.replace(INVISIBLE, '').trim()
+  const trimmed = stripInvisible(raw).trim()
   if (trimmed.length === 0 || trimmed.length > 500) return null
 
   let parsed

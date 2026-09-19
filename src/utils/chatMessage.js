@@ -14,6 +14,13 @@
  * loading the page.
  */
 
+import {
+  stripInvisible,
+  normaliseNewlines,
+  capNewlines,
+  trimLineEnds,
+} from './textClean.js'
+
 /**
  * The longest a message may be, counted after normalising.
  *
@@ -26,53 +33,6 @@ export const MAX_MESSAGE_LENGTH = 500
 /** How many blank lines in a row survive. Two is a paragraph break; twenty is
  *  a way of taking over the page. */
 const MAX_CONSECUTIVE_NEWLINES = 2
-
-/**
- * Characters removed outright rather than rejected.
- *
- * Three groups, all invisible, all of which have been used to make text say
- * one thing and mean another:
- *
- * - C0 and C1 controls, minus newline. A carriage return or a vertical tab in
- *   a chat line is never intentional, and some of them terminate lines in
- *   logs, which is how a message becomes a forged second message.
- * - Bidirectional overrides (U+202A-U+202E, U+2066-U+2069). These reverse the
- *   direction text renders in, so a message can display in an order its
- *   characters are not stored in - the trick behind lookalike addresses.
- * - Zero-width space, joiner, non-joiner and the byte-order mark. Invisible
- *   padding, useful only for slipping past a filter or making two different
- *   handles look identical.
- *
- * Stripped rather than refused because the person typing almost never put
- * them there deliberately - they arrive by paste - and "your message contains
- * U+200B" is not a sentence anyone should read.
- */
-const INVISIBLE_RANGES = [
-  [0x00, 0x09],
-  [0x0b, 0x1f],
-  [0x7f, 0x9f],
-  [0x202a, 0x202e],
-  [0x2066, 0x2069],
-  [0x200b, 0x200d],
-  [0xfeff, 0xfeff],
-]
-
-/*
- * Built from those numbers rather than written as a literal class.
- *
- * Every character it matches is invisible, so a literal would be a regex with
- * nothing readable between the brackets - and the first tool to reformat this
- * file, or any editor that normalises what it cannot see, could drop one
- * without leaving a mark. That failure is silent: the strip still runs, just
- * not on the character somebody is using. Writing the code points out means a
- * change to this set has to be a change to a number.
- */
-const INVISIBLE = new RegExp(
-  `[${INVISIBLE_RANGES.map(
-    ([lo, hi]) => `\\u${lo.toString(16).padStart(4, '0')}-\\u${hi.toString(16).padStart(4, '0')}`,
-  ).join('')}]`,
-  'gu',
-)
 
 /** Why a message was refused. Exported so the UI can say something specific
  *  rather than "invalid". */
@@ -128,24 +88,9 @@ export function messageLength(value) {
 
 /** The normalising half, shared so the counter and the check cannot drift. */
 function clean(raw) {
-  return raw
-    /*
-     * Line endings first, and that order is the whole point. A carriage
-     * return is one of the control characters stripped below, so stripping
-     * before converting would turn a pasted Windows `\r\n` into a bare `\n`
-     * by luck, and an old Mac `\r` into nothing at all - silently joining two
-     * lines the author meant to separate.
-     */
-    .replace(/\r\n?/g, '\n')
-    .replace(INVISIBLE, '')
-    .replace(
-      new RegExp(`\n{${MAX_CONSECUTIVE_NEWLINES + 1},}`, 'g'),
-      '\n'.repeat(MAX_CONSECUTIVE_NEWLINES),
-    )
-    // Trailing spaces on each line, which paste brings along and which make
-    // two identical-looking messages differ.
-    .replace(/[ \t]+$/gm, '')
-    .trim()
+  return trimLineEnds(
+    capNewlines(stripInvisible(normaliseNewlines(raw)), MAX_CONSECUTIVE_NEWLINES),
+  ).trim()
 }
 
 /**
