@@ -18,6 +18,24 @@
 const ADDRESS = /^0x[0-9a-f]{40}$/
 
 /**
+ * An address as it is stored and compared, or null.
+ *
+ * Every address in this database is lowercased, because every wallet and block
+ * explorer displays the mixed-case checksummed form and that is what gets
+ * copied and pasted. Comparing one of those against a stored address without
+ * lowercasing first silently matches nothing - which, for a blocklist, fails
+ * in the direction of letting somebody post.
+ *
+ * @param {unknown} value
+ * @returns {string | null}
+ */
+export function normaliseAddress(value) {
+  if (typeof value !== 'string') return null
+  const lowered = value.trim().toLowerCase()
+  return ADDRESS.test(lowered) ? lowered : null
+}
+
+/**
  * Read the configured moderators.
  *
  * Separated by commas, whitespace or both, because the value gets pasted into

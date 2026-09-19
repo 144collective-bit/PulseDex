@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseAdminAddresses, isAdminAddress } from './chatAdmin'
+import { parseAdminAddresses, isAdminAddress, normaliseAddress } from './chatAdmin'
 
 /*
  * Who may remove a message.
@@ -86,5 +86,27 @@ describe('isAdminAddress', () => {
     // `.has`, which is falsy by luck rather than by design.
     expect(isAdminAddress(ALICE, [ALICE])).toBe(false)
     expect(isAdminAddress(ALICE, undefined)).toBe(false)
+  })
+})
+
+describe('normaliseAddress', () => {
+  it('lowercases a checksummed address', () => {
+    // What every wallet and explorer shows, and therefore what gets pasted
+    // into a moderation box.
+    expect(normaliseAddress('0xAbCdEf0123456789AbCdEf0123456789AbCdEf01')).toBe(
+      '0xabcdef0123456789abcdef0123456789abcdef01',
+    )
+  })
+
+  it('trims surrounding whitespace', () => {
+    expect(normaliseAddress(`  ${ALICE}  `)).toBe(ALICE)
+  })
+
+  it('refuses anything that is not an address', () => {
+    // A blocklist that accepts a malformed address stores a row matching
+    // nobody, which fails in the direction of letting someone post.
+    for (const value of ['', '0x123', `${ALICE}extra`, 'not-an-address', undefined, null, 42, {}]) {
+      expect(normaliseAddress(value)).toBeNull()
+    }
   })
 })

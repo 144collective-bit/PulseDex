@@ -7,6 +7,9 @@ import { useIsModerator } from '../../hooks/useIsModerator'
 import { useRoomPresence } from '../../hooks/useRoomPresence'
 import { useSiweAuth } from '../../context/SiweAuthContext'
 import { removeMessage } from '../../services/chat'
+import { blockAddress } from '../../services/profile'
+import { useChatIdentity } from '../../hooks/useChatIdentity'
+import { formatAddress } from '../../utils/formatters'
 
 /** Close enough to the bottom that the reader is following along rather than
  *  reading back through history. */
@@ -33,6 +36,7 @@ export default function RoomPanel({ room }) {
   const { messages, status, error, add, remove, hasMore, loadingOlder, loadOlder } =
     useChatMessages(room)
   const present = useRoomPresence(room)
+  const { error: identityError } = useChatIdentity()
 
   const scroller = useRef(null)
   const [following, setFollowing] = useState(true)
@@ -82,6 +86,25 @@ export default function RoomPanel({ room }) {
     if (!el) return
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
     setFollowing(distanceFromBottom < FOLLOWING_THRESHOLD_PX)
+  }, [])
+
+  const onBlock = useCallback(async (address) => {
+    /*
+     * Confirmed, unlike removal. Removing one message is visible and
+     * reversible by reposting; blocking silences an account until a moderator
+     * undoes it, and there is no undo control in this interface yet.
+     */
+    const ok = window.confirm(
+      `Block ${formatAddress(address)} from posting? Their existing messages stay.`,
+    )
+    if (!ok) return
+
+    setRemoveError(null)
+    try {
+      await blockAddress({ address })
+    } catch (err) {
+      setRemoveError(err.message)
+    }
   }, [])
 
   const onRemove = useCallback(
@@ -150,6 +173,7 @@ export default function RoomPanel({ room }) {
               isOwn={Boolean(account) && message.address === account.toLowerCase()}
               canRemove={isModerator}
               onRemove={onRemove}
+              onBlock={onBlock}
             />
           ))
         )}
@@ -165,9 +189,9 @@ export default function RoomPanel({ room }) {
         </button>
       )}
 
-      {removeError && (
+      {(removeError || identityError) && (
         <p className="chat-error" role="alert">
-          {removeError}
+          {removeError || identityError}
         </p>
       )}
 

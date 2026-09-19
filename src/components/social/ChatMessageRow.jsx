@@ -1,4 +1,4 @@
-import { Trash2 } from 'lucide-react'
+import { Trash2, Ban } from 'lucide-react'
 import { PRESET_AVATARS } from '../../context/UserProfileContext'
 import { formatAddress, formatTimeAgo } from '../../utils/formatters'
 
@@ -11,7 +11,7 @@ import { formatAddress, formatTimeAgo } from '../../utils/formatters'
  * people can choose the same one. On a chat about which tokens to buy, "who
  * actually said this" has to be answerable without trusting the name.
  */
-export default function ChatMessageRow({ message, isOwn, canRemove, onRemove }) {
+export default function ChatMessageRow({ message, isOwn, canRemove, onRemove, onBlock }) {
   const avatar =
     PRESET_AVATARS.find((a) => a.id === message.avatarId) || PRESET_AVATARS[0]
 
@@ -55,15 +55,31 @@ export default function ChatMessageRow({ message, isOwn, canRemove, onRemove }) 
           </time>
 
           {canRemove && (
-            <button
-              type="button"
-              className="chat-remove"
-              onClick={() => onRemove(message.id)}
-              aria-label="Remove this message"
-              title="Remove this message"
-            >
-              <Trash2 size={12} />
-            </button>
+            <>
+              <button
+                type="button"
+                className="chat-remove"
+                onClick={() => onRemove(message.id)}
+                aria-label="Remove this message"
+                title="Remove this message"
+              >
+                <Trash2 size={12} />
+              </button>
+
+              {/* Blocking is the heavier of the two and stops future posts
+                  rather than hiding this one, so it asks first - and says
+                  whose account it is about, since the row may have scrolled
+                  by the time the dialog appears. */}
+              <button
+                type="button"
+                className="chat-remove"
+                onClick={() => onBlock(message.address)}
+                aria-label="Block this author"
+                title="Block this author from posting"
+              >
+                <Ban size={12} />
+              </button>
+            </>
           )}
         </header>
 

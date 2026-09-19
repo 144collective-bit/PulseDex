@@ -1,12 +1,7 @@
 import { SESSION_COOKIE, getCookie, readSession } from '../_lib/session.js'
 import { isSameOrigin, rateLimit } from '../_lib/guard.js'
 import { serviceClient } from '../_lib/supabase.js'
-import {
-  normaliseMessage,
-  normaliseHandle,
-  normaliseAvatarId,
-  REJECTED,
-} from '../../src/utils/chatMessage.js'
+import { normaliseMessage, REJECTED } from '../../src/utils/chatMessage.js'
 import { parseAdminAddresses, isAdminAddress } from '../../src/utils/chatAdmin.js'
 import { isRoom } from '../../src/config/rooms.js'
 import {
@@ -101,6 +96,29 @@ async function post(req, res) {
     return res.status(503).json({ error: 'Chat is not configured on this deployment.' })
   }
 
+  /*
+   * Blocked before anything else that costs something.
+   *
+   * Answered as 403 with a plain sentence, and deliberately without a reason.
+   * The reason column exists for whoever reads the table in six months, not
+   * for the account it describes - telling somebody precisely which rule they
+   * broke is telling them precisely what to avoid next time.
+   */
+  const { data: blocked, error: blockedError } = await db
+    .from('blocked')
+    .select('address')
+    .eq('address', address)
+    .maybeSingle()
+
+  if (blockedError) {
+    console.error('chat: reading the blocklist failed:', blockedError.message)
+    return res.status(503).json({ error: 'Chat is unavailable right now.' })
+  }
+
+  if (blocked) {
+    return res.status(403).json({ error: 'You cannot post here.' })
+  }
+
   const message = normaliseMessage(req.body?.body)
   if (!message.ok) {
     return res.status(400).json({ error: REFUSALS[message.reason] || 'That message cannot be posted.' })
@@ -158,26 +176,25 @@ async function post(req, res) {
   }
 
   /*
-   * The profile is written on every post, not only the first.
+   * A profile row has to exist, because a message points at one - but posting
+   * no longer writes a name into it.
    *
-   * Messages point at a profile row rather than carrying a name, so one has to
-   * exist before the insert - and upserting here means a display name changed
-   * in settings shows up on the next message without a separate save step. It
-   * also means renaming yourself renames you on every message you have ever
-   * posted, which is the trade for not copying the name onto each row.
+   * It used to. The handle rode along with each message and overwrote the row
+   * every time, which made the browser's localStorage the authority on who
+   * somebody was: a second device, with its own default name, would rename
+   * them on their next message. /api/profile owns the name now, and this only
+   * guarantees the row is there.
+   *
+   * `ignoreDuplicates` is what makes that true - it inserts when absent and
+   * does nothing when present, so an account that has chosen a handle cannot
+   * lose it by posting.
    */
-  const profile = await db.from('profiles').upsert(
-    {
-      address,
-      handle: normaliseHandle(req.body?.handle),
-      avatar_id: normaliseAvatarId(req.body?.avatarId),
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'address' },
-  )
+  const profile = await db
+    .from('profiles')
+    .upsert({ address }, { onConflict: 'address', ignoreDuplicates: true })
 
   if (profile.error) {
-    console.error('chat: writing the profile failed:', profile.error.message)
+    console.error('chat: ensuring the profile row failed:', profile.error.message)
     return res.status(503).json({ error: 'Chat is unavailable right now.' })
   }
 
