@@ -23,12 +23,19 @@ import { pathToFileURL } from 'node:url'
 
 const API_DIR = new URL('../api/', import.meta.url).pathname
 
-/** Every .js file under api/, minus the underscore-prefixed shared helpers -
- *  the same convention Vercel uses to tell a route from a module. */
+/**
+ * Every .js file under api/.
+ *
+ * Including the underscore-prefixed directories, which is a change from when
+ * this only checked routes. `api/_routes/` holds every handler now and
+ * `api/_lib/` the helpers they share; Vercel makes functions of neither, but a
+ * missing import in one is exactly as fatal at runtime as it ever was - the
+ * router imports them all, so one broken module takes the whole API down
+ * rather than a single endpoint.
+ */
 async function handlers(dir) {
   const found = []
   for (const entry of await readdir(dir, { withFileTypes: true })) {
-    if (entry.name.startsWith('_')) continue
     const full = join(dir, entry.name)
     if (entry.isDirectory()) found.push(...(await handlers(full)))
     else if (entry.name.endsWith('.js')) found.push(full)
@@ -43,8 +50,15 @@ for (const file of files) {
   const name = relative(process.cwd(), file)
   try {
     const module = await import(pathToFileURL(file).href)
-    // A route with no default export is a file Vercel will answer 500 from.
-    if (typeof module.default !== 'function') {
+
+    /*
+     * A handler with no default export is one the router cannot call. Checked
+     * only under `_routes/` and for the router itself - `_lib/` holds helpers
+     * that export named functions and nothing else, and demanding a default
+     * from those would fail every one of them.
+     */
+    const isHandler = name.includes('_routes') || name.includes('[...path]')
+    if (isHandler && typeof module.default !== 'function') {
       failures.push(`${name}: no default export`)
       continue
     }
@@ -60,4 +74,4 @@ if (failures.length) {
   process.exit(1)
 }
 
-console.log(`\n${files.length} handlers load cleanly.`)
+console.log(`\n${files.length} modules load cleanly.`)

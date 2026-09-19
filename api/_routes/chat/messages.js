@@ -1,14 +1,14 @@
-import { SESSION_COOKIE, getCookie, readSession } from '../_lib/session.js'
-import { isSameOrigin, rateLimit } from '../_lib/guard.js'
-import { serviceClient } from '../_lib/supabase.js'
-import { normaliseMessage, REJECTED } from '../../src/utils/chatMessage.js'
-import { parseAdminAddresses, isAdminAddress } from '../../src/utils/chatAdmin.js'
-import { isRoom } from '../../src/config/rooms.js'
+import { SESSION_COOKIE, getCookie, readSession } from '../../_lib/session.js'
+import { isSameOrigin, rateLimit } from '../../_lib/guard.js'
+import { serviceClient } from '../../_lib/supabase.js'
+import { normaliseMessage, REJECTED } from '../../../src/utils/chatMessage.js'
+import { parseAdminAddresses, isAdminAddress } from '../../../src/utils/chatAdmin.js'
+import { isRoom } from '../../../src/config/rooms.js'
 import {
   exceededLimit,
   retryAfterSeconds,
   LONGEST_WINDOW_MS,
-} from '../../src/utils/chatRate.js'
+} from '../../../src/utils/chatRate.js'
 
 /**
  * Posting and removing chat messages.

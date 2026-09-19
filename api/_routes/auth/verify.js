@@ -10,9 +10,9 @@ import {
   signSession,
   cookie,
   isSecureRequest,
-} from '../_lib/session.js'
-import { parseSiweMessage } from '../../src/utils/siwe.js'
-import { allowedHosts, isSameOrigin, rateLimit } from '../_lib/guard.js'
+} from '../../_lib/session.js'
+import { parseSiweMessage } from '../../../src/utils/siwe.js'
+import { allowedHosts, isSameOrigin, rateLimit } from '../../_lib/guard.js'
 
 /**
  * PulseChain, for signature verification only. Smart-contract wallets sign via

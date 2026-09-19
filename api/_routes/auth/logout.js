@@ -1,5 +1,5 @@
-import { SESSION_COOKIE, cookie, isSecureRequest } from '../_lib/session.js'
-import { isSameOrigin } from '../_lib/guard.js'
+import { SESSION_COOKIE, cookie, isSecureRequest } from '../../_lib/session.js'
+import { isSameOrigin } from '../../_lib/guard.js'
 
 /** Clear the session cookie. */
 export default async function handler(req, res) {

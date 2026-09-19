@@ -1,9 +1,9 @@
-import { SESSION_COOKIE, getCookie, readSession } from '../_lib/session.js'
-import { isSameOrigin, rateLimit } from '../_lib/guard.js'
-import { serviceClient } from '../_lib/supabase.js'
-import { storeAvatar, removeAvatar } from '../_lib/avatars.js'
-import { decodeAvatar, REJECTED_AVATAR, MAX_AVATAR_BYTES } from '../../src/utils/avatarUpload.js'
-import { parseAdminAddresses, isAdminAddress, normaliseAddress } from '../../src/utils/chatAdmin.js'
+import { SESSION_COOKIE, getCookie, readSession } from '../../_lib/session.js'
+import { isSameOrigin, rateLimit } from '../../_lib/guard.js'
+import { serviceClient } from '../../_lib/supabase.js'
+import { storeAvatar, removeAvatar } from '../../_lib/avatars.js'
+import { decodeAvatar, REJECTED_AVATAR, MAX_AVATAR_BYTES } from '../../../src/utils/avatarUpload.js'
+import { parseAdminAddresses, isAdminAddress, normaliseAddress } from '../../../src/utils/chatAdmin.js'
 
 /**
  * The signed-in wallet's profile picture.

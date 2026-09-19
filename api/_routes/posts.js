@@ -1,14 +1,14 @@
-import { SESSION_COOKIE, getCookie, readSession } from './_lib/session.js'
-import { isSameOrigin, rateLimit } from './_lib/guard.js'
-import { serviceClient } from './_lib/supabase.js'
-import { normalisePost, REJECTED_POST } from '../src/utils/post.js'
-import { parseAdminAddresses, isAdminAddress } from '../src/utils/chatAdmin.js'
+import { SESSION_COOKIE, getCookie, readSession } from '../_lib/session.js'
+import { isSameOrigin, rateLimit } from '../_lib/guard.js'
+import { serviceClient } from '../_lib/supabase.js'
+import { normalisePost, REJECTED_POST } from '../../src/utils/post.js'
+import { parseAdminAddresses, isAdminAddress } from '../../src/utils/chatAdmin.js'
 import {
   exceededLimit,
   retryAfterSeconds,
   FEED_POST_LIMITS,
   longestWindowMs,
-} from '../src/utils/chatRate.js'
+} from '../../src/utils/chatRate.js'
 
 /**
  * Publishing and removing posts.

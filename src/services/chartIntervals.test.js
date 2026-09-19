@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { CHART_INTERVALS, DEFAULT_INTERVAL } from './geckoterminal'
-import { INTERVALS as PROXY_INTERVALS } from '../../api/candles'
+import { INTERVALS as PROXY_INTERVALS } from '../../api/_routes/candles'
 
 /*
  * The client's interval list and the proxy's allowlist have to agree.

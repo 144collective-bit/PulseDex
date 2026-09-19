@@ -1,7 +1,7 @@
-import { SESSION_COOKIE, getCookie, readSession } from '../_lib/session.js'
-import { isSameOrigin, rateLimit } from '../_lib/guard.js'
-import { serviceClient } from '../_lib/supabase.js'
-import { isReaction } from '../../src/config/reactions.js'
+import { SESSION_COOKIE, getCookie, readSession } from '../../_lib/session.js'
+import { isSameOrigin, rateLimit } from '../../_lib/guard.js'
+import { serviceClient } from '../../_lib/supabase.js'
+import { isReaction } from '../../../src/config/reactions.js'
 
 /**
  * Reacting to a message, and taking it back.

@@ -23,10 +23,19 @@ function vercelApiDev() {
         // answer a real module request with a 500.
         if (url.pathname.split('/').some((part) => part.startsWith('_'))) return next()
 
-        const modulePath = `./api${url.pathname.slice(4)}.js`
-
+        /*
+         * The same single router production uses, rather than mapping the
+         * path to a file here.
+         *
+         * This used to build `./api/<path>.js` and load that, which worked
+         * while every route was its own function. It is now one catch-all
+         * dispatching from a table, and a dev server resolving routes its own
+         * way would be a second routing implementation to keep in step - so a
+         * path that 404s on Vercel would work locally, or the reverse, which
+         * is the worst place for a difference to live.
+         */
         try {
-          const mod = await server.ssrLoadModule(modulePath)
+          const mod = await server.ssrLoadModule('./api/[...path].js')
 
           if (req.method === 'POST' || req.method === 'PUT') {
             const chunks = []
