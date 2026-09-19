@@ -147,3 +147,66 @@ function clean(raw) {
     .replace(/[ \t]+$/gm, '')
     .trim()
 }
+
+/**
+ * The longest a display name may be. Matches the `check (char_length(handle)
+ * between 1 and 32)` on the profiles table.
+ */
+export const MAX_HANDLE_LENGTH = 32
+
+/**
+ * Tidy a display name, or decide there isn't one.
+ *
+ * Returns null rather than an error, and that is the important part: a handle
+ * is decoration on a message, so a bad one should cost the name and show the
+ * shortened address instead. Refusing the whole post because someone's saved
+ * display name has an emoji in the wrong place would be losing what they
+ * actually wrote to protect what they didn't.
+ *
+ * The invisible characters matter more here than in a message body. A handle
+ * is how one person is told apart from another, so zero-width padding is a way
+ * to register a name that renders identically to somebody else's - which is
+ * the setup for being believed.
+ *
+ * @param {unknown} raw
+ * @returns {string | null}
+ */
+export function normaliseHandle(raw) {
+  if (typeof raw !== 'string') return null
+
+  // Every run of whitespace, newlines included, becomes one space: a display
+  // name is a single line wherever it is shown, and a newline in one would
+  // break the row it sits in rather than wrapping.
+  const cleaned = clean(raw).replace(/\s+/g, ' ').trim()
+
+  if (cleaned.length === 0) return null
+  if ([...cleaned].length > MAX_HANDLE_LENGTH) return null
+
+  return cleaned
+}
+
+/**
+ * Tidy an avatar id, or decide there isn't one.
+ *
+ * Not the same rule as a handle, though the two arrive together and it is
+ * tempting to reuse it. A handle is text a person chose and may contain
+ * anything they can type; an avatar id is a key into the fixed list in
+ * UserProfileContext, so it is a slug or it is nothing. Validating it as a
+ * handle would let a sentence be stored where the app expects a lookup key.
+ *
+ * Only the preset avatars can be represented. An uploaded picture lives in the
+ * browser's own storage as a compressed image, which is not a value that
+ * belongs in this column - so someone using a custom avatar shows as their
+ * default alongside their messages.
+ *
+ * @param {unknown} raw
+ * @returns {string | null}
+ */
+export function normaliseAvatarId(raw) {
+  if (typeof raw !== 'string') return null
+
+  const trimmed = raw.trim().toLowerCase()
+  if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(trimmed)) return null
+
+  return trimmed
+}

@@ -2,7 +2,10 @@ import { describe, it, expect } from 'vitest'
 import {
   normaliseMessage,
   messageLength,
+  normaliseHandle,
+  normaliseAvatarId,
   MAX_MESSAGE_LENGTH,
+  MAX_HANDLE_LENGTH,
   REJECTED,
 } from './chatMessage'
 
@@ -163,5 +166,63 @@ describe('counting', () => {
   it('counts nothing for input that is not text', () => {
     expect(messageLength(undefined)).toBe(0)
     expect(messageLength(1234)).toBe(0)
+  })
+})
+
+describe('normaliseHandle', () => {
+  it('keeps an ordinary name', () => {
+    expect(normaliseHandle('satoshi')).toBe('satoshi')
+    expect(normaliseHandle('  satoshi  ')).toBe('satoshi')
+  })
+
+  it('flattens a name onto one line', () => {
+    // A handle is shown inside a row. A newline in one breaks the row rather
+    // than wrapping inside it.
+    expect(normaliseHandle('two\nlines')).toBe('two lines')
+    expect(normaliseHandle('lots   of    space')).toBe('lots of space')
+  })
+
+  it('strips the padding used to clone somebody else\'s name', () => {
+    const zeroWidth = String.fromCharCode(0x200b)
+    expect(normaliseHandle(`satoshi${zeroWidth}`)).toBe('satoshi')
+    expect(normaliseHandle(`sat${zeroWidth}oshi`)).toBe('satoshi')
+  })
+
+  it('gives up rather than refusing, when there is nothing usable', () => {
+    // The caller posts the message anyway and shows a shortened address. The
+    // alternative - rejecting the post - loses what someone wrote to protect
+    // what they did not.
+    expect(normaliseHandle('')).toBeNull()
+    expect(normaliseHandle('   ')).toBeNull()
+    expect(normaliseHandle(undefined)).toBeNull()
+    expect(normaliseHandle(42)).toBeNull()
+    expect(normaliseHandle('a'.repeat(MAX_HANDLE_LENGTH + 1))).toBeNull()
+  })
+
+  it('accepts a name exactly at the limit', () => {
+    expect(normaliseHandle('a'.repeat(MAX_HANDLE_LENGTH))).toHaveLength(MAX_HANDLE_LENGTH)
+  })
+})
+
+describe('normaliseAvatarId', () => {
+  it('keeps a preset id', () => {
+    expect(normaliseAvatarId('fox')).toBe('fox')
+    expect(normaliseAvatarId('pulse-mark_2')).toBe('pulse-mark_2')
+  })
+
+  it('lowercases and trims', () => {
+    expect(normaliseAvatarId('  FOX  ')).toBe('fox')
+  })
+
+  it('refuses anything that is not a lookup key', () => {
+    // The rule a handle would have let through. An avatar id is a key into a
+    // fixed list, so a sentence here is either a mistake or an attempt.
+    expect(normaliseAvatarId('a sentence, really')).toBeNull()
+    expect(normaliseAvatarId('../../etc/passwd')).toBeNull()
+    expect(normaliseAvatarId('-leading-dash')).toBeNull()
+    expect(normaliseAvatarId('a'.repeat(65))).toBeNull()
+    expect(normaliseAvatarId('')).toBeNull()
+    expect(normaliseAvatarId(undefined)).toBeNull()
+    expect(normaliseAvatarId(42)).toBeNull()
   })
 })
