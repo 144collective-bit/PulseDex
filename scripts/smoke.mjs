@@ -24,6 +24,18 @@
 const base = (process.argv[2] || process.env.SMOKE_URL || '').replace(/\/+$/, '')
 const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET || ''
 
+/*
+ * The commit this URL is expected to be serving, if we know it.
+ *
+ * The check that matters most and the one that is least obvious. A deployment
+ * can be entirely healthy at its own address while the domain points at
+ * something else - which is exactly what a rollback does, because it pins
+ * production and every later deploy builds, goes green and never takes over.
+ * Asking each route whether it answers cannot see that. Asking the domain
+ * which commit it is can.
+ */
+const expectCommit = (process.env.EXPECT_COMMIT || '').trim()
+
 if (!base) {
   console.error('usage: npm run smoke -- <url>')
   process.exit(2)
@@ -110,6 +122,24 @@ for (const route of ROUTES) {
    */
   if (route.path === '/api/health') {
     const payload = await res.json().catch(() => null)
+
+    if (expectCommit) {
+      const serving = payload?.commit || ''
+      if (!serving) {
+        console.error('      FAIL commit - deployment did not report one')
+        failures += 1
+      } else if (serving !== expectCommit) {
+        console.error(
+          `      FAIL commit - ${base} is serving ${serving.slice(0, 12)}, ` +
+            `expected ${expectCommit.slice(0, 12)}. The domain is pointing at ` +
+            'a different deployment; a rollback pins production until something promotes past it.',
+        )
+        failures += 1
+      } else {
+        console.log(`      ok  commit ${serving.slice(0, 12)}`)
+      }
+    }
+
     for (const check of payload?.checks || []) {
       if (check.ok) {
         console.log(`      ok  ${check.name}`)

@@ -61,3 +61,19 @@ jobs:
           fi
 
           npm run smoke -- "$TARGET"
+
+      # The deployment answered. Now ask whether the domain is serving it.
+      #
+      # These are different questions and the difference has already cost an
+      # outage: a rollback pins production, so the deploy after it built, went
+      # green and never took the domain - while its own URL answered perfectly,
+      # which is what got checked. Comparing the commit the domain reports
+      # against the one that just deployed is what catches that.
+      - name: Check the production domain is serving this commit
+        if: github.event.deployment_status.environment == 'Production'
+        env:
+          # Override with a repository variable if the domain ever changes,
+          # so this does not quietly check the wrong site forever.
+          DOMAIN: ${{ vars.PRODUCTION_URL || 'https://www.pulsedex.net' }}
+          EXPECT_COMMIT: ${{ github.event.deployment_status.sha || github.sha }}
+        run: npm run smoke -- "$DOMAIN"

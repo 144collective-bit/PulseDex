@@ -33,6 +33,21 @@ export default async function handler(req, res) {
   const checks = []
 
   /*
+   * Which commit this is.
+   *
+   * Here because of a specific failure. A rollback pins production, so every
+   * deploy afterwards builds, goes green, reports itself ready - and never
+   * takes the domain. The fix sat serving nobody for ten minutes while its own
+   * deployment URL answered perfectly, which is what was checked.
+   *
+   * Reporting the commit turns "did this build work" into "is this what the
+   * domain is serving", and those are not the same question. A smoke test can
+   * compare it against the commit it expected and fail loudly when they
+   * differ.
+   */
+  const commit = process.env.VERCEL_GIT_COMMIT_SHA || null
+
+  /*
    * Configuration first, and reported rather than thrown.
    *
    * A deployment with no Supabase keys is misconfigured, not broken - the app
@@ -66,7 +81,7 @@ export default async function handler(req, res) {
    * 503 when something is wrong, so a smoke test can judge on the status code
    * alone and anything watching a URL notices without parsing a body.
    */
-  return res.status(ok ? 200 : 503).json({ ok, checks })
+  return res.status(ok ? 200 : 503).json({ ok, commit, checks })
 }
 
 /**
