@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, Loader2, Search, Users } from 'lucide-react'
 import PersonCard from './PersonCard'
 import { searchProfiles, fetchActiveProfiles } from '../../services/discover'
+import { useFollowSet } from '../../hooks/useFollowSet'
 
 /**
  * Finding people.
@@ -22,6 +23,14 @@ export default function DiscoverPanel({ onOpenProfile }) {
   const [active, setActive] = useState([])
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState(null)
+
+  /*
+   * Whoever is on screen, so the follow state for all of them is one query.
+   * Results when a search is showing, the active list otherwise - the two are
+   * never shown together, so this is always exactly what is rendered.
+   */
+  const shown = results !== null ? results : active
+  const follow = useFollowSet(shown.map((p) => p.address))
 
   useEffect(() => {
     let alive = true
@@ -91,9 +100,9 @@ export default function DiscoverPanel({ onOpenProfile }) {
         </button>
       </form>
 
-      {error && (
+      {(error || follow.error) && (
         <p className="chat-error" role="alert">
-          {error}
+          {error || follow.error}
         </p>
       )}
 
@@ -114,7 +123,15 @@ export default function DiscoverPanel({ onOpenProfile }) {
             </p>
           ) : (
             results.map((profile) => (
-              <PersonCard key={profile.address} profile={profile} onOpenProfile={onOpenProfile} />
+              <PersonCard
+                key={profile.address}
+                profile={profile}
+                onOpenProfile={onOpenProfile}
+                following={follow.isFollowing(profile.address)}
+                canFollow={follow.canFollow(profile.address)}
+                busy={follow.isBusy(profile.address)}
+                onToggle={follow.toggle}
+              />
             ))
           )}
         </section>
@@ -147,7 +164,15 @@ export default function DiscoverPanel({ onOpenProfile }) {
 
           {status === 'ready' &&
             active.map((profile) => (
-              <PersonCard key={profile.address} profile={profile} onOpenProfile={onOpenProfile} />
+              <PersonCard
+                key={profile.address}
+                profile={profile}
+                onOpenProfile={onOpenProfile}
+                following={follow.isFollowing(profile.address)}
+                canFollow={follow.canFollow(profile.address)}
+                busy={follow.isBusy(profile.address)}
+                onToggle={follow.toggle}
+              />
             ))}
         </section>
       )}

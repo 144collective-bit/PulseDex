@@ -124,8 +124,22 @@ export function subscribeToPosts({ author = null, onPost, onRemoved }) {
 
   const wanted = author ? author.toLowerCase() : null
 
+  /*
+   * A fresh channel name each time, not the constant this used to be.
+   *
+   * The feed is mounted from several places now - the Feed tab, either half
+   * of For you / Following, and a profile's Posts or Replies - and switching
+   * between them unmounts one and mounts the next. Two subscriptions sharing
+   * a name across that handover is a collision: `removeChannel` is
+   * asynchronous, so the new one can be created while the old is still
+   * leaving, and what survives is either an error or a channel nobody holds a
+   * reference to any more.
+   *
+   * Names are per-connection, so a unique one costs nothing - every channel
+   * still rides the one websocket supabase-js keeps open.
+   */
   const channel = supabase
-    .channel('feed-posts')
+    .channel(`feed-posts-${crypto.randomUUID()}`)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts' }, async (payload) => {
       if (wanted && payload.new.address !== wanted) return
       const post = await fetchPost(payload.new.id)

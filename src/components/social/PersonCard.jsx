@@ -1,6 +1,5 @@
 import { Loader2, UserCheck, UserPlus } from 'lucide-react'
 import ChatAvatar from './ChatAvatar'
-import { useFollow } from '../../hooks/useFollow'
 import { formatAddress } from '../../utils/formatters'
 
 /**
@@ -14,9 +13,14 @@ import { formatAddress } from '../../utils/formatters'
  *
  * The whole row opens the profile except the button, which does not. A row
  * where the action also navigates is a row you cannot press without leaving.
+ *
+ * Follow state arrives as props rather than being fetched here, and that is
+ * the difference between this rendering and this being slow. A hook per row
+ * meant a query per row - three, in fact, two of which fetched follower counts
+ * this row does not display. Twenty people came to sixty requests, and a
+ * browser runs six at a time. The list asks once now, for everybody.
  */
-export default function PersonCard({ profile, onOpenProfile }) {
-  const { following, canFollow, busy, toggle } = useFollow(profile.address)
+export default function PersonCard({ profile, onOpenProfile, following, canFollow, busy, onToggle }) {
 
   return (
     <div className="person-card">
@@ -48,7 +52,7 @@ export default function PersonCard({ profile, onOpenProfile }) {
         <button
           type="button"
           className={`xp-btn ${following ? 'is-following' : 'is-follow'}`}
-          onClick={toggle}
+          onClick={() => onToggle(profile.address)}
           disabled={busy}
         >
           {busy ? (

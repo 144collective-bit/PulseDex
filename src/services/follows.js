@@ -106,3 +106,38 @@ export async function setFollowing({ address, on }) {
     throw new Error(payload.error || 'That could not be saved.')
   }
 }
+
+/**
+ * Which of these addresses the follower already follows.
+ *
+ * One query for a whole list, and it exists because the obvious thing was
+ * costing sixty. A list of people rendered a follow button each, every button
+ * asked the database independently whether it should say Follow or Following,
+ * and two thirds of those asks were for follower counts the row never even
+ * displayed. Twenty people meant sixty requests, and a browser will only run
+ * about six at a time - so the page spent ten round trips deciding what to
+ * write on twenty buttons.
+ *
+ * Returns a Set of the addresses that are followed, which is the shape the
+ * caller wants: `set.has(address)` is what a button needs and nothing more.
+ *
+ * @param {string|null} follower
+ * @param {string[]} addresses
+ * @returns {Promise<Set<string>>}
+ */
+export async function fetchFollowingAmong(follower, addresses) {
+  const wanted = (addresses || []).filter(Boolean).map((a) => a.toLowerCase())
+  if (!hasSupabase || !follower || wanted.length === 0) return new Set()
+
+  const { data, error } = await supabase
+    .from('follows')
+    .select('followee')
+    .eq('follower', follower.toLowerCase())
+    .in('followee', wanted)
+
+  // An empty set rather than a throw: not knowing reads as "not following",
+  // which shows a Follow button that corrects itself when pressed. A list that
+  // fails to render because one decoration query failed is the worse outcome.
+  if (error) return new Set()
+  return new Set((data || []).map((row) => row.followee))
+}
