@@ -7,6 +7,18 @@ import { useIsModerator } from '../../hooks/useIsModerator'
 import { useSiweAuth } from '../../context/SiweAuthContext'
 import { fetchPostCount } from '../../services/posts'
 import { formatAddress } from '../../utils/formatters'
+/*
+ * The stylesheet, imported here as well as in SocialView.
+ *
+ * These are the two ways into this component family, and Vite attaches a
+ * stylesheet to the chunk that imports it - so with the import only on
+ * SocialView, /u/<address> opened directly loaded the page's code and none of
+ * its styles. The shell above it was styled, everything below it was browser
+ * defaults, and it only looked right if you happened to arrive via Chat with
+ * SocialView's chunk already fetched. Imported from both entry points, the
+ * stylesheet becomes a shared asset each of them pulls in.
+ */
+import '../../styles/social.css'
 
 /**
  * Somebody's page: who they are, and everything they have posted.

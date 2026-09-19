@@ -592,7 +592,7 @@ export default function ProfileView({ onOpenPublicProfile }) {
                       <div className="banner-actions">
                         <button
                           type="button"
-                          className="x-connect-btn"
+                          className="banner-upload-btn"
                           onClick={() => bannerInputRef.current?.click()}
                           disabled={bannerBusy}
                         >
@@ -631,7 +631,7 @@ export default function ProfileView({ onOpenPublicProfile }) {
                         </p>
                       )}
 
-                      <p className="x-connect-lede">
+                      <p className="banner-note">
                         Cropped to 1200 by 400 in your browser before it is sent, so
                         nothing but the visible band leaves this device. It is public
                         the moment it uploads.

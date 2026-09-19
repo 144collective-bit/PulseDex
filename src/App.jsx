@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
+import RouteErrorBoundary from './components/RouteErrorBoundary'
+import { loadWithRetry } from './utils/lazyRetry'
 import { WagmiProvider } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { wagmiConfig } from './config/wagmi'
@@ -29,13 +31,23 @@ import { SiweAuthProvider, useSiweAuth } from './context/SiweAuthContext'
  * Home is deliberately not in this list. It is the landing page, so deferring
  * it would only add a round trip to the one view everybody sees.
  */
-const TokenPage = lazy(() => import('./components/TokenPage'))
-const TrenchesView = lazy(() => import('./components/TrenchesView'))
-const SocialView = lazy(() => import('./components/SocialView'))
-const ProfilePage = lazy(() => import('./components/social/ProfilePage'))
-const MarketOverview = lazy(() => import('./components/MarketOverview'))
-const PortfolioSection = lazy(() => import('./components/PortfolioSection'))
-const ProfileView = lazy(() => import('./components/ProfileView'))
+/*
+ * Routes are loaded on demand, and a load can fail.
+ *
+ * `lazyRoute` is `lazy` with the one behaviour a hashed-chunk build needs: a
+ * retry, then a reload, rather than an unhandled rejection that unmounts the
+ * app. See src/utils/lazyRetry.js - the failure it exists for is a tab left
+ * open across a deployment, which is every reader of a site that ships often.
+ */
+const lazyRoute = (importer) => lazy(() => loadWithRetry(importer))
+
+const TokenPage = lazyRoute(() => import('./components/TokenPage'))
+const TrenchesView = lazyRoute(() => import('./components/TrenchesView'))
+const SocialView = lazyRoute(() => import('./components/SocialView'))
+const ProfilePage = lazyRoute(() => import('./components/social/ProfilePage'))
+const MarketOverview = lazyRoute(() => import('./components/MarketOverview'))
+const PortfolioSection = lazyRoute(() => import('./components/PortfolioSection'))
+const ProfileView = lazyRoute(() => import('./components/ProfileView'))
 
 /*
  * The screener's two heavy panels, split from the tab around them.
@@ -44,12 +56,12 @@ const ProfileView = lazy(() => import('./components/ProfileView'))
  * the swap reconstruction. Neither is needed to render the pair header and the
  * sidebar, which is what the screener shows first.
  */
-const TradingChart = lazy(() => import('./components/TradingChart'))
-const TradeHistory = lazy(() => import('./components/TradeHistory'))
+const TradingChart = lazyRoute(() => import('./components/TradingChart'))
+const TradeHistory = lazyRoute(() => import('./components/TradeHistory'))
 
 // Modals: opened by a deliberate action, so never part of a first load.
-const WalletConnectModal = lazy(() => import('./components/WalletConnectModal'))
-const UserProfileModal = lazy(() => import('./components/UserProfileModal'))
+const WalletConnectModal = lazyRoute(() => import('./components/WalletConnectModal'))
+const UserProfileModal = lazyRoute(() => import('./components/UserProfileModal'))
 import { UserProfileProvider, useUserProfile } from './context/UserProfileContext'
 import { FEATURES } from './config/features'
 
@@ -300,6 +312,11 @@ function MainApp() {
 
       {/* Main Views */}
       <main className="app-main-content">
+        {/* Above Suspense, so a chunk that never arrives is caught here
+            rather than unmounting the app and leaving a white screen. Keyed on
+            the current view, so moving to another tab clears a failure instead
+            of leaving the message in place for every tab. */}
+        <RouteErrorBoundary resetKey={`${activeTab}|${tokenAddress || ''}|${profileRoute?.address || profileRoute?.handle || ''}`}>
         <Suspense fallback={<TabLoading />}>
         {/* A direct /token/<address> link takes over the content area; the tab
             shell stays mounted underneath so Back returns to it instantly. */}
@@ -453,6 +470,7 @@ function MainApp() {
         </>
         )}
         </Suspense>
+        </RouteErrorBoundary>
       </main>
 
       {/* Mobile Native Bottom Navigation */}
@@ -470,16 +488,20 @@ function MainApp() {
         not a spinner over the page.
       */}
       {showWalletModal && (
-        <Suspense fallback={null}>
-          <WalletConnectModal isOpen onClose={() => setShowWalletModal(false)} />
-        </Suspense>
+        <RouteErrorBoundary resetKey="wallet-modal">
+          <Suspense fallback={null}>
+            <WalletConnectModal isOpen onClose={() => setShowWalletModal(false)} />
+          </Suspense>
+        </RouteErrorBoundary>
       )}
 
       {/* Global User Profile & Settings Modal */}
       {FEATURES.profile && isProfileModalOpen && (
-        <Suspense fallback={null}>
-          <UserProfileModal />
-        </Suspense>
+        <RouteErrorBoundary resetKey="profile-modal">
+          <Suspense fallback={null}>
+            <UserProfileModal />
+          </Suspense>
+        </RouteErrorBoundary>
       )}
 
       {/* Global Auth Sign Up / Sign In Modal */}
