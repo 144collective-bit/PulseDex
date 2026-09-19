@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, ArrowLeft, ExternalLink, ImageOff, Loader2 } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, ExternalLink, ImageOff, Loader2, Settings2, CalendarDays, PenLine } from 'lucide-react'
 import ChatAvatar from './ChatAvatar'
 import FeedPanel from './FeedPanel'
 import { fetchPublicProfile, fetchProfileByHandle, removeAvatar } from '../../services/profile'
 import { useIsModerator } from '../../hooks/useIsModerator'
+import { useSiweAuth } from '../../context/SiweAuthContext'
+import { fetchPostCount } from '../../services/posts'
 import { formatAddress } from '../../utils/formatters'
 
 /**
@@ -22,12 +24,14 @@ import { formatAddress } from '../../utils/formatters'
  * nothing here is private - a profile that only members could see would be a
  * profile nobody discovers.
  */
-export default function ProfilePage({ route, onOpenProfile, onClose }) {
+export default function ProfilePage({ route, onOpenProfile, onClose, onEditProfile }) {
   const isModerator = useIsModerator()
+  const { account } = useSiweAuth()
 
   const [profile, setProfile] = useState(null)
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState(null)
+  const [postCount, setPostCount] = useState(null)
 
   const { address, handle } = route
 
@@ -55,6 +59,28 @@ export default function ProfilePage({ route, onOpenProfile, onClose }) {
     }
   }, [address, handle])
 
+  /*
+   * The post count, asked for separately and by address.
+   *
+   * It cannot ride along with the profile row - a count of one table filtered
+   * by a column in another is not something the profile query can answer - and
+   * it is not worth blocking the page on. So it arrives when it arrives, and
+   * the number simply appears.
+   */
+  const shownAddress = profile?.address || address
+  useEffect(() => {
+    if (!shownAddress) return undefined
+
+    let active = true
+    fetchPostCount(shownAddress).then((count) => {
+      if (active) setPostCount(count)
+    })
+
+    return () => {
+      active = false
+    }
+  }, [shownAddress])
+
   const onRemovePicture = useCallback(async () => {
     if (!profile) return
     const ok = window.confirm(`Remove ${formatAddress(profile.address)}'s profile picture?`)
@@ -77,6 +103,15 @@ export default function ProfilePage({ route, onOpenProfile, onClose }) {
    * genuinely nothing to show.
    */
   const shown = profile || (address ? { address, handle: null, links: [] } : null)
+
+  // Whether the reader is looking at their own page, which changes what this
+  // offers: an invitation to fill it in rather than a report on somebody else.
+  const isMine = Boolean(account) && shown?.address === account.toLowerCase()
+
+  // An own page with nothing on it is the state this feature most needs to
+  // handle well - it is what every new account sees, and "nothing here" is a
+  // dead end where a prompt is a next step.
+  const isBare = isMine && !shown?.bio && !shown?.links?.length && !shown?.avatarUrl
 
   if (status === 'loading') {
     return (
@@ -150,10 +185,52 @@ export default function ProfilePage({ route, onOpenProfile, onClose }) {
             </ul>
           )}
 
+          <div className="profile-public-stats font-mono">
+            {postCount !== null && (
+              <span className="profile-public-stat">
+                <PenLine size={11} />
+                {postCount} {postCount === 1 ? 'post' : 'posts'}
+              </span>
+            )}
+
+            {shown.createdAt && (
+              <span
+                className="profile-public-stat"
+                title={new Date(shown.createdAt).toLocaleString()}
+              >
+                <CalendarDays size={11} />
+                joined {formatJoined(shown.createdAt)}
+              </span>
+            )}
+          </div>
+
+          {/*
+            Shown on everybody's page including your own. A reader checking a
+            stranger needs it; you seeing it on your own page is how you learn
+            that this is what strangers see, which is worth knowing before you
+            decide what to put here.
+          */}
           <p className="chat-profile-warning">
             <AlertTriangle size={11} />
             Anyone can write anything here. Check the address, not the name.
           </p>
+
+          {isMine && (
+            <button type="button" className="profile-public-edit font-mono" onClick={onEditProfile}>
+              <Settings2 size={11} />
+              Edit profile
+            </button>
+          )}
+
+          {/* A next step rather than a blank space. Every new account lands
+              here with nothing on it, and "nothing here" is a dead end. */}
+          {isBare && (
+            <p className="profile-public-prompt">
+              This is your page, and it is empty. Add a picture, a line about
+              yourself and up to three links in profile settings - then post
+              something below and it stays here.
+            </p>
+          )}
 
           {isModerator && shown.avatarUrl && (
             <button type="button" className="chat-profile-moderate font-mono" onClick={onRemovePicture}>
@@ -188,4 +265,17 @@ function Frame({ onClose, children }) {
       {children}
     </div>
   )
+}
+
+/**
+ * When somebody joined, as a month and year.
+ *
+ * Not a full date and not "3 months ago". The exact day is on the tooltip for
+ * anyone who wants it; on the page it is a rough vintage, which is what the
+ * number is actually read for - whether this account has been around.
+ */
+function formatJoined(iso) {
+  const at = Date.parse(iso)
+  if (!Number.isFinite(at)) return 'recently'
+  return new Date(at).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
 }

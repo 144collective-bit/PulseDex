@@ -180,3 +180,26 @@ export async function reportPost({ id, reason }) {
     throw new Error(payload.error || 'That post could not be reported.')
   }
 }
+
+/**
+ * How many posts somebody has, without fetching them.
+ *
+ * `head: true` sends the query and asks for the count in a header rather than
+ * the rows, so a profile showing "412 posts" does not download 412 posts to
+ * work that out. The same partial index the feed rides on serves it.
+ *
+ * Answers 0 rather than throwing on failure. A count is decoration on a
+ * profile page, and losing it should not take the page with it.
+ */
+export async function fetchPostCount(address) {
+  if (!hasSupabase || !address) return 0
+
+  const { count, error } = await supabase
+    .from('posts')
+    .select('id', { count: 'exact', head: true })
+    .eq('address', address.toLowerCase())
+    .is('deleted_at', null)
+
+  if (error) return 0
+  return count || 0
+}

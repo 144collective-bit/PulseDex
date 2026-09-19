@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto'
-import { NONCE_COOKIE, signNonce, cookie, isSecureRequest } from '../_lib/session.js'
-import { rateLimit } from '../_lib/guard.js'
+import { NONCE_COOKIE, signNonce, cookie, isSecureRequest } from '../../_lib/session.js'
+import { rateLimit } from '../../_lib/guard.js'
 
 /**
  * Issue a nonce for a sign-in attempt.

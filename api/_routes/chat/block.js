@@ -1,12 +1,12 @@
-import { SESSION_COOKIE, getCookie, readSession } from '../_lib/session.js'
-import { isSameOrigin } from '../_lib/guard.js'
-import { serviceClient } from '../_lib/supabase.js'
-import { removeAvatar } from '../_lib/avatars.js'
+import { SESSION_COOKIE, getCookie, readSession } from '../../_lib/session.js'
+import { isSameOrigin } from '../../_lib/guard.js'
+import { serviceClient } from '../../_lib/supabase.js'
+import { removeAvatar } from '../../_lib/avatars.js'
 import {
   parseAdminAddresses,
   isAdminAddress,
   normaliseAddress,
-} from '../../src/utils/chatAdmin.js'
+} from '../../../src/utils/chatAdmin.js'
 
 /**
  * Stop an address posting, or let it post again.

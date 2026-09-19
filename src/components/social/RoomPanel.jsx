@@ -7,7 +7,7 @@ import { useChatMessages, CHAT_STATUS } from '../../hooks/useChatMessages'
 import { useIsModerator } from '../../hooks/useIsModerator'
 import { useRoomPresence } from '../../hooks/useRoomPresence'
 import { useSiweAuth } from '../../context/SiweAuthContext'
-import { removeMessage } from '../../services/chat'
+import { removeMessage, editMessage, setReaction } from '../../services/chat'
 import { blockAddress } from '../../services/profile'
 import { useChatIdentity } from '../../hooks/useChatIdentity'
 import { formatAddress } from '../../utils/formatters'
@@ -34,7 +34,7 @@ const FOLLOWING_THRESHOLD_PX = 120
 export default function RoomPanel({ room, onOpenProfile }) {
   const { account } = useSiweAuth()
   const isModerator = useIsModerator()
-  const { messages, status, error, add, remove, hasMore, loadingOlder, loadOlder } =
+  const { messages, status, error, add, remove, replace, react, hasMore, loadingOlder, loadOlder } =
     useChatMessages(room)
   const present = useRoomPresence(room)
   const { error: identityError } = useChatIdentity()
@@ -120,6 +120,44 @@ export default function RoomPanel({ room, onOpenProfile }) {
     }
   }, [])
 
+  const onEdit = useCallback(
+    async (id, body) => {
+      setRemoveError(null)
+      try {
+        const updated = await editMessage({ id, body })
+        // Shown at once rather than waiting for the feed to echo it. The merge
+        // absorbs the repeat when it arrives a moment later.
+        if (updated) replace(updated)
+      } catch (err) {
+        setRemoveError(err.message)
+      }
+    },
+    [replace],
+  )
+
+  const onReact = useCallback(
+    async (id, emoji, on) => {
+      setRemoveError(null)
+
+      /*
+       * Applied locally first, so pressing a reaction is instant. If the
+       * request fails it is put back - which is the right way round for
+       * something this small: a reaction that flickers and reverts is a
+       * better failure than one that appears to do nothing for a second.
+       */
+      const mine = account ? account.toLowerCase() : null
+      if (mine) react({ message_id: id, address: mine, emoji, on })
+
+      try {
+        await setReaction({ id, emoji, on })
+      } catch (err) {
+        if (mine) react({ message_id: id, address: mine, emoji, on: !on })
+        setRemoveError(err.message)
+      }
+    },
+    [account, react],
+  )
+
   const onRemove = useCallback(
     async (id) => {
       setRemoveError(null)
@@ -184,10 +222,13 @@ export default function RoomPanel({ room, onOpenProfile }) {
               key={message.id}
               message={message}
               isOwn={Boolean(account) && message.address === account.toLowerCase()}
-              canRemove={isModerator}
+              isModerator={isModerator}
+              account={account}
               onRemove={onRemove}
               onBlock={onBlock}
               onOpenProfile={setOpenProfile}
+              onEdit={onEdit}
+              onReact={onReact}
             />
           ))
         )}

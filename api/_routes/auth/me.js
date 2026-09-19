@@ -1,5 +1,5 @@
-import { SESSION_COOKIE, getCookie, readSession } from '../_lib/session.js'
-import { parseAdminAddresses, isAdminAddress } from '../../src/utils/chatAdmin.js'
+import { SESSION_COOKIE, getCookie, readSession } from '../../_lib/session.js'
+import { parseAdminAddresses, isAdminAddress } from '../../../src/utils/chatAdmin.js'
 
 /** Who the session cookie says this is, or null. */
 export default async function handler(req, res) {

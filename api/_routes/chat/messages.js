@@ -1,14 +1,14 @@
-import { SESSION_COOKIE, getCookie, readSession } from '../_lib/session.js'
-import { isSameOrigin, rateLimit } from '../_lib/guard.js'
-import { serviceClient } from '../_lib/supabase.js'
-import { normaliseMessage, REJECTED } from '../../src/utils/chatMessage.js'
-import { parseAdminAddresses, isAdminAddress } from '../../src/utils/chatAdmin.js'
-import { isRoom } from '../../src/config/rooms.js'
+import { SESSION_COOKIE, getCookie, readSession } from '../../_lib/session.js'
+import { isSameOrigin, rateLimit } from '../../_lib/guard.js'
+import { serviceClient } from '../../_lib/supabase.js'
+import { normaliseMessage, REJECTED } from '../../../src/utils/chatMessage.js'
+import { parseAdminAddresses, isAdminAddress } from '../../../src/utils/chatAdmin.js'
+import { isRoom } from '../../../src/config/rooms.js'
 import {
   exceededLimit,
   retryAfterSeconds,
   LONGEST_WINDOW_MS,
-} from '../../src/utils/chatRate.js'
+} from '../../../src/utils/chatRate.js'
 
 /**
  * Posting and removing chat messages.
@@ -50,9 +50,10 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') return post(req, res)
+  if (req.method === 'PUT') return edit(req, res)
   if (req.method === 'DELETE') return remove(req, res)
 
-  res.setHeader('Allow', 'POST, DELETE')
+  res.setHeader('Allow', 'POST, PUT, DELETE')
   return res.status(405).json({ error: 'Method not allowed' })
 }
 
@@ -220,20 +221,66 @@ async function post(req, res) {
   return res.status(201).json({ message: inserted.data })
 }
 
-async function remove(req, res) {
+/**
+ * Change what you said.
+ *
+ * Yours only, and there is no moderator version - a moderator can remove a
+ * message, which is visible, but putting words in somebody's mouth is a
+ * different power and nothing here needs it.
+ *
+ * Always stamps `edited_at`, which the interface renders as an "edited"
+ * marker. That marker is the reason this is allowed at all: a silent edit is
+ * a way to change what you said after somebody replied to it, and in a room
+ * about what to buy, "I said sell" after the fact is worth money.
+ */
+async function edit(req, res) {
   const address = await signedInAddress(req)
   if (!address) return res.status(401).json({ error: 'Sign in first.' })
 
-  const admins = parseAdminAddresses(process.env.ADMIN_ADDRESSES)
-  if (!isAdminAddress(address, admins)) {
-    /*
-     * 404 rather than 403, deliberately. A 403 confirms the endpoint exists
-     * and does something worth protecting, which is a hint worth not giving
-     * for a route whose whole security is a list of addresses in an
-     * environment variable.
-     */
-    return res.status(404).json({ error: 'Not found.' })
+  const db = serviceClient()
+  if (!db) return res.status(503).json({ error: 'Chat is not configured on this deployment.' })
+
+  const id = Number(req.body?.id)
+  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Which message?' })
+
+  // The same normalising the original went through, from the same function,
+  // so an edit cannot smuggle in what a post could not.
+  const message = normaliseMessage(req.body?.body)
+  if (!message.ok) {
+    return res.status(400).json({ error: REFUSALS[message.reason] || 'That message cannot be posted.' })
   }
+
+  /*
+   * The author check is the `eq` on address, not a read followed by a
+   * comparison. One statement, so there is no window between checking who owns
+   * the row and writing to it - and no branch that could be got wrong.
+   */
+  const updated = await db
+    .from('messages')
+    .update({ body: message.body, edited_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('address', address)
+    .is('deleted_at', null)
+    .select('id, address, room, body, created_at, edited_at, profiles ( handle, avatar_id, avatar_url )')
+
+  if (updated.error) {
+    console.error('chat: the edit failed:', updated.error.message)
+    return res.status(503).json({ error: 'Chat is unavailable right now.' })
+  }
+
+  /*
+   * Nothing updated means the message is not yours, is already removed, or
+   * never existed. All three answer the same way, so this cannot be used to
+   * ask who wrote a given id.
+   */
+  if (!updated.data.length) return res.status(404).json({ error: 'Not found.' })
+
+  return res.status(200).json({ message: updated.data[0] })
+}
+
+async function remove(req, res) {
+  const address = await signedInAddress(req)
+  if (!address) return res.status(401).json({ error: 'Sign in first.' })
 
   const db = serviceClient()
   if (!db) return res.status(503).json({ error: 'Chat is not configured on this deployment.' })
@@ -249,19 +296,41 @@ async function remove(req, res) {
     return res.status(400).json({ error: 'Which message?' })
   }
 
-  const removed = await db
+  /*
+   * Two ways to be allowed: it is yours, or you are a moderator.
+   *
+   * Until now only a moderator could remove anything, which meant somebody who
+   * posted a wallet address by mistake had to ask one. Expressed as a filter
+   * rather than a branch - a moderator's update is unrestricted, everybody
+   * else's carries `eq('address', ...)` - so the author check happens inside
+   * the statement that writes, with no window in between.
+   */
+  const admins = parseAdminAddresses(process.env.ADMIN_ADDRESSES)
+  const moderator = isAdminAddress(address, admins)
+
+  let update = db
     .from('messages')
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', id)
     .is('deleted_at', null)
-    .select('id')
+
+  if (!moderator) update = update.eq('address', address)
+
+  const removed = await update.select('id')
 
   if (removed.error) {
     console.error('chat: the removal failed:', removed.error.message)
     return res.status(503).json({ error: 'Chat is unavailable right now.' })
   }
 
-  // An empty result means it was already gone. Answered as success: the caller
-  // wanted the message removed, and it is.
+  /*
+   * Nothing updated means it was already gone, or was never theirs to remove.
+   *
+   * A moderator gets success either way - they wanted it gone and it is. For
+   * anybody else the two cases answer 404 together, so this does not become a
+   * way of asking whether a given id exists and who wrote it.
+   */
+  if (!removed.data.length && !moderator) return res.status(404).json({ error: 'Not found.' })
+
   return res.status(200).json({ id, removed: removed.data.length > 0 })
 }

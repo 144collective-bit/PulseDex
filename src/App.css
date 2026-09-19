@@ -14895,3 +14895,25 @@ a.wallet-option-item {
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+
+/* The way from profile settings to the page they produce. */
+.profile-view-public {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  font-family: var(--font-instrument);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--pulse-cyan);
+  background: rgba(0, 229, 255, 0.1);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  align-self: flex-start;
+  transition: background 0.15s ease;
+}
+
+.profile-view-public:hover {
+  background: rgba(0, 229, 255, 0.18);
+}

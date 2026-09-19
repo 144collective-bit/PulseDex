@@ -1,8 +1,8 @@
-import { SESSION_COOKIE, getCookie, readSession } from './_lib/session.js'
-import { isSameOrigin, rateLimit } from './_lib/guard.js'
-import { serviceClient } from './_lib/supabase.js'
-import { normaliseHandle, normaliseAvatarId } from '../src/utils/chatMessage.js'
-import { normaliseBio, normaliseLinks } from '../src/utils/profileFields.js'
+import { SESSION_COOKIE, getCookie, readSession } from '../_lib/session.js'
+import { isSameOrigin, rateLimit } from '../_lib/guard.js'
+import { serviceClient } from '../_lib/supabase.js'
+import { normaliseHandle, normaliseAvatarId } from '../../src/utils/chatMessage.js'
+import { normaliseBio, normaliseLinks } from '../../src/utils/profileFields.js'
 
 /**
  * The signed-in wallet's own profile.
