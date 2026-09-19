@@ -1,0 +1,307 @@
+/* The social page: one room, a list that scrolls, a box at the bottom. */
+
+.social-view {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.social-head-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.social-head-title h1 {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+}
+
+.social-head-icon {
+  color: var(--pulse-cyan);
+}
+
+.social-head-lede {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.social-panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.chat-scroll {
+  /*
+   * A fixed span of the viewport rather than "whatever is left".
+   *
+   * Filling the remaining height would mean every ancestor between here and
+   * the body agreeing to pass a height down, and this page hangs inside the
+   * same container as the screener and the portfolio, which are written to
+   * grow instead. Asking for that would be rewriting their layout to change
+   * this one. A clamp gets the same thing that matters - a list that scrolls
+   * inside itself with the composer pinned under it - and behaves on a short
+   * laptop screen and a tall monitor alike.
+   */
+  height: clamp(320px, 58vh, 620px);
+  overflow-y: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /* Anchored at the bottom, so the browser keeps the newest message in view
+     when the list grows rather than holding the scroll position. */
+  overflow-anchor: auto;
+}
+
+/* ── One message ── */
+
+.chat-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.chat-avatar {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.chat-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.chat-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: var(--fs-micro, 10px);
+  color: var(--text-muted);
+}
+
+.chat-author {
+  font-size: var(--fs-label, 11px);
+  font-weight: 600;
+  color: var(--text-primary);
+  /* A display name is chosen by whoever typed it, so it cannot be allowed to
+     push the address it sits beside off the row. */
+  max-width: 14em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-row.own .chat-author {
+  color: var(--pulse-green);
+}
+
+.chat-address {
+  color: var(--text-muted);
+}
+
+.chat-time {
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+.chat-remove {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease;
+}
+
+.chat-row:hover .chat-remove,
+/* Keyboard users never hover, so the control has to appear on focus too or it
+   cannot be reached without a mouse. */
+.chat-remove:focus-visible {
+  opacity: 1;
+}
+
+.chat-remove:hover {
+  color: var(--pulse-red);
+}
+
+.chat-text {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  /* Keeps the line breaks the author typed. Everything here was written by a
+     stranger and is rendered as text - React escapes it, and this only
+     affects whitespace. */
+  white-space: pre-wrap;
+  /* A 500-character word is a legal message and must not widen the page. */
+  overflow-wrap: anywhere;
+}
+
+/* ── States that are not a conversation ── */
+
+.chat-notice,
+.chat-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 16px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.chat-spin {
+  animation: chat-spin 1s linear infinite;
+}
+
+@keyframes chat-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-spin {
+    animation: none;
+  }
+}
+
+.chat-jump {
+  align-self: center;
+  margin: 0 0 8px;
+  padding: 4px 12px;
+  font-size: var(--fs-label, 11px);
+  color: var(--bg-main);
+  background: var(--pulse-cyan);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+/* ── The box you type in ── */
+
+.chat-composer {
+  border-top: 1px solid var(--border-subtle);
+  padding: 10px 12px 12px;
+  background: var(--bg-subtle);
+}
+
+.chat-input {
+  width: 100%;
+  resize: none;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 9px 11px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.chat-input:focus {
+  outline: none;
+  border-color: var(--border-active);
+}
+
+.chat-composer-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.chat-hint,
+.chat-count {
+  font-size: var(--fs-micro, 10px);
+  color: var(--text-muted);
+}
+
+.chat-count.over {
+  color: var(--pulse-red);
+}
+
+.chat-error {
+  font-size: var(--fs-label, 11px);
+  color: var(--pulse-red);
+  margin: 0;
+}
+
+.chat-send {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--bg-main);
+  background: var(--pulse-green);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* The label is two or three words and reads as one thing. Left to wrap it
+   breaks across lines inside the button on a narrow phone. */
+.chat-send {
+  white-space: nowrap;
+}
+
+.chat-send:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.chat-signin {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.chat-signin-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.chat-signin .chat-send {
+  margin-left: auto;
+}
+
+@media (max-width: 640px) {
+  .social-view {
+    padding: 10px;
+  }
+
+  .chat-scroll {
+    padding: 10px;
+  }
+
+  /* The timestamp goes first when the row runs out of width: it is the least
+     load-bearing thing on it. The address stays, because it is the only part
+     that identifies anyone - a handle is chosen, and two people can choose
+     the same one. */
+  .chat-time {
+    display: none;
+  }
+}

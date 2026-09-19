@@ -20,7 +20,14 @@ on:
 # A newer push to the same branch makes the run in flight pointless.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+
+  # On a branch, yes: nobody needs a verdict on a commit that has already been
+  # replaced. On main, never. Every commit there is deployed to pulsedex.net,
+  # and cancelling means a commit reaches production with no verdict at all -
+  # which is not hypothetical. Merging the two action bumps a few minutes
+  # apart did exactly that: the run for the first was cancelled by the second,
+  # and ff3b419 is on main having never been checked.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   checks:

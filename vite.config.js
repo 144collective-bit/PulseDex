@@ -65,12 +65,27 @@ function vercelApiDev() {
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
-  // The api handlers read process.env, which Vite does not populate on its
-  // own. Loading .env.local here is what lets sign-in be exercised locally
-  // instead of only against a deployment. Only SESSION_SECRET is lifted -
-  // nothing here should ever reach the client bundle.
+  /*
+   * The api handlers read process.env, which Vite does not populate on its
+   * own. Loading .env.local here is what lets sign-in and the chat be
+   * exercised locally instead of only against a deployment.
+   *
+   * A named list, never everything. These are the values the handlers read on
+   * the server, and two of them - the session secret and the Supabase service
+   * role key - are the kind that must never reach the browser. Lifting the
+   * whole environment because it is convenient is how one of them ends up in
+   * a bundle; Vite only inlines names beginning with VITE_, and the point of
+   * this list is that nothing here has to rely on remembering that.
+   */
   const env = loadEnv(mode, process.cwd(), '')
-  if (env.SESSION_SECRET) process.env.SESSION_SECRET = env.SESSION_SECRET
+  const SERVER_ONLY = ['SESSION_SECRET', 'SUPABASE_SERVICE_ROLE_KEY', 'ADMIN_ADDRESSES']
+  for (const name of SERVER_ONLY) {
+    if (env[name]) process.env[name] = env[name]
+  }
+
+  // Read by both sides: the browser builds its read-only client from it, and
+  // the api pairs it with the service role key. It is public either way.
+  if (env.VITE_SUPABASE_URL) process.env.VITE_SUPABASE_URL = env.VITE_SUPABASE_URL
 
   return {
     plugins: [react(), vercelApiDev()],
