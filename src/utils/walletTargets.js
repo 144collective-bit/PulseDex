@@ -71,6 +71,62 @@ export function detectWallet(walletId, win = typeof window !== 'undefined' ? win
   }
 }
 
+/** The wallets this app lists by name, so everything else can be found. */
+export const CURATED_WALLET_IDS = ['rabby', 'internetmoney', 'zkxwallet', 'okx']
+
+/**
+ * Every wallet on this page that the curated list does not name.
+ *
+ * The modal offered four wallets and a download link for each one it could not
+ * find. On a desktop with an extension that is a reasonable thing to do. Inside
+ * a wallet's own in-app browser - which is how most people reach a site like
+ * this from a phone - it was a dead end: MetaMask, Trust, Coinbase, Rainbow and
+ * the rest all inject a perfectly good provider, none of them is one of the
+ * four, so the page detected nothing and offered to install browser extensions
+ * to a browser that cannot have any. There was no way to connect, from inside a
+ * wallet.
+ *
+ * EIP-6963 is what fixes it. A wallet that announces itself appears in wagmi's
+ * connector list under its own reverse-DNS id, which is both proof it is really
+ * there and a name and icon to show. Anything announcing itself is offered,
+ * whether or not this app has heard of it.
+ *
+ * `hasInjected` covers the older wallets that set `window.ethereum` and never
+ * announce. That one is offered only when nothing announced, because otherwise
+ * it is the same wallet a second time under a duller name.
+ */
+export function otherInjectedWallets(connectors = [], { hasInjected = false } = {}) {
+  const isCurated = (c) => CURATED_WALLET_IDS.some((id) => matchesWallet(c, id))
+
+  // A dotted id is a reverse-DNS one, which only EIP-6963 discovery produces.
+  const announced = connectors.filter(
+    (c) => typeof c?.id === 'string' && c.id.includes('.') && !isCurated(c)
+  )
+
+  const seen = new Set()
+  const out = []
+  for (const c of announced) {
+    const key = (c.name || c.id).toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ id: c.id, name: c.name || 'Browser wallet', icon: c.icon || null })
+  }
+
+  if (out.length === 0 && hasInjected) {
+    const generic = connectors.find((c) => c?.id === 'injected' && !isCurated(c))
+    if (generic) {
+      out.push({
+        id: generic.id,
+        // Its own name is "Injected", which tells a reader nothing.
+        name: generic.name && generic.name !== 'Injected' ? generic.name : 'Browser wallet',
+        icon: null,
+      })
+    }
+  }
+
+  return out
+}
+
 /**
  * A link that opens this page inside a wallet's own browser.
  *
@@ -84,16 +140,22 @@ export function walletHandoffLink(walletId, href) {
   if (!href) return null
 
   /*
-   * Parsed only to reject what is not a URL. Every link below embeds the
-   * address whole, so a malformed one would be handed to a wallet as-is and
-   * fail somewhere the user cannot see. The result is deliberately unused -
-   * MetaMask was the one format that needed the parts, and it is gone.
+   * Parsed to reject what is not a web address - and `new URL` alone does not
+   * do that. `javascript:alert(1)` is a perfectly valid URL, so the old check
+   * passed it through and the wallet was handed a link whose target was a
+   * script, to open in its own browser.
+   *
+   * Not reachable from this app, which only ever passes `window.location.href`
+   * - but this is an exported helper with no say in who calls it next, and the
+   * cost of being sure is one comparison.
    */
+  let parsed
   try {
-    void new URL(href)
+    parsed = new URL(href)
   } catch {
     return null
   }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null
 
   switch (walletId) {
     case 'okx-app':
@@ -107,6 +169,24 @@ export function walletHandoffLink(walletId, href) {
       return `https://web3.okx.com/download?deeplink=${encodeURIComponent(
         `okx://wallet/dapp/url?dappUrl=${encodeURIComponent(href)}`,
       )}`
+    /*
+     * MetaMask, whose universal link takes the address as a path with the
+     * scheme stripped and re-adds https itself. Back after having been removed
+     * with its SDK: the SDK is what was dropped, and this is a plain link that
+     * needs nothing installed and no account of ours.
+     *
+     * Rabby and ZKX are not here, and not because they were forgotten. Neither
+     * publishes a format this could be written against, and a link invented
+     * rather than documented opens the wallet on its own home screen - which
+     * to the person holding the phone is indistinguishable from the app being
+     * broken. Both speak WalletConnect, so both are reached that way instead.
+     */
+    case 'metamask-app': {
+      // Scheme stripped: MetaMask takes host and path, and re-adds https.
+      const bare = href.replace(/^https?:\/\//, '')
+      return `https://metamask.app.link/dapp/${bare}`
+    }
+
     default:
       return null
   }

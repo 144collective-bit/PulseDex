@@ -91,7 +91,7 @@ jobs:
       - name: Install Chromium
         run: npx playwright-core install --with-deps chromium
 
-      - name: Build and open the app in a browser
+      - name: Build and drive the app in a browser
         env:
           VITE_SUPABASE_URL: https://mock.supabase.co
           VITE_SUPABASE_ANON_KEY: mock
@@ -104,4 +104,18 @@ jobs:
             curl -sf -o /dev/null http://127.0.0.1:4317/ && break
             sleep 1
           done
+
+          # Does every page come up on a fair wind?
           npm run smoke:browser -- http://127.0.0.1:4317
+
+          # And what happens when it does not: nulls in every nullable column,
+          # an empty database, one that refuses, a phone, signed out, and tabs
+          # switched faster than the fetches settle. Three bugs came out of the
+          # first run of this, one of which had been silently deleting profile
+          # links. It reuses the server and the Chromium above, so the cost is
+          # the run itself - revisit if it ever becomes the slow part.
+          npm run stress -- http://127.0.0.1:4317
+
+          # One shell, deliberately: the preview server is a background process
+          # of this step, and a later step relying on it having survived is a
+          # thing that works until it does not.

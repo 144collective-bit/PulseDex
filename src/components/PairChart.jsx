@@ -325,9 +325,31 @@ export default function PairChart({
       // that is mid-teardown.
       disposedRef.current = true
       chart.unsubscribeCrosshairMove(onCrosshair)
-      chart.remove()
       chartRef.current = null
       seriesRef.current = { price: null, overlays: [], panes: [] }
+
+      /*
+       * Disposed on the next frame, not this one.
+       *
+       * `resize()` does not repaint; it marks the chart invalid and schedules
+       * the work on an animation frame of the library's own. The measuring
+       * loop above calls it from a frame callback, so any frame in which the
+       * size changed ends with a paint already queued - and removing the chart
+       * before that paint runs left the library drawing into an object it had
+       * just disposed:
+       *
+       *   Object is disposed
+       *     at e.resizeCanvasElement (lightweight-charts...)
+       *
+       * Uncaught, from a frame callback, so no boundary could catch it, and it
+       * fired every single time somebody left the Screener or switched pair.
+       *
+       * Frame callbacks run in the order they were registered, so the paint
+       * the library queued first still finds a live chart, and this runs after
+       * it. `disposedRef` is already set, so the loop issues no further
+       * resizes in the meantime.
+       */
+      requestAnimationFrame(() => chart.remove())
     }
   }, [measured])
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { User, LogOut, Loader2, Copy, Check, ExternalLink, IdCard, UserRound } from 'lucide-react'
+import { User, LogOut, Loader2, Copy, Check, ExternalLink, IdCard, UserRound, Wallet } from 'lucide-react'
 import { useSiweAuth, AUTH_STATUS } from '../context/SiweAuthContext'
 import { formatAddress } from '../utils/formatters'
 import { avatarAccent } from '../utils/tokenImage'
@@ -27,8 +27,8 @@ const LABEL = {
  * the public page shipped with no route to it at all: reachable only by
  * clicking somebody else's face in the chat, and never your own.
  */
-export default function AccountButton({ onOpenProfile, onOpenPublicProfile }) {
-  const { status, account, error, signIn, signOut, isBusy } = useSiweAuth()
+export default function AccountButton({ onOpenProfile, onOpenPublicProfile, onOpenWalletModal }) {
+  const { status, account, error, needsWallet, signIn, signOut, isBusy } = useSiweAuth()
   const { profile } = useUserProfile()
 
   // The uploaded picture where there is one, the address-derived accent
@@ -76,6 +76,22 @@ export default function AccountButton({ onOpenProfile, onOpenPublicProfile }) {
           <span>{LABEL[status] || 'Sign in'}</span>
         </button>
         {error && <span className="account-error">{error}</span>}
+
+        {/*
+          The way out of the one failure that has one.
+          
+          Signing in with no wallet on the device used to end at a sentence
+          telling the reader to open this page inside their wallet app, with
+          nothing to tap that would do it - the links that do are in the wallet
+          modal, and nothing on a phone opened that. The sentence is now a
+          route.
+        */}
+        {needsWallet && onOpenWalletModal && (
+          <button type="button" className="account-wallet-route" onClick={onOpenWalletModal}>
+            <Wallet size={13} />
+            <span>Open in a wallet app</span>
+          </button>
+        )}
       </div>
     )
   }

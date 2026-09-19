@@ -10,6 +10,7 @@ import {
   ArrowRight,
   Zap,
   Lock,
+  Wallet,
 } from 'lucide-react'
 import { pulsechain } from '../config/pulsechain'
 import { hasWalletConnect } from '../config/wagmi'
@@ -19,6 +20,7 @@ import {
   detectWallet,
   walletHandoffLink,
   providerIsWallet,
+  otherInjectedWallets,
 } from '../utils/walletTargets'
 
 // Curated supported wallet definitions with detection checks, official download links & SVGs
@@ -153,6 +155,12 @@ const MOBILE_HANDOFF = [
      */
     link: () => walletHandoffLink('okx-app', window.location.href),
   },
+  {
+    id: 'metamask-app',
+    name: 'MetaMask',
+    desc: 'Opens this page inside the MetaMask app.',
+    link: () => walletHandoffLink('metamask-app', window.location.href),
+  },
 ]
 
 export default function WalletConnectModal({ isOpen, onClose }) {
@@ -281,6 +289,18 @@ export default function WalletConnectModal({ isOpen, onClose }) {
     setCopiedAddr(true)
     setTimeout(() => setCopiedAddr(false), 2000)
   }
+
+  /*
+   * Wallets that announced themselves and are not among the four named above.
+   *
+   * This is the whole of the mobile fix. Most people reach a site like this
+   * from a phone through their wallet's own in-app browser - MetaMask's,
+   * Trust's, Coinbase's, Rainbow's - every one of which injects a working
+   * provider. None of them is one of the four, so the modal detected nothing
+   * and offered to install browser extensions to a browser that cannot have
+   * any. There was no way to connect, from inside a wallet.
+   */
+  const discovered = otherInjectedWallets(connectors, { hasInjected: injectedPresent })
 
   const isWrongChain = isConnected && chainId !== pulsechain.id
 
@@ -424,7 +444,15 @@ export default function WalletConnectModal({ isOpen, onClose }) {
                   </button>
                 )}
 
-                <p className="wallet-handoff-label">Or open this page in your wallet</p>
+                {/* "Or" only when there is something to be an alternative
+                    to. With no WalletConnect project id configured this list
+                    is the entire offering, and the word read as though an
+                    option above it had failed to render. */}
+                <p className="wallet-handoff-label">
+                  {hasWalletConnect
+                    ? 'Or open this page in your wallet'
+                    : 'Open this page in your wallet'}
+                </p>
 
                 {MOBILE_HANDOFF.map((w) => (
                   <a
@@ -453,6 +481,51 @@ export default function WalletConnectModal({ isOpen, onClose }) {
               </div>
             ) : (
             <div className="wallet-options-list">
+              {/* First, because unlike everything below them these are
+                  certainly here - they said so. */}
+              {discovered.map((w) => {
+                const isThisConnecting = isPending && connectingWalletId === w.id
+                return (
+                  <button
+                    key={w.id}
+                    type="button"
+                    className={`wallet-option-item ${isThisConnecting ? 'is-connecting' : ''}`}
+                    onClick={() => connectVia(w.id, w.name)}
+                    disabled={isThisConnecting}
+                    aria-label={`Connect ${w.name}`}
+                  >
+                    <div className="wallet-option-left">
+                      <div className="wallet-option-icon">
+                        {/* The icon the wallet announced, when it sent one.
+                            It is a data URI from the page's own provider, so
+                            it loads with no request leaving the device. */}
+                        {w.icon ? (
+                          <img className="wallet-option-icon-img" src={w.icon} alt="" />
+                        ) : (
+                          <Wallet size={22} className="text-pulse-cyan" />
+                        )}
+                      </div>
+                      <div className="wallet-option-meta">
+                        <div className="wallet-option-name-row">
+                          <span className="wallet-option-name">{w.name}</span>
+                          <span className="wallet-detected-pill">Detected</span>
+                        </div>
+                        <span className="wallet-option-desc">
+                          Found on this device. Connects straight away.
+                        </span>
+                      </div>
+                    </div>
+                    <div className="wallet-option-right">
+                      {isThisConnecting ? (
+                        <div className="wallet-spin-loader"></div>
+                      ) : (
+                        <span className="wallet-connect-cta-btn">Connect</span>
+                      )}
+                    </div>
+                  </button>
+                )
+              })}
+
               {SUPPORTED_WALLETS.map((w) => {
                 // `w.detect()` only sees whichever wallet currently owns
                 // `window.ethereum`. Also trust EIP-6963 auto-discovered

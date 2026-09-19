@@ -92,6 +92,7 @@ export function SiweAuthProvider({ children }) {
   const [status, setStatus] = useState(AUTH_STATUS.loading)
   const [account, setAccount] = useState(null)
   const [error, setError] = useState(null)
+  const [needsWallet, setNeedsWallet] = useState(false)
 
   /**
    * Restore the session on load, and re-check it when the tab comes back.
@@ -146,6 +147,7 @@ export function SiweAuthProvider({ children }) {
 
   const signIn = useCallback(async () => {
     setError(null)
+    setNeedsWallet(false)
 
     try {
       // An existing connection is authoritative. Reading it from the store
@@ -171,11 +173,24 @@ export function SiweAuthProvider({ children }) {
         }
 
         if (!available.length) {
-          throw new Error(
+          /*
+           * Named, not just worded.
+           *
+           * The message told somebody on a phone to open this page inside
+           * their wallet app and gave them no way to do it - the links that
+           * do exactly that live in the wallet modal, which nothing on a
+           * phone opens. A dead end that describes the way out is still a
+           * dead end, so the UI needs to be able to tell this failure from
+           * every other one and offer the route. Matching on the sentence
+           * would break the first time somebody reworded it.
+           */
+          const err = new Error(
             isMobileBrowser()
-              ? 'No wallet found. Open pulsedex.net inside your wallet app’s browser, then try again.'
+              ? 'No wallet found on this device.'
               : 'No wallet extension detected. Install Rabby, Internet Money, OKX or ZKX, then try again.'
           )
+          err.code = 'NO_WALLET'
+          throw err
         }
 
         for (const connector of available) {
@@ -240,6 +255,7 @@ export function SiweAuthProvider({ children }) {
       // Declining the wallet prompt is a decision, not a failure worth
       // shouting about - the button simply returns to its resting state.
       setError(isRejection(err) ? null : err?.message || 'Sign-in failed.')
+      setNeedsWallet(err?.code === 'NO_WALLET')
       setStatus(AUTH_STATUS.signedOut)
       return null
     }
@@ -261,6 +277,9 @@ export function SiweAuthProvider({ children }) {
         status,
         account,
         error,
+        // True only after a sign-in that failed for want of a wallet, which is
+        // the one failure here with somewhere else to send the person.
+        needsWallet,
         signIn,
         signOut,
         isSignedIn: status === AUTH_STATUS.signedIn,

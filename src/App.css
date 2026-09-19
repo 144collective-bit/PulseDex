@@ -15088,3 +15088,38 @@ a.wallet-option-item {
   color: var(--text-tertiary, rgba(255, 255, 255, 0.35));
   word-break: break-word;
 }
+
+/* The icon a wallet announced over EIP-6963, which it sends as a data URI.
+   Sized to match the hand-drawn SVGs beside it so a discovered wallet and a
+   curated one sit in the same row without one looking pasted in. */
+.wallet-option-icon-img {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  object-fit: contain;
+  display: block;
+}
+
+/* The route out of "no wallet found". Quiet, and directly under the sentence
+   it answers, because it is the next thing to do rather than a second offer. */
+.account-wallet-route {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 5px 11px;
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  border-radius: var(--radius-full);
+  background: rgba(0, 229, 255, 0.1);
+  color: var(--pulse-cyan);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.account-wallet-route:hover {
+  background: rgba(0, 229, 255, 0.18);
+  border-color: rgba(0, 229, 255, 0.5);
+}
