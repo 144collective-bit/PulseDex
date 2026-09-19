@@ -50,12 +50,14 @@ async function visit(name, steps, setup, expect = {}) {
   const requests = []
 
   /*
-   * This sandbox has no outbound network, so every external fetch fails.
-   * Those errors say something about the environment and nothing about the
-   * app, and left in they drown out the ones that matter.
+   * Every request that would leave localhost is aborted below, so the app's
+   * outbound calls all fail. Those errors say something about the harness and
+   * nothing about the app, and left in they drown out the ones that matter.
+   * This stays as a backstop for anything that slips past the block - a
+   * request issued by the browser itself rather than by the page, say.
    */
   const environmental =
-    /ERR_TUNNEL_CONNECTION_FAILED|ERR_CERT_AUTHORITY_INVALID|ERR_NAME_NOT_RESOLVED|ERR_CONNECTION|Failed to fetch|NetworkError|net::ERR_|WebSocket connection to|tunnel via proxy/i
+    /ERR_TUNNEL_CONNECTION_FAILED|ERR_CERT_AUTHORITY_INVALID|ERR_NAME_NOT_RESOLVED|ERR_CONNECTION|Failed to fetch|NetworkError|net::ERR_|WebSocket connection to|tunnel via proxy|blocked by CORS policy|Access to fetch at|Access-Control-Allow-Origin/i
 
   page.on('console', (m) => {
     if (m.type() !== 'error') return
@@ -73,6 +75,24 @@ async function visit(name, steps, setup, expect = {}) {
     if (r.url().startsWith(BASE)) failed.push(`${r.url().replace(BASE, '')} ${why}`)
   })
   page.on('request', (r) => requests.push(r.url()))
+
+  /*
+   * Nothing leaves localhost.
+   *
+   * Registered before setup's own routes, which Playwright then matches first,
+   * so a case can still answer a specific request - this only catches what is
+   * left. It is what makes the harness say the same thing everywhere: in a
+   * sandbox with no network the app's outbound calls fail as connection
+   * errors, and on a CI runner, which does have network, the very same calls
+   * reach real hosts and come back as CORS failures instead. Filtering by the
+   * wording of the failure meant the check passed here and failed on GitHub.
+   * Not making the calls at all leaves one behaviour to reason about, and the
+   * external services out of a result that is supposed to be about this app.
+   */
+  await page.route('**/*', (route) => {
+    if (route.request().url().startsWith(BASE)) return route.continue()
+    return route.abort()
+  })
 
   if (setup) await setup(page)
 
