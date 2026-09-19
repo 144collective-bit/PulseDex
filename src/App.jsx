@@ -422,7 +422,9 @@ function MainApp() {
           <TrenchesView onSelectPairForChart={handleSelectPair} onOpenTokenPage={openToken} />
         )}
 
-        {FEATURES.social && activeTab === 'social' && <SocialView onOpenProfile={openProfile} />}
+        {FEATURES.social && activeTab === 'social' && (
+          <SocialView onOpenProfile={openProfile} onEditProfile={() => selectTab('profile')} />
+        )}
 
         {FEATURES.markets && activeTab === 'markets' && (
           <MarketOverview

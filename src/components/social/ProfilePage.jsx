@@ -24,7 +24,7 @@ import { formatAddress } from '../../utils/formatters'
  * nothing here is private - a profile that only members could see would be a
  * profile nobody discovers.
  */
-export default function ProfilePage({ route, onOpenProfile, onClose, onEditProfile }) {
+export default function ProfilePage({ route, onOpenProfile, onClose, onEditProfile, embedded = false }) {
   const isModerator = useIsModerator()
   const { account } = useSiweAuth()
 
@@ -116,7 +116,7 @@ export default function ProfilePage({ route, onOpenProfile, onClose, onEditProfi
 
   if (status === 'loading') {
     return (
-      <Frame onClose={onClose}>
+      <Frame onClose={onClose} embedded={embedded}>
         <p className="chat-notice">
           <Loader2 size={15} className="chat-spin" />
           <span>Loading profile</span>
@@ -127,7 +127,7 @@ export default function ProfilePage({ route, onOpenProfile, onClose, onEditProfi
 
   if (status === 'failed' || !shown) {
     return (
-      <Frame onClose={onClose}>
+      <Frame onClose={onClose} embedded={embedded}>
         <p className="chat-notice">
           <AlertTriangle size={15} />
           <span>{error || `Nobody here goes by @${handle}.`}</span>
@@ -137,7 +137,7 @@ export default function ProfilePage({ route, onOpenProfile, onClose, onEditProfi
   }
 
   return (
-    <Frame onClose={onClose}>
+    <Frame onClose={onClose} embedded={embedded}>
       <ProfileHeader
         profile={profile}
         address={shown.address}
@@ -183,7 +183,14 @@ export default function ProfilePage({ route, onOpenProfile, onClose, onEditProfi
 /** The page around it, including the way back. Somebody who arrived on a
  *  pasted link has no history to go back through, so this is a link home
  *  rather than a call to history.back(). */
-function Frame({ onClose, children }) {
+function Frame({ onClose, embedded, children }) {
+  /*
+   * Inside a tab there is no page to go back to and no outer layout to
+   * supply - the tab is already the page. So the embedded version is the
+   * contents and nothing else.
+   */
+  if (embedded) return <div className="profile-embedded">{children}</div>
+
   return (
     <div className="social-view profile-public">
       <button type="button" className="chat-older font-mono profile-public-back" onClick={onClose}>

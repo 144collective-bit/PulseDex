@@ -1740,3 +1740,262 @@
     display: none;
   }
 }
+
+/* ==========================================================================
+   THE SECTION'S OWN TABS - Feed, My Profile, Chat Rooms, Discover
+
+   The same strip the profile page uses, so the two read as one product. Given
+   its own surface here because it sits above everything rather than inside a
+   card, and a bare row of buttons on the page background reads as nothing in
+   particular.
+   ========================================================================== */
+
+.social-tabs {
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-lg);
+  overflow-x: auto;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 60%),
+    var(--ch-surface);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+  backdrop-filter: blur(16px) saturate(130%);
+  box-shadow: var(--ch-lift);
+  /* The active tab's bar sits on the bottom edge, so it needs to be inside
+     the rounded corner rather than clipped by it. */
+  border-bottom: 0;
+}
+
+.social-tabs .xp-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  white-space: nowrap;
+  padding: 12px 10px;
+}
+
+.social-tab-icon {
+  flex: 0 0 auto;
+}
+
+/* Four labels do not fit across a phone. The icons carry the meaning there,
+   which is what they are for - and the header above still names whichever is
+   open, so nothing is guessed at. */
+@media (max-width: 560px) {
+  .social-tabs .xp-tab span {
+    display: none;
+  }
+
+  .social-tabs .xp-tab {
+    padding: 13px 8px;
+  }
+
+  .social-tab-icon {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+/* The profile page inside its tab: no frame of its own, because the tab is
+   already the page. */
+.profile-embedded {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── Signed out, on a tab that is about you ── */
+
+.social-signin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 20px;
+  text-align: center;
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--ch-surface);
+  color: var(--text-muted);
+  box-shadow: var(--ch-lift);
+}
+
+.social-signin h2 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.social-signin p {
+  margin: 0;
+  max-width: 44ch;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.social-signin .chat-send {
+  margin: 4px 0 0;
+}
+
+/* ==========================================================================
+   DISCOVER
+   ========================================================================== */
+
+.discover {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.discover-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.discover-search-icon {
+  position: absolute;
+  left: 13px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.discover-input {
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0 14px 0 36px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--ch-hairline);
+  background: rgba(8, 11, 17, 0.6);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.discover-input:focus {
+  outline: none;
+  border-color: rgba(0, 229, 255, 0.45);
+  box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.1);
+}
+
+.discover-search .chat-send {
+  margin-left: 0;
+}
+
+.discover-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.discover-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 2px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ── One person in a list ── */
+
+.person-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 13px;
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 55%);
+}
+
+.person-card:hover {
+  border-color: rgba(255, 255, 255, 0.13);
+}
+
+/*
+ * The row opens the profile; the Follow button beside it does not. A row where
+ * the action also navigates is a row you cannot press without leaving.
+ */
+.person-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.person-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.person-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.person-main:hover .person-name {
+  color: var(--pulse-cyan);
+}
+
+.person-address {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* One line, clipped. A bio is up to 300 characters and this is a list - the
+   whole of it is on the page this row opens. */
+.person-bio {
+  margin-top: 2px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * The feed's own For you / Following strip, nested under the section tabs.
+ *
+ * Two tab rows stacked is the arrangement X uses and it works for the same
+ * reason: the outer row says which part of the site you are in, the inner one
+ * says which slice of this part. It needs a surface of its own or it reads as
+ * loose buttons floating on the page between the tabs above and the posts
+ * below.
+ */
+.feed-wrap > .xp-tabs {
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  border-bottom: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 70%);
+}
+
+.feed-wrap > .xp-tabs .xp-tab {
+  padding: 11px 8px;
+  font-size: 12.5px;
+}
+
+/* Shorter, because this strip is subordinate to the one above it and an
+   identical bar on both reads as two things of equal weight. */
+.feed-wrap > .xp-tabs .xp-tab.active::after {
+  width: 40px;
+  height: 2px;
+}
