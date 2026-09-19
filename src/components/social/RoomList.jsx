@@ -1,4 +1,3 @@
-import { Rss } from 'lucide-react'
 import { ROOMS } from '../../config/rooms'
 
 /**
@@ -13,33 +12,15 @@ import { ROOMS } from '../../config/rooms'
  * conversation beside them is stated rather than implied. That also buys the
  * arrow-key behaviour people expect from tabs for free in most screen readers.
  *
- * The feed sits at the top and is separated from the rooms below it, because
- * it is not one of them. A room is a place to talk; the feed is everything
- * anybody has published. Listed as a sixth room it would read as a sixth
- * subject, and people would post to it expecting the Lounge.
+ * Rooms and nothing else. The feed briefly lived at the top of this list and
+ * has moved to a tab of its own, which is where it belonged: a room is a
+ * place to talk, the feed is everything anybody published, and listing them
+ * together made the feed read as a sixth subject.
  */
 export default function RoomList({ current, onSelect }) {
   return (
-    <nav className="room-list" aria-label="Rooms and feed">
+    <nav className="room-list" aria-label="Chat rooms">
       <ul role="tablist" aria-orientation="vertical">
-        <li>
-          <button
-            type="button"
-            role="tab"
-            id="room-tab-feed"
-            aria-selected={current === 'feed'}
-            aria-controls="room-panel"
-            className={`room-item is-feed ${current === 'feed' ? 'active' : ''}`}
-            onClick={() => onSelect('feed')}
-            title="Everything posted on PulseDex"
-          >
-            <Rss size={12} />
-            <span className="room-name font-mono">Feed</span>
-          </button>
-        </li>
-
-        <li className="room-divider" aria-hidden="true" />
-
         {ROOMS.map((room) => {
           const active = room.slug === current
           return (
