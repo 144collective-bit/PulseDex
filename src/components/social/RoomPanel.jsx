@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Loader2, AlertTriangle } from 'lucide-react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Loader2, AlertTriangle, ChevronUp, Users } from 'lucide-react'
 import ChatMessageRow from './ChatMessageRow'
 import ChatComposer from './ChatComposer'
 import { useChatMessages, CHAT_STATUS } from '../../hooks/useChatMessages'
 import { useIsModerator } from '../../hooks/useIsModerator'
+import { useRoomPresence } from '../../hooks/useRoomPresence'
 import { useSiweAuth } from '../../context/SiweAuthContext'
 import { removeMessage } from '../../services/chat'
 
@@ -29,7 +30,9 @@ const FOLLOWING_THRESHOLD_PX = 120
 export default function RoomPanel({ room }) {
   const { account } = useSiweAuth()
   const isModerator = useIsModerator()
-  const { messages, status, error, add, remove } = useChatMessages(room)
+  const { messages, status, error, add, remove, hasMore, loadingOlder, loadOlder } =
+    useChatMessages(room)
+  const present = useRoomPresence(room)
 
   const scroller = useRef(null)
   const [following, setFollowing] = useState(true)
@@ -47,6 +50,32 @@ export default function RoomPanel({ room }) {
     const el = scroller.current
     if (el) el.scrollTop = el.scrollHeight
   }, [messages, following])
+
+  /*
+   * Hold the reader's place when older messages are prepended.
+   *
+   * Adding content above the viewport moves everything down by its height, so
+   * without this the line someone was reading jumps off the screen and the view
+   * lands somewhere in the newly-loaded past. Measuring the scroll height
+   * before and after, and adding the difference, keeps the same line under the
+   * same pixel.
+   *
+   * Done in a layout effect rather than an ordinary one: this has to run after
+   * the DOM grows but before the browser paints, or the jump is visible.
+   */
+  const heightBeforeLoad = useRef(null)
+  useLayoutEffect(() => {
+    const el = scroller.current
+    if (!el || heightBeforeLoad.current === null) return
+    el.scrollTop += el.scrollHeight - heightBeforeLoad.current
+    heightBeforeLoad.current = null
+  }, [messages])
+
+  const onLoadOlder = useCallback(() => {
+    const el = scroller.current
+    heightBeforeLoad.current = el ? el.scrollHeight : null
+    loadOlder()
+  }, [loadOlder])
 
   const onScroll = useCallback(() => {
     const el = scroller.current
@@ -95,6 +124,22 @@ export default function RoomPanel({ room }) {
   return (
     <>
       <div className="chat-scroll" ref={scroller} onScroll={onScroll}>
+        {hasMore && (
+          <button
+            type="button"
+            className="chat-older font-mono"
+            onClick={onLoadOlder}
+            disabled={loadingOlder}
+          >
+            {loadingOlder ? (
+              <Loader2 size={12} className="chat-spin" />
+            ) : (
+              <ChevronUp size={12} />
+            )}
+            {loadingOlder ? 'Loading' : 'Load older messages'}
+          </button>
+        )}
+
         {messages.length === 0 ? (
           <p className="chat-empty">Nobody has said anything here yet. Go first.</p>
         ) : (
@@ -123,6 +168,13 @@ export default function RoomPanel({ room }) {
       {removeError && (
         <p className="chat-error" role="alert">
           {removeError}
+        </p>
+      )}
+
+      {present > 0 && (
+        <p className="chat-presence font-mono" aria-live="polite">
+          <Users size={11} />
+          {present === 1 ? 'Just you here' : `${present} here`}
         </p>
       )}
 

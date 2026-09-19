@@ -1,4 +1,5 @@
 import { supabase, hasSupabase } from '../config/supabase'
+import { PAGE_SIZE, hasMoreBefore } from '../utils/chatPaging'
 
 /**
  * Reading and writing the chat.
@@ -10,10 +11,6 @@ import { supabase, hasSupabase } from '../config/supabase'
  * places on purpose, and the asymmetry is the security model rather than an
  * accident of how it grew.
  */
-
-/** How much history a visitor arrives to. Enough to have a conversation to
- *  read, short enough that the first paint is not a scroll through a week. */
-export const PAGE_SIZE = 50
 
 /*
  * Messages carry an address; names and avatars live on the profile it points
@@ -43,10 +40,10 @@ function toMessage(row) {
  * Fetched newest-first because that is what the index is for and what a limit
  * of fifty should mean, then reversed, because a conversation reads downward.
  */
-export async function fetchRecentMessages({ room, limit = PAGE_SIZE } = {}) {
-  if (!hasSupabase) return []
+export async function fetchMessagePage({ room, before = null, limit = PAGE_SIZE } = {}) {
+  if (!hasSupabase) return { messages: [], hasMore: false }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('messages')
     .select(MESSAGE_FIELDS)
     .eq('room', room)
@@ -54,8 +51,16 @@ export async function fetchRecentMessages({ room, limit = PAGE_SIZE } = {}) {
     .order('created_at', { ascending: false })
     .limit(limit)
 
+  // Exclusive, so the message the cursor came from is not returned again. An
+  // inclusive bound would refetch the same page forever, and the merge would
+  // hide it by absorbing the duplicate.
+  if (before) query = query.lt('created_at', before)
+
+  const { data, error } = await query
   if (error) throw new Error(error.message)
-  return (data || []).map(toMessage).reverse()
+
+  const rows = data || []
+  return { messages: rows.map(toMessage).reverse(), hasMore: hasMoreBefore(rows, limit) }
 }
 
 /** One message with its author attached, by id. */
@@ -163,5 +168,49 @@ export async function removeMessage(id) {
   if (!res.ok) {
     const payload = await res.json().catch(() => ({}))
     throw new Error(payload.error || 'That message could not be removed.')
+  }
+}
+
+/**
+ * Who else is in this room.
+ *
+ * Supabase's presence, which is held by the realtime connection rather than in
+ * a table - so it needs no schema, and a browser that closes drops out of it
+ * without anything having to notice.
+ *
+ * A count, and nothing more. Presence could carry the address of everyone
+ * signed in, and showing that would say which wallets are reading a chat about
+ * what to buy - to anyone with the anon key, which is everyone. A number
+ * answers "is anyone here" without answering "who".
+ *
+ * The key is random per tab rather than per wallet, deliberately: keying by
+ * address would both publish the address and make one person on two devices
+ * count once.
+ *
+ * @param {{ room: string, onCount: (count: number) => void }} handlers
+ * @returns {() => void} unsubscribe
+ */
+export function subscribeToPresence({ room, onCount }) {
+  if (!hasSupabase) return () => {}
+
+  const channel = supabase.channel(`chat-presence-${room}`, {
+    config: { presence: { key: crypto.randomUUID() } },
+  })
+
+  const report = () => onCount(Object.keys(channel.presenceState()).length)
+
+  channel
+    .on('presence', { event: 'sync' }, report)
+    .on('presence', { event: 'join' }, report)
+    .on('presence', { event: 'leave' }, report)
+    .subscribe((status) => {
+      // Tracked only once the channel is actually joined; calling track before
+      // that is dropped, and the tab would be counted by nobody including
+      // itself.
+      if (status === 'SUBSCRIBED') channel.track({ at: Date.now() })
+    })
+
+  return () => {
+    supabase.removeChannel(channel)
   }
 }
