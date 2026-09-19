@@ -57,7 +57,7 @@ export default function MobileBottomNav({
           <div className="mobile-nav-icon-wrapper">
             <MessagesSquare size={22} />
           </div>
-          <span className="mobile-nav-label">Lounge</span>
+          <span className="mobile-nav-label">Chat</span>
         </button>
       )}
 

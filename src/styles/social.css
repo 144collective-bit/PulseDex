@@ -32,6 +32,52 @@
   color: var(--text-secondary);
 }
 
+/* Rooms beside the conversation. */
+.social-body {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.room-list ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.room-item {
+  width: 100%;
+  text-align: left;
+  display: block;
+  padding: 8px 11px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.room-item:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+.room-item.active {
+  background: var(--pulse-cyan-bg);
+  border-color: var(--border-active);
+  color: var(--pulse-cyan);
+}
+
+.room-name {
+  letter-spacing: 0.02em;
+}
+
 .social-panel {
   display: flex;
   flex-direction: column;
@@ -288,7 +334,38 @@
   margin-left: auto;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 760px) {
+  /*
+   * The rooms go along the top on a narrow screen, not down the side.
+   *
+   * A 170px column out of 375px is nearly half the width, and the thing being
+   * squeezed is the conversation - the part people came for. A scrolling strip
+   * costs one row of height instead.
+   */
+  .social-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .room-list ul {
+    flex-direction: row;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    /* No scrollbar track eating a few pixels on the platforms that show one
+       permanently; the overflow is discoverable by dragging. */
+    scrollbar-width: none;
+  }
+
+  .room-list ul::-webkit-scrollbar {
+    display: none;
+  }
+
+  .room-item {
+    white-space: nowrap;
+    padding: 6px 12px;
+    border: 1px solid var(--border-subtle);
+  }
+
   .social-view {
     padding: 10px;
   }

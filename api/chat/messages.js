@@ -8,6 +8,7 @@ import {
   REJECTED,
 } from '../../src/utils/chatMessage.js'
 import { parseAdminAddresses, isAdminAddress } from '../../src/utils/chatAdmin.js'
+import { isRoom } from '../../src/config/rooms.js'
 import {
   exceededLimit,
   retryAfterSeconds,
@@ -105,6 +106,31 @@ async function post(req, res) {
     return res.status(400).json({ error: REFUSALS[message.reason] || 'That message cannot be posted.' })
   }
 
+  /*
+   * The room is checked against the list, not merely against the slug shape.
+   *
+   * It arrives in a request body, and a body is whatever the sender decided to
+   * send. A slug that only satisfies the database's shape constraint would
+   * create a room that exists in the data and nowhere in the app: absent from
+   * the sidebar, unreachable by navigation, and so unmoderatable through the
+   * interface built to moderate it.
+   *
+   * Refused rather than redirected into the default. A post is a write, and
+   * quietly filing somebody's message somewhere other than where they aimed it
+   * is worse than telling them it did not go.
+   */
+  const room = req.body?.room
+  if (!isRoom(room)) {
+    return res.status(400).json({ error: 'That room does not exist.' })
+  }
+
+  /*
+   * Counted across every room, not per room.
+   *
+   * The limit exists to stop one wallet making the chat unreadable, and five
+   * rooms would otherwise multiply the allowance by five - the same flood,
+   * spread out, which is no better for anyone trying to read.
+   */
   const since = new Date(Date.now() - LONGEST_WINDOW_MS).toISOString()
   const recent = await db
     .from('messages')
@@ -157,8 +183,8 @@ async function post(req, res) {
 
   const inserted = await db
     .from('messages')
-    .insert({ address, body: message.body })
-    .select('id, address, body, created_at')
+    .insert({ address, room, body: message.body })
+    .select('id, address, room, body, created_at')
     .single()
 
   if (inserted.error) {

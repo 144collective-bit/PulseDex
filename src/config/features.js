@@ -76,7 +76,7 @@ export const FEATURES = {
    *  so this is off - two independent reasons nothing here can move funds. */
   dexSwapLive: false,
 
-  /** The social page: one chat room, open to read, wallet signature to post.
+  /** The social page: a few chat rooms, open to read, wallet signature to post.
    *
    *  Needs a database, unlike everything else here. With the Supabase
    *  variables unset the page says chat is not configured on this deployment

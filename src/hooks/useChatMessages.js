@@ -21,8 +21,14 @@ export const CHAT_STATUS = {
  * and a chat that shows your message twice looks broken in a way that makes
  * people stop trusting the rest of it. Everything here is keyed by id and
  * merged rather than appended.
+ *
+ * Scoped to one room, and re-run from scratch when it changes: both the query
+ * and the realtime subscription are filtered server-side, so reading a quiet
+ * room costs nothing when a busy one is active.
+ *
+ * @param {string} room slug from src/config/rooms.js
  */
-export function useChatMessages() {
+export function useChatMessages(room) {
   const [messages, setMessages] = useState([])
   const [status, setStatus] = useState(
     hasSupabase ? CHAT_STATUS.loading : CHAT_STATUS.unconfigured,
@@ -58,7 +64,7 @@ export function useChatMessages() {
 
     let active = true
 
-    fetchRecentMessages()
+    fetchRecentMessages({ room })
       .then((history) => {
         if (!active) return
         merge(history)
@@ -77,6 +83,7 @@ export function useChatMessages() {
      * merge makes the overlap harmless.
      */
     const unsubscribe = subscribeToMessages({
+      room,
       onMessage: (message) => {
         if (active) merge([message])
       },
@@ -89,7 +96,7 @@ export function useChatMessages() {
       active = false
       unsubscribe()
     }
-  }, [merge, forget])
+  }, [room, merge, forget])
 
   return {
     messages,

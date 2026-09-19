@@ -186,7 +186,7 @@ export default function Navbar({
                 onClick={() => setActiveTab('social')}
               >
                 <MessagesSquare size={16} />
-                <span>Lounge</span>
+                <span>Chat</span>
               </button>
             )}
             {FEATURES.markets && (
