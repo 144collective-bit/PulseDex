@@ -133,8 +133,15 @@ export function subscribeToMessages({ room, onMessage, onRemoved, onReaction }) 
    * anyone reading a quiet one - which is the whole reason to filter here
    * rather than subscribing to everything and discarding what does not match.
    */
+  /*
+   * The room, plus something unique. Two different rooms never collided, but
+   * leaving one and returning to it does: the panel remounts, and
+   * `removeChannel` is asynchronous, so the new subscription can be created
+   * while the old one is still leaving. Names are per-connection and every
+   * channel shares one websocket, so uniqueness is free.
+   */
   const channel = supabase
-    .channel(`chat-messages-${room}`)
+    .channel(`chat-messages-${room}-${crypto.randomUUID()}`)
     .on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'messages', filter: `room=eq.${room}` },
@@ -306,7 +313,7 @@ export async function removeMessage(id) {
 export function subscribeToPresence({ room, onCount }) {
   if (!hasSupabase) return () => {}
 
-  const channel = supabase.channel(`chat-presence-${room}`, {
+  const channel = supabase.channel(`chat-presence-${room}-${crypto.randomUUID()}`, {
     config: { presence: { key: crypto.randomUUID() } },
   })
 
