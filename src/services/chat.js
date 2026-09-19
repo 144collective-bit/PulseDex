@@ -21,7 +21,7 @@ export const PAGE_SIZE = 50
  * alternative, resolving names separately, is a request per author on first
  * paint.
  */
-const MESSAGE_FIELDS = 'id, address, body, created_at, profiles ( handle, avatar_id )'
+const MESSAGE_FIELDS = 'id, address, room, body, created_at, profiles ( handle, avatar_id )'
 
 /** Flatten the joined row into something a component can render without
  *  knowing the shape of the query that produced it. */
@@ -29,6 +29,7 @@ function toMessage(row) {
   return {
     id: row.id,
     address: row.address,
+    room: row.room,
     body: row.body,
     createdAt: row.created_at,
     handle: row.profiles?.handle || null,
@@ -42,12 +43,13 @@ function toMessage(row) {
  * Fetched newest-first because that is what the index is for and what a limit
  * of fifty should mean, then reversed, because a conversation reads downward.
  */
-export async function fetchRecentMessages({ limit = PAGE_SIZE } = {}) {
+export async function fetchRecentMessages({ room, limit = PAGE_SIZE } = {}) {
   if (!hasSupabase) return []
 
   const { data, error } = await supabase
     .from('messages')
     .select(MESSAGE_FIELDS)
+    .eq('room', room)
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .limit(limit)
@@ -84,14 +86,21 @@ async function fetchMessage(id) {
  *
  * @param {{ onMessage: (message: object) => void, onRemoved: (id: number) => void }} handlers
  */
-export function subscribeToMessages({ onMessage, onRemoved }) {
+export function subscribeToMessages({ room, onMessage, onRemoved }) {
   if (!hasSupabase) return () => {}
 
+  /*
+   * One channel per room, named after it.
+   *
+   * The filter is applied by the server, so a busy room costs nothing to
+   * anyone reading a quiet one - which is the whole reason to filter here
+   * rather than subscribing to everything and discarding what does not match.
+   */
   const channel = supabase
-    .channel('chat-messages')
+    .channel(`chat-messages-${room}`)
     .on(
       'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'messages' },
+      { event: 'INSERT', schema: 'public', table: 'messages', filter: `room=eq.${room}` },
       async (payload) => {
         const message = await fetchMessage(payload.new.id)
         if (message) onMessage(message)
@@ -99,7 +108,7 @@ export function subscribeToMessages({ onMessage, onRemoved }) {
     )
     .on(
       'postgres_changes',
-      { event: 'UPDATE', schema: 'public', table: 'messages' },
+      { event: 'UPDATE', schema: 'public', table: 'messages', filter: `room=eq.${room}` },
       (payload) => {
         if (payload.new.deleted_at) onRemoved(payload.new.id)
       },
@@ -120,14 +129,14 @@ export function subscribeToMessages({ onMessage, onRemoved }) {
  * sent at all - it comes from the sign-in cookie, and a body that could name
  * its own author would let anyone post as anyone.
  */
-export async function postMessage({ body, handle, avatarId }) {
+export async function postMessage({ room, body, handle, avatarId }) {
   const res = await fetch('/api/chat/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     // Sends the session cookie on a same-origin request, which is the only
     // kind this endpoint accepts.
     credentials: 'same-origin',
-    body: JSON.stringify({ body, handle, avatarId }),
+    body: JSON.stringify({ room, body, handle, avatarId }),
   })
 
   const payload = await res.json().catch(() => ({}))

@@ -15,7 +15,7 @@ const COUNTER_APPEARS_AT = MAX_MESSAGE_LENGTH - 100
  * is here rather than over the whole page because a conversation nobody can
  * read until they connect a wallet is a conversation nobody joins.
  */
-export default function ChatComposer({ onPosted }) {
+export default function ChatComposer({ room, onPosted }) {
   const { isSignedIn, isBusy, signIn } = useSiweAuth()
   const { profile } = useUserProfile()
 
@@ -36,6 +36,7 @@ export default function ChatComposer({ onPosted }) {
 
     try {
       const message = await postMessage({
+        room,
         body: draft,
         handle: profile.displayName,
         avatarId: profile.avatarId,

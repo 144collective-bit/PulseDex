@@ -1,0 +1,142 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Loader2, AlertTriangle } from 'lucide-react'
+import ChatMessageRow from './ChatMessageRow'
+import ChatComposer from './ChatComposer'
+import { useChatMessages, CHAT_STATUS } from '../../hooks/useChatMessages'
+import { useIsModerator } from '../../hooks/useIsModerator'
+import { useSiweAuth } from '../../context/SiweAuthContext'
+import { removeMessage } from '../../services/chat'
+
+/** Close enough to the bottom that the reader is following along rather than
+ *  reading back through history. */
+const FOLLOWING_THRESHOLD_PX = 120
+
+/**
+ * One room's conversation.
+ *
+ * Split out from the page so it can be mounted with the room as its `key`.
+ * That is the whole reason this file exists: switching rooms then throws this
+ * component away and builds a new one, and every piece of state in it - the
+ * messages, the scroll position, whether the reader is following the live end,
+ * a failed removal - starts empty because it is new, rather than because
+ * something remembered to clear it.
+ *
+ * The alternative was resetting each of those when the room changed, which
+ * works right up until someone adds a sixth piece of state and forgets. A
+ * conversation is not the same conversation when the room changes, and saying
+ * so to React is cheaper than maintaining the list.
+ */
+export default function RoomPanel({ room }) {
+  const { account } = useSiweAuth()
+  const isModerator = useIsModerator()
+  const { messages, status, error, add, remove } = useChatMessages(room)
+
+  const scroller = useRef(null)
+  const [following, setFollowing] = useState(true)
+  const [removeError, setRemoveError] = useState(null)
+
+  /*
+   * Follow the conversation, unless the reader has scrolled away from it.
+   *
+   * Yanking someone back to the bottom while they are reading what was said
+   * ten minutes ago is the single most irritating thing a chat does, and it
+   * happens every time somebody else types.
+   */
+  useEffect(() => {
+    if (!following) return
+    const el = scroller.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [messages, following])
+
+  const onScroll = useCallback(() => {
+    const el = scroller.current
+    if (!el) return
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    setFollowing(distanceFromBottom < FOLLOWING_THRESHOLD_PX)
+  }, [])
+
+  const onRemove = useCallback(
+    async (id) => {
+      setRemoveError(null)
+      /*
+       * Taken off the screen before the request answers. The realtime feed
+       * will say the same thing a moment later and the merge ignores the
+       * repeat; if the request fails, the message comes back on the next
+       * load, which is the right way round - a moderator seeing a removal
+       * they have to redo beats one believing something is gone when it is
+       * still on everybody else's screen.
+       */
+      remove(id)
+      try {
+        await removeMessage(id)
+      } catch (err) {
+        setRemoveError(err.message)
+      }
+    },
+    [remove],
+  )
+
+  if (status === CHAT_STATUS.unconfigured) {
+    return <Notice icon={AlertTriangle}>Chat is not configured on this deployment yet.</Notice>
+  }
+
+  if (status === CHAT_STATUS.loading) {
+    return (
+      <Notice icon={Loader2} spinning>
+        Loading the conversation
+      </Notice>
+    )
+  }
+
+  if (status === CHAT_STATUS.failed) {
+    return <Notice icon={AlertTriangle}>{error || 'The chat could not be loaded.'}</Notice>
+  }
+
+  return (
+    <>
+      <div className="chat-scroll" ref={scroller} onScroll={onScroll}>
+        {messages.length === 0 ? (
+          <p className="chat-empty">Nobody has said anything here yet. Go first.</p>
+        ) : (
+          messages.map((message) => (
+            <ChatMessageRow
+              key={message.id}
+              message={message}
+              isOwn={Boolean(account) && message.address === account.toLowerCase()}
+              canRemove={isModerator}
+              onRemove={onRemove}
+            />
+          ))
+        )}
+      </div>
+
+      {!following && messages.length > 0 && (
+        <button
+          type="button"
+          className="chat-jump font-mono"
+          onClick={() => setFollowing(true)}
+        >
+          Jump to latest
+        </button>
+      )}
+
+      {removeError && (
+        <p className="chat-error" role="alert">
+          {removeError}
+        </p>
+      )}
+
+      <ChatComposer room={room} onPosted={add} />
+    </>
+  )
+}
+
+/** The three states that are not a conversation, said the same way. */
+function Notice({ icon: Icon, spinning = false, children }) {
+  return (
+    <p className="chat-notice">
+      <Icon size={15} className={spinning ? 'chat-spin' : undefined} />
+      <span>{children}</span>
+    </p>
+  )
+}
