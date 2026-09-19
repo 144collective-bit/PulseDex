@@ -36,9 +36,9 @@ jobs:
       github.event.pull_request.head.repo.full_name != github.repository
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           # From .nvmrc, so the version lives in one place. It tracks the
           # Vercel project's Node setting - a build that passes here on a
