@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { chromium } from 'playwright-core'
 
 /**
@@ -40,9 +41,20 @@ const PEOPLE = Array.from({ length: 20 }, (_, i) => ({
   created_at: '2025-01-01T00:00:00.000Z',
 }))
 
+/*
+ * Where Chromium is.
+ *
+ * Two environments, two answers. A sandbox has one pre-installed at a fixed
+ * path and no way to download another; CI runs `playwright install`, which
+ * puts it where Playwright looks by default. Pinning the sandbox path
+ * unconditionally is why this could not run on GitHub at all - so the path is
+ * used only when something is actually there, and otherwise Playwright is left
+ * to find its own.
+ */
+const SANDBOX_CHROMIUM = process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome'
+
 const browser = await chromium.launch({
-  // Overridable, because this path belongs to one environment and nobody else's.
-  executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+  ...(existsSync(SANDBOX_CHROMIUM) ? { executablePath: SANDBOX_CHROMIUM } : {}),
   args: ['--no-sandbox'],
 })
 

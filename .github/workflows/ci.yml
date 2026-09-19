@@ -72,3 +72,36 @@ jobs:
       - run: npm test
 
       - run: npm run build
+
+      # And then open it.
+      #
+      # The five checks above never render a page: lint reads syntax, check:api
+      # imports handlers without calling them, the suite runs pure functions,
+      # and the build only compiles. A tab that throws on mount - or one whose
+      # code fails to arrive at all - passes every one of them and shows the
+      # reader a white screen. That has now happened in production twice.
+      #
+      # Supabase is answered by the harness rather than reached, so this needs
+      # no credentials. The mock URL still has to be set at build time: without
+      # it `hasSupabase` is false, the app asks for nothing, and the social
+      # surfaces measure as perfect while proving nothing.
+      # playwright-core, not playwright: the harness drives a browser and needs
+      # nothing else from the package. --with-deps because a bare runner is
+      # missing the shared libraries Chromium links against.
+      - name: Install Chromium
+        run: npx playwright-core install --with-deps chromium
+
+      - name: Build and open the app in a browser
+        env:
+          VITE_SUPABASE_URL: https://mock.supabase.co
+          VITE_SUPABASE_ANON_KEY: mock
+        run: |
+          npm run build
+          npx vite preview --port 4317 --host 127.0.0.1 &
+          # Wait for the preview server rather than sleeping at it. A fixed
+          # sleep is either too short on a slow runner or wasted on a fast one.
+          for i in $(seq 1 60); do
+            curl -sf -o /dev/null http://127.0.0.1:4317/ && break
+            sleep 1
+          done
+          npm run smoke:browser -- http://127.0.0.1:4317

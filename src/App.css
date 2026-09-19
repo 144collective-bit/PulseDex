@@ -14963,3 +14963,90 @@ a.wallet-option-item {
   gap: 9px;
   flex-wrap: wrap;
 }
+
+/* ===========================================================
+   Route error boundary
+   What a failed tab looks like instead of a white screen. Sized
+   and coloured like the other empty states rather than like an
+   alert: nothing here is the reader's fault, and most of the
+   time a reload is the whole fix.
+   =========================================================== */
+.route-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 340px;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.route-error-icon {
+  color: var(--pulse-amber, #ffb020);
+  opacity: 0.9;
+}
+
+.route-error-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.route-error-body {
+  margin: 0;
+  max-width: 420px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.route-error-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.route-error-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  border-radius: 8px;
+  background: rgba(0, 229, 255, 0.08);
+  color: var(--pulse-cyan);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.route-error-btn:hover {
+  background: rgba(0, 229, 255, 0.14);
+  border-color: rgba(0, 229, 255, 0.55);
+}
+
+.route-error-btn.is-quiet {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+}
+
+.route-error-btn.is-quiet:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.route-error-detail {
+  margin: 4px 0 0;
+  max-width: 480px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--text-tertiary, rgba(255, 255, 255, 0.35));
+  word-break: break-word;
+}
