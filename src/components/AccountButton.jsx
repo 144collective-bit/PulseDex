@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { User, LogOut, Loader2, Copy, Check, ExternalLink, IdCard } from 'lucide-react'
+import { User, LogOut, Loader2, Copy, Check, ExternalLink, IdCard, UserRound } from 'lucide-react'
 import { useSiweAuth, AUTH_STATUS } from '../context/SiweAuthContext'
 import { formatAddress } from '../utils/formatters'
 import { avatarAccent } from '../utils/tokenImage'
@@ -19,8 +19,15 @@ const LABEL = {
  * Signed out it invites sign-in; signed in it becomes the identity and the way
  * into the profile. One button either way, because a header that offers both
  * "sign in" and "profile" is asking the user to work out which one they are.
+ *
+ * Two profile items, not one, and they are different places. The public page
+ * is what everybody else sees - the posts, the bio, the linked accounts.
+ * Settings is where it is edited, along with slippage and theme, which nobody
+ * else ever sees. Before this the menu said "Profile" and meant settings, so
+ * the public page shipped with no route to it at all: reachable only by
+ * clicking somebody else's face in the chat, and never your own.
  */
-export default function AccountButton({ onOpenProfile }) {
+export default function AccountButton({ onOpenProfile, onOpenPublicProfile }) {
   const { status, account, error, signIn, signOut, isBusy } = useSiweAuth()
   const { profile } = useUserProfile()
 
@@ -123,6 +130,20 @@ export default function AccountButton({ onOpenProfile }) {
             <span>{copied ? 'Address copied' : 'Copy address'}</span>
           </button>
 
+          {/* First, and above settings, because it is the one somebody is
+              looking for when they think "my profile". */}
+          <button
+            type="button"
+            className="account-menu-item"
+            onClick={() => {
+              setOpen(false)
+              onOpenPublicProfile?.()
+            }}
+          >
+            <UserRound size={14} />
+            <span>My public profile</span>
+          </button>
+
           <button
             type="button"
             className="account-menu-item"
@@ -132,7 +153,7 @@ export default function AccountButton({ onOpenProfile }) {
             }}
           >
             <IdCard size={14} />
-            <span>Profile</span>
+            <span>Profile settings</span>
           </button>
 
           <a

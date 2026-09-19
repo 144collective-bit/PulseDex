@@ -28,6 +28,7 @@ export default function Navbar({
   onSelectPair,
   watchlistCount = 0,
   onOpenWalletModal,
+  onOpenPublicProfile,
 }) {
   const { address, isConnected } = useAccount()
   const { disconnect } = useDisconnect()
@@ -289,7 +290,10 @@ export default function Navbar({
               becomes the identity and the way into the profile. The $DEX buy
               button that used to sit here is gone until there is a token to
               buy - it was advertising a purchase nobody can make. */}
-          <AccountButton onOpenProfile={() => setActiveTab('profile')} />
+          <AccountButton
+            onOpenProfile={() => setActiveTab('profile')}
+            onOpenPublicProfile={onOpenPublicProfile}
+          />
 
 
 

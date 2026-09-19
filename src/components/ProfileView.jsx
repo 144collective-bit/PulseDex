@@ -4,7 +4,7 @@ import {
   ShieldCheck, Volume2, VolumeX, Eye, EyeOff,
   Zap, CheckCircle2, Radio,
   FileText, Mail, Camera, Loader2, Trash2, Lock,
-  Link2, MessagesSquare,
+  Link2, MessagesSquare, UserRound,
 } from 'lucide-react'
 import { useUserProfile } from '../context/UserProfileContext'
 import { useSiweAuth } from '../context/SiweAuthContext'
@@ -119,7 +119,7 @@ function SectionCard({ icon: Icon, iconColor = 'var(--pulse-cyan)', title, subti
   )
 }
 
-export default function ProfileView() {
+export default function ProfileView({ onOpenPublicProfile }) {
   // Wallet sign-in replaced the password vault. The rest of this view still
   // reads from the local profile store; wiring it to the backend is the next
   // step, so `currentUser` is shaped from the session for now.
@@ -443,6 +443,15 @@ export default function ProfileView() {
               )}
             </div>
           </div>
+          {/* The round trip closed. These settings produce a page, and until
+              now nothing on this screen said so or led to it. */}
+          {isAuthenticated && onOpenPublicProfile && (
+            <button type="button" className="profile-view-public" onClick={onOpenPublicProfile}>
+              <UserRound size={13} />
+              View my public profile
+            </button>
+          )}
+
           <div className="profile-hero-actions">
             {!isAuthenticated ? (
               <button className="btn-sm btn-glow-pulse" onClick={() => openAuthModal('signin')}><LogIn size={13} />Sign In</button>

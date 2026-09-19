@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react'
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
 import { WagmiProvider } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { wagmiConfig } from './config/wagmi'
@@ -161,6 +161,18 @@ function MainApp() {
    * normal but did nothing at all once a token was open - the tab state changed
    * underneath while the token page stayed mounted on top.
    */
+  /*
+   * Your own public page.
+   *
+   * Opened by address rather than by handle, deliberately: this is the one
+   * link that has to work before somebody has chosen a name, which is exactly
+   * the state a new account is in when it goes looking for its own profile.
+   * The page itself resolves the handle and shows it.
+   */
+  const openMyProfile = useCallback(() => {
+    if (account) openProfile({ address: account })
+  }, [account, openProfile])
+
   const selectTab = (tab) => {
     closeToken()
     // Same reasoning for the profile page: it gates the content area too, so
@@ -274,6 +286,7 @@ function MainApp() {
       <Navbar
         activeTab={activeTab}
         setActiveTab={selectTab}
+        onOpenPublicProfile={openMyProfile}
         onSelectPair={handleSelectPair}
         watchlistCount={watchlist.length}
         onOpenWalletModal={() => setShowWalletModal(true)}
@@ -295,6 +308,7 @@ function MainApp() {
             route={profileRoute}
             onOpenProfile={openProfile}
             onClose={closeProfile}
+            onEditProfile={() => selectTab('profile')}
           />
         ) : tokenAddress ? (
           <TokenPage
@@ -431,7 +445,9 @@ function MainApp() {
           />
         )}
 
-        {FEATURES.profile && activeTab === 'profile' && <ProfileView />}
+        {FEATURES.profile && activeTab === 'profile' && (
+          <ProfileView onOpenPublicProfile={openMyProfile} />
+        )}
 
         </>
         )}
