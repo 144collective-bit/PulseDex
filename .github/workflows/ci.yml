@@ -1,0 +1,60 @@
+# What a clean checkout has to survive before it reaches pulsedex.net.
+#
+# Every step here is a command a contributor already runs locally. The point of
+# running them again on GitHub is the "clean checkout" part: this repository has
+# already shipped a package-lock.json that `npm install` quietly rewrote on
+# every machine and that `npm ci` refused outright, which is invisible until
+# something starts from nothing. This does, on every push.
+#
+# Vercel builds and deploys on its own, from its GitHub integration. It is not
+# waiting on this workflow and will not be blocked by it - a red run here means
+# the commit is broken, not that the deploy was stopped.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+# A newer push to the same branch makes the run in flight pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: install, lint, test, build
+    runs-on: ubuntu-latest
+
+    # Pushing a branch in this repository already triggers this workflow, so
+    # opening a pull request from that branch would only run it a second time
+    # on the same commits. A fork cannot push here, so its pull request is the
+    # one case that needs the pull_request event.
+    if: >-
+      github.event_name == 'push' ||
+      github.event.pull_request.head.repo.full_name != github.repository
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          # From .nvmrc, so the version lives in one place. It tracks the
+          # Vercel project's Node setting - a build that passes here on a
+          # different major than production proves less than it appears to.
+          node-version-file: .nvmrc
+          cache: npm
+
+      # ci, not install: it installs exactly what the lockfile says and fails
+      # if package.json disagrees with it, which is the check that was missing.
+      - run: npm ci
+
+      - run: npm run lint
+
+      # Exits non-zero on an unhandled rejection as well as a failed
+      # assertion, which is deliberate - the suite has been green and broken
+      # at the same time before.
+      - run: npm test
+
+      - run: npm run build

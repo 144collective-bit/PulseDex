@@ -1,0 +1,27 @@
+# Dependency updates, batched rather than one pull request per package.
+#
+# The tree behind wagmi and viem is large enough that ungrouped updates would
+# open a dozen pull requests a week and get ignored, which is the failure mode
+# this is meant to avoid: `npm audit` currently reports ten advisories, and the
+# reason they went unnoticed is that nothing was watching.
+
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # One pull request for everything that should not break anything. A
+      # major goes on its own, where it can be read.
+      non-major:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
