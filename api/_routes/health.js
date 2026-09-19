@@ -73,6 +73,7 @@ export default async function handler(req, res) {
     checks.push(await query(db, 'blocked-table', 'blocked', 'address'))
     checks.push(await query(db, 'reports-table', 'post_reports', 'id'))
     checks.push(await query(db, 'reactions-table', 'message_reactions', 'emoji'))
+    checks.push(await query(db, 'follows-table', 'follows', 'follower'))
   }
 
   const ok = checks.every((check) => check.ok)

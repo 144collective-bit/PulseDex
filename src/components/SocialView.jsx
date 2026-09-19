@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { MessagesSquare, Rss } from 'lucide-react'
 import RoomList from './social/RoomList'
 import RoomPanel from './social/RoomPanel'
-import FeedPanel from './social/FeedPanel'
+import PublicFeed from './social/PublicFeed'
 import { findRoom } from '../config/rooms'
 import '../styles/social.css'
 
@@ -62,7 +62,7 @@ export default function SocialView({ onOpenProfile }) {
           aria-labelledby={`room-tab-${view}`}
         >
           {onFeed ? (
-            <FeedPanel onOpenProfile={onOpenProfile} />
+            <PublicFeed onOpenProfile={onOpenProfile} />
           ) : (
             /*
               Keyed by the room, so changing rooms remounts rather than

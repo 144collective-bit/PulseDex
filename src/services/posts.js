@@ -27,6 +27,9 @@ function toPost(row) {
     handle: row.profiles?.handle || null,
     avatarId: row.profiles?.avatar_id || null,
     avatarUrl: row.profiles?.avatar_url || null,
+    // Null for a top-level post, the parent's id for a reply. The feed shows
+    // only the former; a profile's Replies tab shows only the latter.
+    parentId: row.parent_id || null,
   }
 }
 
@@ -40,8 +43,18 @@ function toPost(row) {
  *
  * @param {{ author?: string|null, before?: string|null, limit?: number }} options
  */
-export async function fetchPostPage({ author = null, before = null, limit = PAGE_SIZE } = {}) {
+export async function fetchPostPage({
+  author = null,
+  authors = null,
+  before = null,
+  limit = PAGE_SIZE,
+  replies = false,
+} = {}) {
   if (!hasSupabase) return { posts: [], hasMore: false }
+
+  // A following feed with nobody followed is empty, and saying so here saves
+  // a query that would ask the database for posts by no one.
+  if (authors && authors.length === 0) return { posts: [], hasMore: false }
 
   let query = supabase
     .from('posts')
@@ -50,7 +63,17 @@ export async function fetchPostPage({ author = null, before = null, limit = PAGE
     .order('created_at', { ascending: false })
     .limit(limit)
 
+  /*
+   * Top level only, unless replies were asked for.
+   *
+   * Without this the feed would interleave replies with the posts they answer,
+   * which reads as the same thing said twice - and a profile would show
+   * somebody's half of ten conversations above the things they actually wrote.
+   */
+  query = replies ? query.not('parent_id', 'is', null) : query.is('parent_id', null)
+
   if (author) query = query.eq('address', author.toLowerCase())
+  if (authors) query = query.in('address', authors.map((a) => a.toLowerCase()))
 
   // Exclusive, so the post the cursor came from is not returned again. An
   // inclusive bound would refetch the same page forever, and the merge would
@@ -127,12 +150,14 @@ export function subscribeToPosts({ author = null, onPost, onRemoved }) {
  * cookie, and the name and picture from the profile that cookie identifies. A
  * body that could name its own author would let anyone post as anyone.
  */
-export async function createPost(body) {
+export async function createPost(body, parentId = null) {
   const res = await fetch('/api/posts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'same-origin',
-    body: JSON.stringify({ body }),
+    // `parentId` makes it a reply. Sent as null rather than omitted when there
+    // is none, so the endpoint reads one shape either way.
+    body: JSON.stringify({ body, parentId }),
   })
 
   const payload = await res.json().catch(() => ({}))
@@ -201,4 +226,63 @@ export async function fetchPostCount(address) {
 
   if (error) return 0
   return count || 0
+}
+
+/**
+ * The replies to one post, oldest first.
+ *
+ * Oldest first, unlike everything else here, because this is a conversation
+ * rather than a feed: replies are read in the order they were written, and the
+ * newest-first ordering that suits a timeline makes an exchange read backwards.
+ *
+ * Not paged. A post with more replies than fit in one request is a problem
+ * this site does not have yet, and the limit is high enough that hitting it
+ * means something worth designing for properly rather than adding a button to.
+ */
+export async function fetchReplies(parentId, limit = 100) {
+  if (!hasSupabase || !parentId) return []
+
+  const { data, error } = await supabase
+    .from('posts')
+    .select(POST_FIELDS)
+    .eq('parent_id', parentId)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: true })
+    .limit(limit)
+
+  if (error) throw new Error(error.message)
+  return (data || []).map(toPost)
+}
+
+/**
+ * How many replies each of these posts has.
+ *
+ * One query for the whole page rather than one per post: a feed of fifty would
+ * otherwise be fifty round trips to draw fifty numbers. Returns a Map from
+ * post id to count, and omits the posts with none - a caller reading a missing
+ * key as zero is correct and saves filling the map with zeroes.
+ */
+export async function fetchReplyCounts(postIds) {
+  const ids = (postIds || []).filter((id) => Number.isInteger(id))
+  if (!hasSupabase || ids.length === 0) return new Map()
+
+  /*
+   * The ids rather than a count per group, because PostgREST has no group-by.
+   * Capped at a page's worth of replies, which is the same reasoning as
+   * fetchReplies: past that the number stops being worth an exact answer.
+   */
+  const { data, error } = await supabase
+    .from('posts')
+    .select('parent_id')
+    .in('parent_id', ids)
+    .is('deleted_at', null)
+    .limit(1000)
+
+  if (error) return new Map()
+
+  const counts = new Map()
+  for (const row of data || []) {
+    counts.set(row.parent_id, (counts.get(row.parent_id) || 0) + 1)
+  }
+  return counts
 }

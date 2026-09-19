@@ -1373,3 +1373,370 @@
     opacity: 1;
   }
 }
+
+/* ==========================================================================
+   PROFILE PAGE - the layout every social profile settled on
+
+   Banner, avatar overlapping its lower edge, name and handle beneath, action
+   on the right at the avatar's height, then bio, metadata, counts, tabs.
+   Copied because people already know where to look: the eye lands on the
+   picture, reads right across the name, and the hand goes to where Follow has
+   always been.
+
+   The palette is this app's. A page that borrowed another product's colours
+   would read as an embed rather than as part of PulseDex.
+   ========================================================================== */
+
+.xp-head {
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 30%),
+    var(--ch-surface);
+  -webkit-backdrop-filter: blur(16px) saturate(130%);
+  backdrop-filter: blur(16px) saturate(130%);
+  box-shadow: var(--ch-lift);
+}
+
+/* Generated from the address, so every profile is distinguishable and nothing
+   had to be uploaded, moderated or taken down to make that true. */
+.xp-banner {
+  height: 132px;
+  background-blend-mode: overlay;
+}
+
+/*
+ * The avatar row.
+ *
+ * Pulled up over the banner with a negative margin, which is the whole trick
+ * of this layout: it ties the two bands together and gives the name somewhere
+ * to sit that is neither on the banner nor floating below it.
+ */
+.xp-identity {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 18px;
+  margin-top: -42px;
+}
+
+.xp-avatar {
+  /* A ring in the page background, so the avatar reads as sitting on top of
+     the banner rather than punched through it. */
+  border-radius: 50%;
+  padding: 4px;
+  background: var(--ch-solid);
+  line-height: 0;
+}
+
+.xp-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* Level with the avatar's lower half rather than its top, so the button
+     lines up with the name that follows instead of with the banner. */
+  padding-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.xp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 15px;
+  border-radius: var(--radius-full, 999px);
+  border: 1px solid var(--ch-hairline);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.xp-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.xp-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Not following yet: the filled, brand-gradient state, because this is the
+   one thing on the page we are inviting somebody to do. */
+.xp-btn.is-follow {
+  color: var(--bg-main);
+  background: linear-gradient(135deg, var(--pulse-cyan), var(--pulse-green));
+  border-color: transparent;
+  box-shadow: 0 0 14px rgba(0, 229, 255, 0.25);
+}
+
+.xp-btn.is-follow:hover:not(:disabled) {
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.4);
+}
+
+.xp-btn.is-danger {
+  color: var(--pulse-red, #f43f5e);
+  border-color: rgba(244, 63, 94, 0.3);
+  background: rgba(244, 63, 94, 0.1);
+}
+
+/*
+ * Following: reads as a state, and says "Unfollow" only on hover.
+ *
+ * The swap is why this pattern is everywhere. A button that says "Unfollow"
+ * at rest reads as an instruction - people unfollow by accident trying to
+ * confirm they are following. Saying "Following" answers the question, and the
+ * hover answers what pressing it would do.
+ */
+.xp-btn.is-following .xp-btn-hover {
+  display: none;
+}
+
+.xp-btn.is-following:hover:not(:disabled) {
+  color: var(--pulse-red, #f43f5e);
+  border-color: rgba(244, 63, 94, 0.4);
+  background: rgba(244, 63, 94, 0.1);
+}
+
+.xp-btn.is-following:hover:not(:disabled) .xp-btn-label {
+  display: none;
+}
+
+.xp-btn.is-following:hover:not(:disabled) .xp-btn-hover {
+  display: inline;
+}
+
+/* Hover does not exist on a phone, so there the button simply says what it
+   is and tapping it is the confirm dialog's job. */
+@media (hover: none) {
+  .xp-btn.is-following:hover .xp-btn-label {
+    display: inline;
+  }
+
+  .xp-btn.is-following:hover .xp-btn-hover {
+    display: none;
+  }
+}
+
+.xp-body {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px 18px 16px;
+}
+
+.xp-name {
+  margin: 0;
+  font-size: 21px;
+  letter-spacing: 0.01em;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+/*
+ * The address sits where a handle would on X, and is shown in full.
+ *
+ * A display name is chosen and a picture can be copied; on a site about which
+ * tokens to buy, being mistaken for somebody trusted is worth money. Half an
+ * address behind an ellipsis is exactly as forgeable as a name, so it wraps
+ * rather than truncating, and selects in one click.
+ */
+.xp-address {
+  margin: -4px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.xp-bio {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.xp-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.xp-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.xp-meta-item.is-link {
+  color: var(--pulse-cyan);
+  text-decoration: none;
+}
+
+.xp-meta-item.is-link:hover {
+  text-decoration: underline;
+}
+
+.xp-counts {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.xp-counts strong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+/* ── Tabs ── */
+
+/*
+ * Underlined, full width, evenly divided - the shape a tab bar has had since
+ * it moved onto phones. The active one carries a short bar rather than a full
+ * border, so the row still reads as one strip.
+ */
+.xp-tabs {
+  display: flex;
+  border-top: 1px solid var(--ch-hairline);
+}
+
+.xp-tab {
+  position: relative;
+  flex: 1;
+  padding: 13px 8px;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.xp-tab:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.xp-tab.active {
+  color: var(--text-primary);
+}
+
+.xp-tab.active::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: 52px;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(90deg, var(--pulse-cyan), var(--pulse-green));
+}
+
+.xp-tab-count {
+  margin-left: 6px;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* ── The feed's own tab strip ── */
+
+.feed-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==========================================================================
+   REPLIES
+   ========================================================================== */
+
+.feed-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Carries the count, so a post with a conversation under it says so without
+   being opened - which is what makes a feed worth scanning. */
+.feed-tool.is-reply {
+  width: auto;
+  gap: 5px;
+  padding: 0 8px;
+}
+
+.feed-tool.is-reply.is-open {
+  color: var(--pulse-cyan);
+  border-color: rgba(0, 229, 255, 0.35);
+  background: rgba(0, 229, 255, 0.1);
+}
+
+.feed-tool-count {
+  font-size: 10px;
+}
+
+.post-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* Indented and ruled, so the conversation reads as belonging to the post
+     above it rather than as more feed. */
+  margin-left: 18px;
+  padding-left: 14px;
+  border-left: 2px solid var(--ch-hairline);
+}
+
+.post-reply {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.post-reply > .feed-post,
+.post-reply > .feed-composer {
+  flex: 1;
+  min-width: 0;
+}
+
+.post-reply-mark {
+  margin-top: 16px;
+  color: var(--text-muted);
+  flex: 0 0 auto;
+}
+
+@media (max-width: 720px) {
+  .xp-banner {
+    height: 104px;
+  }
+
+  .xp-identity {
+    margin-top: -34px;
+    padding: 0 12px;
+  }
+
+  .xp-body {
+    padding: 12px;
+  }
+
+  /* The indent costs width a reply needs more than it needs the ruling. */
+  .post-thread {
+    margin-left: 0;
+    padding-left: 10px;
+  }
+
+  .post-reply-mark {
+    display: none;
+  }
+}

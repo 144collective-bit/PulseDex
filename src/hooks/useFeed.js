@@ -27,7 +27,7 @@ export const FEED_STATUS = {
  * @param {{ author?: string|null }} options an address to show one person's
  *   posts, or nothing for everybody's
  */
-export function useFeed({ author = null } = {}) {
+export function useFeed({ author = null, authors = null, replies = false } = {}) {
   const [posts, setPosts] = useState([])
   const [status, setStatus] = useState(
     hasSupabase ? FEED_STATUS.loading : FEED_STATUS.unconfigured,
@@ -48,6 +48,16 @@ export function useFeed({ author = null } = {}) {
   // from a URL as often as from a row, and the two casings are the same
   // account to everyone except a string compare.
   const wanted = author ? author.toLowerCase() : null
+
+  /*
+   * A stable key for the author list.
+   *
+   * `authors` is an array built by its caller, so it is a new object on every
+   * render and depending on it directly would tear down the subscription and
+   * refetch the feed continuously. The joined string changes only when the set
+   * actually changes.
+   */
+  const authorsKey = authors ? authors.join(',') : ''
 
   const merge = useCallback((incoming) => {
     const next = byId.current
@@ -82,7 +92,7 @@ export function useFeed({ author = null } = {}) {
     setPosts([])
     setStatus(FEED_STATUS.loading)
 
-    fetchPostPage({ author: wanted })
+    fetchPostPage({ author: wanted, authors, replies })
       .then((page) => {
         if (!active) return
         merge(page.posts)
@@ -106,7 +116,13 @@ export function useFeed({ author = null } = {}) {
       // page does not fetch every post by everybody else just to discard it.
       author: wanted,
       onPost: (post) => {
-        if (active) merge([post])
+        if (!active) return
+        // The subscription is every post. A feed of top-level posts must not
+        // take replies, a Replies tab must not take top-level posts, and a
+        // following feed must not take people who are not followed.
+        if (replies ? !post.parentId : post.parentId) return
+        if (authors && !authors.includes(post.address)) return
+        merge([post])
       },
       onRemoved: (id) => {
         if (active) forget(id)
@@ -134,7 +150,7 @@ export function useFeed({ author = null } = {}) {
 
     setLoadingOlder(true)
     try {
-      const page = await fetchPostPage({ author: wanted, before })
+      const page = await fetchPostPage({ author: wanted, authors, replies, before })
       merge(page.posts)
       setHasMore(page.hasMore)
     } catch (err) {
@@ -142,7 +158,7 @@ export function useFeed({ author = null } = {}) {
     } finally {
       setLoadingOlder(false)
     }
-  }, [wanted, hasMore, loadingOlder, merge])
+  }, [wanted, authorsKey, replies, hasMore, loadingOlder, merge])
 
   return {
     posts,
