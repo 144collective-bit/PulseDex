@@ -308,7 +308,6 @@ function MainApp() {
             route={profileRoute}
             onOpenProfile={openProfile}
             onClose={closeProfile}
-            onEditProfile={() => selectTab('profile')}
           />
         ) : tokenAddress ? (
           <TokenPage
@@ -423,7 +422,7 @@ function MainApp() {
         )}
 
         {FEATURES.social && activeTab === 'social' && (
-          <SocialView onOpenProfile={openProfile} onEditProfile={() => selectTab('profile')} />
+          <SocialView onOpenProfile={openProfile} />
         )}
 
         {FEATURES.markets && activeTab === 'markets' && (

@@ -11,9 +11,17 @@ import { MAX_AVATAR_BYTES } from '../../src/utils/avatarUpload.js'
  * sitting on a public CDN URL that the last person to see it can still open.
  */
 
-/** Public, so the CDN serves the file straight to an `<img>`. Nothing here is
- *  private: a profile picture is shown to everyone by definition. */
+/*
+ * Public, so the CDN serves the file straight to an `<img>`. Nothing here is
+ * private: a profile picture is shown to everyone by definition, and so is a
+ * banner.
+ *
+ * Two buckets rather than one with prefixes, so a size limit and an allowed
+ * type list can differ between them - a banner is legitimately several times
+ * an avatar, and one bucket would have to permit the larger for both.
+ */
 export const AVATAR_BUCKET = 'avatars'
+export const BANNER_BUCKET = 'banners'
 
 /*
  * Whether the bucket has been confirmed to exist on this instance.
@@ -23,7 +31,7 @@ export const AVATAR_BUCKET = 'avatars'
  * something that cannot change. Module scope, so it survives between
  * invocations on a warm instance and costs one call on a cold one.
  */
-let bucketReady = false
+const bucketsReady = new Set()
 
 /**
  * Make sure the bucket exists.
@@ -37,24 +45,24 @@ let bucketReady = false
  * An "already exists" answer is success. Two cold instances racing on a first
  * upload is the ordinary case, not an error.
  */
-async function ensureBucket(db) {
-  if (bucketReady) return
+async function ensureBucket(db, bucket, fileSizeLimit) {
+  if (bucketsReady.has(bucket)) return
 
-  const { error } = await db.storage.createBucket(AVATAR_BUCKET, {
+  const { error } = await db.storage.createBucket(bucket, {
     public: true,
     // Enforced by Storage as well as by decodeAvatar, so the limit holds even
     // if something reaches this bucket by a route that skipped the check.
-    fileSizeLimit: MAX_AVATAR_BYTES,
+    fileSizeLimit,
     allowedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
   })
 
   if (error && !/exists/i.test(error.message)) throw new Error(error.message)
-  bucketReady = true
+  bucketsReady.add(bucket)
 }
 
 /** Everything currently stored for one address. */
-async function existingObjects(db, address) {
-  const { data, error } = await db.storage.from(AVATAR_BUCKET).list(address)
+async function existingObjects(db, bucket, address) {
+  const { data, error } = await db.storage.from(bucket).list(address)
   if (error) return []
   return (data || []).map((entry) => `${address}/${entry.name}`)
 }
@@ -76,22 +84,27 @@ async function existingObjects(db, address) {
  * @param {{ bytes: Uint8Array, type: string, ext: string }} image
  * @returns {Promise<string>} the public URL
  */
-export async function storeAvatar(db, address, image) {
-  await ensureBucket(db)
+export async function storeImage(db, { bucket, address, image, maxBytes = MAX_AVATAR_BYTES }) {
+  await ensureBucket(db, bucket, maxBytes)
 
-  const previous = await existingObjects(db, address)
+  const previous = await existingObjects(db, bucket, address)
   const path = `${address}/${Date.now()}.${image.ext}`
 
   const { error } = await db.storage
-    .from(AVATAR_BUCKET)
+    .from(bucket)
     .upload(path, image.bytes, { contentType: image.type, upsert: false })
 
   if (error) throw new Error(error.message)
 
-  if (previous.length) await db.storage.from(AVATAR_BUCKET).remove(previous)
+  if (previous.length) await db.storage.from(bucket).remove(previous)
 
-  return db.storage.from(AVATAR_BUCKET).getPublicUrl(path).data.publicUrl
+  return db.storage.from(bucket).getPublicUrl(path).data.publicUrl
 }
+
+/** The avatar case, named, because three callers say it and none of them
+ *  should have to remember which bucket avatars live in. */
+export const storeAvatar = (db, address, image) =>
+  storeImage(db, { bucket: AVATAR_BUCKET, address, image })
 
 /**
  * Take an address's picture down: the files, then the column.
@@ -106,16 +119,22 @@ export async function storeAvatar(db, address, image) {
  * after deciding a picture should not exist, and "it already did not" is that
  * outcome rather than a problem.
  */
-export async function removeAvatar(db, address) {
-  await ensureBucket(db)
+export async function removeImage(db, { bucket, address, column, maxBytes = MAX_AVATAR_BYTES }) {
+  await ensureBucket(db, bucket, maxBytes)
 
-  const objects = await existingObjects(db, address)
-  if (objects.length) await db.storage.from(AVATAR_BUCKET).remove(objects)
+  const objects = await existingObjects(db, bucket, address)
+  if (objects.length) await db.storage.from(bucket).remove(objects)
 
   const { error } = await db
     .from('profiles')
-    .update({ avatar_url: null, updated_at: new Date().toISOString() })
+    .update({ [column]: null, updated_at: new Date().toISOString() })
     .eq('address', address)
 
   if (error) throw new Error(error.message)
 }
+
+/** Taking a picture down, named for the same reason as storeAvatar - and
+ *  because a block calls it, where getting the bucket wrong would mean a
+ *  silenced account keeping its face. */
+export const removeAvatar = (db, address) =>
+  removeImage(db, { bucket: AVATAR_BUCKET, address, column: 'avatar_url' })

@@ -1,6 +1,7 @@
-import { AlertTriangle, CalendarDays, ExternalLink, ImageOff, Loader2, Settings2, UserCheck, UserPlus } from 'lucide-react'
+import { AlertTriangle, CalendarDays, ExternalLink, ImageOff, Loader2, UserCheck, UserPlus } from 'lucide-react'
 import ChatAvatar from './ChatAvatar'
 import { useFollow } from '../../hooks/useFollow'
+import { isSafeAvatarSrc } from '../../utils/avatarImage'
 import { formatAddress, formatCompactCount } from '../../utils/formatters'
 
 /**
@@ -29,7 +30,6 @@ export default function ProfileHeader({
   replyCount,
   isMine,
   isModerator,
-  onEditProfile,
   onRemovePicture,
   tab,
   onTab,
@@ -37,12 +37,26 @@ export default function ProfileHeader({
   const { counts, following, canFollow, busy, error, toggle } = useFollow(address)
 
   const name = profile?.handle || formatAddress(address)
+  const uploaded = isSafeAvatarSrc(profile?.bannerUrl)
 
   return (
     <header className="xp-head">
-      {/* Derived from the address, so two profiles are never the same and
-          nothing had to be uploaded to make that true. */}
-      <div className="xp-banner" style={bannerStyle(address)} aria-hidden="true" />
+      {/*
+        An uploaded banner when there is one, a gradient drawn from the address
+        when there is not - so a profile that has never uploaded anything is
+        still distinguishable, and the upload is an upgrade rather than a
+        requirement.
+
+        Checked before it reaches a style, even though it came from our own
+        database: the column is readable with the anon key, and the cost of
+        checking is a regex against the cost of one bad write becoming a URL
+        the browser fetches.
+      */}
+      <div
+        className={`xp-banner ${uploaded ? 'is-image' : ''}`}
+        style={uploaded ? { backgroundImage: `url(${JSON.stringify(profile.bannerUrl)})` } : bannerStyle(address)}
+        aria-hidden="true"
+      />
 
       <div className="xp-identity">
         <div className="xp-avatar">
@@ -55,42 +69,43 @@ export default function ProfileHeader({
         </div>
 
         <div className="xp-actions">
-          {isMine ? (
-            <button type="button" className="xp-btn" onClick={onEditProfile}>
-              <Settings2 size={13} />
-              Edit profile
+          {/*
+            No edit control here, deliberately.
+            
+            This page is what everybody else sees, and putting an editor on it
+            makes that ambiguous - you end up unsure whether you are looking at
+            your profile or working on it. Editing lives in one place, behind
+            the account button, so the page is only ever the finished thing.
+          */}
+          {canFollow && (
+            /*
+             * Reads "Following" when you are, and the hover state says
+             * "Unfollow" - the pattern everybody already knows, and the
+             * reason it exists: a button that says "Unfollow" at rest looks
+             * like an instruction rather than a state.
+             */
+            <button
+              type="button"
+              className={`xp-btn ${following ? 'is-following' : 'is-follow'}`}
+              onClick={toggle}
+              disabled={busy}
+            >
+              {busy ? (
+                <Loader2 size={13} className="chat-spin" />
+              ) : following ? (
+                <UserCheck size={13} />
+              ) : (
+                <UserPlus size={13} />
+              )}
+              <span className="xp-btn-label">{following ? 'Following' : 'Follow'}</span>
+              <span className="xp-btn-hover">Unfollow</span>
             </button>
-          ) : (
-            canFollow && (
-              /*
-               * Reads "Following" when you are, and the hover state says
-               * "Unfollow" - the pattern everybody already knows, and the
-               * reason it exists: a button that says "Unfollow" at rest looks
-               * like an instruction rather than a state.
-               */
-              <button
-                type="button"
-                className={`xp-btn ${following ? 'is-following' : 'is-follow'}`}
-                onClick={toggle}
-                disabled={busy}
-              >
-                {busy ? (
-                  <Loader2 size={13} className="chat-spin" />
-                ) : following ? (
-                  <UserCheck size={13} />
-                ) : (
-                  <UserPlus size={13} />
-                )}
-                <span className="xp-btn-label">{following ? 'Following' : 'Follow'}</span>
-                <span className="xp-btn-hover">Unfollow</span>
-              </button>
-            )
           )}
 
-          {isModerator && !isMine && profile?.avatarUrl && (
+          {isModerator && !isMine && (profile?.avatarUrl || uploaded) && (
             <button type="button" className="xp-btn is-danger" onClick={onRemovePicture}>
               <ImageOff size={13} />
-              Remove picture
+              Remove images
             </button>
           )}
         </div>

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, ArrowLeft, Loader2 } from 'lucide-react'
 import FeedPanel from './FeedPanel'
 import ProfileHeader from './ProfileHeader'
-import { fetchPublicProfile, fetchProfileByHandle, removeAvatar } from '../../services/profile'
+import { fetchPublicProfile, fetchProfileByHandle, removeAvatar, removeBanner } from '../../services/profile'
 import { useIsModerator } from '../../hooks/useIsModerator'
 import { useSiweAuth } from '../../context/SiweAuthContext'
 import { fetchPostCount } from '../../services/posts'
@@ -24,7 +24,7 @@ import { formatAddress } from '../../utils/formatters'
  * nothing here is private - a profile that only members could see would be a
  * profile nobody discovers.
  */
-export default function ProfilePage({ route, onOpenProfile, onClose, onEditProfile, embedded = false }) {
+export default function ProfilePage({ route, onOpenProfile, onClose, embedded = false }) {
   const isModerator = useIsModerator()
   const { account } = useSiweAuth()
 
@@ -84,13 +84,20 @@ export default function ProfilePage({ route, onOpenProfile, onClose, onEditProfi
 
   const onRemovePicture = useCallback(async () => {
     if (!profile) return
-    const ok = window.confirm(`Remove ${formatAddress(profile.address)}'s profile picture?`)
+    const ok = window.confirm(
+      `Remove ${formatAddress(profile.address)}'s profile picture and banner?`,
+    )
     if (!ok) return
 
     setError(null)
     try {
-      await removeAvatar(profile.address)
-      setProfile((prev) => (prev ? { ...prev, avatarUrl: null } : prev))
+      /*
+       * Both, and in parallel. A moderator reaching for this has decided the
+       * images are the problem; taking one down and leaving the other - the
+       * full-width one, usually - would be doing most of nothing.
+       */
+      await Promise.all([removeAvatar(profile.address), removeBanner(profile.address)])
+      setProfile((prev) => (prev ? { ...prev, avatarUrl: null, bannerUrl: null } : prev))
     } catch (err) {
       setError(err.message)
     }
@@ -145,7 +152,6 @@ export default function ProfilePage({ route, onOpenProfile, onClose, onEditProfi
         replyCount={null}
         isMine={isMine}
         isModerator={isModerator}
-        onEditProfile={onEditProfile}
         onRemovePicture={onRemovePicture}
         tab={tab}
         onTab={setTab}

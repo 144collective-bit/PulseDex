@@ -49,7 +49,7 @@ const TABS = [
   },
 ]
 
-export default function SocialView({ onOpenProfile, onEditProfile }) {
+export default function SocialView({ onOpenProfile }) {
   const { account, isSignedIn, signIn, isBusy } = useSiweAuth()
 
   const [tab, setTab] = useState('feed')
@@ -106,7 +106,6 @@ export default function SocialView({ onOpenProfile, onEditProfile }) {
             route={{ address: account.toLowerCase(), handle: null }}
             embedded
             onOpenProfile={onOpenProfile}
-            onEditProfile={onEditProfile}
           />
         ) : (
           <div className="social-signin">

@@ -1999,3 +1999,10 @@
   width: 40px;
   height: 2px;
 }
+
+/* An uploaded banner, where the generated gradient would otherwise be. */
+.xp-banner.is-image {
+  background-size: cover;
+  background-position: center;
+  background-blend-mode: normal;
+}

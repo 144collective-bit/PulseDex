@@ -1,5 +1,6 @@
 import { supabase, hasSupabase } from '../config/supabase'
 import { normaliseLinks } from '../utils/profileFields'
+import { PUBLIC_PROFILE_FIELDS } from '../config/queries'
 
 /**
  * The signed-in wallet's chat identity, held by the server.
@@ -151,13 +152,6 @@ export async function fetchProfileByHandle(handle) {
   )
 }
 
-/*
- * Only the columns that are meant to be seen, named once. The table also holds
- * `updated_at`, which would say when somebody last touched their profile -
- * harmless-looking, and a way of telling who is active right now.
- */
-const PUBLIC_PROFILE_FIELDS = 'address, handle, avatar_id, avatar_url, bio, links, created_at'
-
 async function runProfileQuery(query) {
   const { data, error } = await query.maybeSingle()
 
@@ -169,6 +163,7 @@ async function runProfileQuery(query) {
     handle: data.handle || null,
     avatarId: data.avatar_id || null,
     avatarUrl: data.avatar_url || null,
+    bannerUrl: data.banner_url || null,
     bio: data.bio || null,
     // Normalised again on the way out, although it was normalised on the way
     // in. This value arrives from the database over a public key, and the
@@ -176,5 +171,41 @@ async function runProfileQuery(query) {
     // a link rendered as an anchor should be one this build approved.
     links: normaliseLinks(data.links),
     createdAt: data.created_at || null,
+  }
+}
+
+/**
+ * Publish a banner.
+ *
+ * Takes the same cropped data URL the settings page produces, for the same
+ * reason the avatar does: the browser's crop and re-encode is what turns a
+ * photograph carrying a location in its EXIF into 1200 by 400 pixels with
+ * nothing attached, and the endpoint has no way to do that for us.
+ */
+export async function uploadMyBanner(dataUrl) {
+  const res = await fetch('/api/profile/banner', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ dataUrl }),
+  })
+
+  const payload = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(payload.error || 'That image could not be published.')
+  return payload.bannerUrl || null
+}
+
+/** Take a banner down. Your own with no address; somebody else's only as a
+ *  moderator, where anyone else gets the 404 the route gives a stranger. */
+export async function removeBanner(address = null) {
+  const query = address ? `?address=${encodeURIComponent(address)}` : ''
+  const res = await fetch(`/api/profile/banner${query}`, {
+    method: 'DELETE',
+    credentials: 'same-origin',
+  })
+
+  if (!res.ok) {
+    const payload = await res.json().catch(() => ({}))
+    throw new Error(payload.error || 'That image could not be removed.')
   }
 }
