@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Send, Loader2 } from 'lucide-react'
 import { useSiweAuth } from '../../context/SiweAuthContext'
-import { useUserProfile } from '../../context/UserProfileContext'
 import { postMessage } from '../../services/chat'
 import { messageLength, MAX_MESSAGE_LENGTH } from '../../utils/chatMessage'
 
@@ -17,7 +16,6 @@ const COUNTER_APPEARS_AT = MAX_MESSAGE_LENGTH - 100
  */
 export default function ChatComposer({ room, onPosted }) {
   const { isSignedIn, isBusy, signIn } = useSiweAuth()
-  const { profile } = useUserProfile()
 
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
@@ -35,12 +33,10 @@ export default function ChatComposer({ room, onPosted }) {
     setError(null)
 
     try {
-      const message = await postMessage({
-        room,
-        body: draft,
-        handle: profile.displayName,
-        avatarId: profile.avatarId,
-      })
+      // No name or avatar travels with a message any more. The server reads
+      // both from the profile the sign-in cookie identifies, which is what
+      // stops a second device renaming an account by posting from it.
+      const message = await postMessage({ room, body: draft })
 
       /*
        * Cleared only after the post succeeds. Clearing optimistically reads

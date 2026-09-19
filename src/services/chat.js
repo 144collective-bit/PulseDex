@@ -123,20 +123,20 @@ export function subscribeToMessages({ room, onMessage, onRemoved }) {
 /**
  * Post a message.
  *
- * The handle and avatar travel with it so the profile row is kept current
- * without a second request, but they are only a suggestion: the endpoint
- * validates both and ignores either if it cannot use it. The address is not
- * sent at all - it comes from the sign-in cookie, and a body that could name
- * its own author would let anyone post as anyone.
+ * Only the room and the text. Neither the author nor their name is sent: the
+ * address comes from the sign-in cookie, and the name from the profile that
+ * cookie identifies. A body that could name its own author would let anyone
+ * post as anyone; one that could name its own handle would let a stale tab
+ * rename the account.
  */
-export async function postMessage({ room, body, handle, avatarId }) {
+export async function postMessage({ room, body }) {
   const res = await fetch('/api/chat/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     // Sends the session cookie on a same-origin request, which is the only
     // kind this endpoint accepts.
     credentials: 'same-origin',
-    body: JSON.stringify({ room, body, handle, avatarId }),
+    body: JSON.stringify({ room, body }),
   })
 
   const payload = await res.json().catch(() => ({}))
