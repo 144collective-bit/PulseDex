@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { fetchRecentMessages, subscribeToMessages } from '../services/chat'
+import { fetchMessagePage, subscribeToMessages } from '../services/chat'
+import { oldestCursor } from '../utils/chatPaging'
 import { hasSupabase } from '../config/supabase'
 
 export const CHAT_STATUS = {
@@ -34,6 +35,8 @@ export function useChatMessages(room) {
     hasSupabase ? CHAT_STATUS.loading : CHAT_STATUS.unconfigured,
   )
   const [error, setError] = useState(null)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingOlder, setLoadingOlder] = useState(false)
 
   /*
    * Held in a ref as well as state so the merge can read the current list
@@ -64,10 +67,11 @@ export function useChatMessages(room) {
 
     let active = true
 
-    fetchRecentMessages({ room })
-      .then((history) => {
+    fetchMessagePage({ room })
+      .then((page) => {
         if (!active) return
-        merge(history)
+        merge(page.messages)
+        setHasMore(page.hasMore)
         setStatus(CHAT_STATUS.ready)
       })
       .catch((err) => {
@@ -98,10 +102,38 @@ export function useChatMessages(room) {
     }
   }, [room, merge, forget])
 
+  /**
+   * Fetch the page before the oldest message held.
+   *
+   * Guarded against overlapping calls. Two requests in flight would both page
+   * from the same cursor and fetch the same messages, which the merge would
+   * absorb - leaving a button that looks broken because pressing it twice
+   * quickly appears to do nothing.
+   */
+  const loadOlder = useCallback(async () => {
+    if (loadingOlder || !hasMore) return
+    const before = oldestCursor([...byId.current.values()])
+    if (!before) return
+
+    setLoadingOlder(true)
+    try {
+      const page = await fetchMessagePage({ room, before })
+      merge(page.messages)
+      setHasMore(page.hasMore)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoadingOlder(false)
+    }
+  }, [room, hasMore, loadingOlder, merge])
+
   return {
     messages,
     status,
     error,
+    hasMore,
+    loadingOlder,
+    loadOlder,
     /** Show a message this browser just posted, without waiting for the feed
      *  to bring it back around. */
     add: useCallback((message) => merge([message]), [merge]),

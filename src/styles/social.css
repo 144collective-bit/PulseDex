@@ -231,6 +231,44 @@
   }
 }
 
+.chat-older {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 0 4px;
+  padding: 5px 12px;
+  font-size: var(--fs-label, 11px);
+  color: var(--text-secondary);
+  background: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  cursor: pointer;
+  /* The scroll area is a flex column, so without this the button stretches to
+     the full width of the conversation. */
+  flex: 0 0 auto;
+}
+
+.chat-older:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--border-active);
+}
+
+.chat-older:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.chat-presence {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  padding: 5px 12px 0;
+  font-size: var(--fs-micro, 10px);
+  color: var(--text-muted);
+}
+
 .chat-jump {
   align-self: center;
   margin: 0 0 8px;
