@@ -1,5 +1,6 @@
 import { supabase, hasSupabase } from '../config/supabase'
 import { PAGE_SIZE, hasMoreBefore } from '../utils/chatPaging'
+import { POST_FIELDS } from '../config/queries'
 
 /**
  * Reading and writing posts.
@@ -14,9 +15,6 @@ import { PAGE_SIZE, hasMoreBefore } from '../utils/chatPaging'
  * means backwards in time - so what comes out of here stays newest-first and
  * is rendered in that order.
  */
-
-const POST_FIELDS =
-  'id, address, body, created_at, profiles!posts_address_fkey ( handle, avatar_id, avatar_url )'
 
 /** Flatten the joined row into something a component can render without
  *  knowing the shape of the query that produced it. */

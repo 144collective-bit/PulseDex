@@ -1,5 +1,6 @@
 import { supabase, hasSupabase } from '../config/supabase'
 import { PAGE_SIZE, hasMoreBefore } from '../utils/chatPaging'
+import { MESSAGE_FIELDS } from '../config/queries'
 
 /**
  * Reading and writing the chat.
@@ -11,19 +12,6 @@ import { PAGE_SIZE, hasMoreBefore } from '../utils/chatPaging'
  * places on purpose, and the asymmetry is the security model rather than an
  * accident of how it grew.
  */
-
-/*
- * Messages carry an address; names and avatars live on the profile it points
- * at. Asked for together here so a row arrives ready to render - the
- * alternative, resolving names separately, is a request per author on first
- * paint.
- */
-const MESSAGE_FIELDS =
-  'id, address, room, body, created_at, edited_at, ' +
-  'profiles!messages_address_fkey ( handle, avatar_id, avatar_url ), ' +
-  // Reactions come with the page rather than in a request per message. Fifty
-  // messages would otherwise be fifty round trips before anything is drawn.
-  'message_reactions ( emoji, address )'
 
 /** Flatten the joined row into something a component can render without
  *  knowing the shape of the query that produced it. */

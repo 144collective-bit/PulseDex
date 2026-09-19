@@ -9,6 +9,7 @@ import {
   FEED_POST_LIMITS,
   longestWindowMs,
 } from '../../src/utils/chatRate.js'
+import { POST_FIELDS } from '../../src/config/queries.js'
 
 /**
  * Publishing and removing posts.
@@ -34,17 +35,6 @@ const REFUSALS = {
   [REJECTED_POST.empty]: 'Write something first.',
   [REJECTED_POST.tooLong]: 'That post is too long.',
 }
-
-/*
- * What a created post comes back as, profile included.
- *
- * The join means the post the author sees immediately carries their own name
- * and picture. Without it the reply is a bare row, which renders as an address
- * and a generated mark until the realtime feed brings the same post round
- * again - a visible flicker, on your own post, every time.
- */
-const POST_FIELDS =
-  'id, address, body, created_at, profiles!posts_address_fkey ( handle, avatar_id, avatar_url )'
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store')
