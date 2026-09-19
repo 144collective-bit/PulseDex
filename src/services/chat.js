@@ -20,7 +20,7 @@ import { PAGE_SIZE, hasMoreBefore } from '../utils/chatPaging'
  */
 const MESSAGE_FIELDS =
   'id, address, room, body, created_at, edited_at, ' +
-  'profiles ( handle, avatar_id, avatar_url ), ' +
+  'profiles!messages_address_fkey ( handle, avatar_id, avatar_url ), ' +
   // Reactions come with the page rather than in a request per message. Fifty
   // messages would otherwise be fifty round trips before anything is drawn.
   'message_reactions ( emoji, address )'
