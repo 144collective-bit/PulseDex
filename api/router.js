@@ -21,10 +21,18 @@ import profileAvatar from './_routes/profile/avatar.js'
  * error about plan limits rather than about code.
  *
  * Folding two endpoints together would have bought one slot and hit the same
- * wall on the next one. This removes the ceiling instead: `[...path]` catches
- * everything under /api, and the handlers live in `_routes/` where the
- * leading underscore keeps Vercel from making functions of them. They are the
- * same files, unchanged apart from one extra `../` in their imports.
+ * wall on the next one. This removes the ceiling instead: one function, with
+ * the handlers in `_routes/` where the leading underscore keeps Vercel from
+ * making functions of them. They are the same files, unchanged apart from one
+ * extra `../` in their imports.
+ *
+ * Reached by an explicit rewrite in vercel.json rather than by a `[...path]`
+ * catch-all filename, and that is not a style choice. The catch-all version
+ * of this shipped and 404'd every multi-segment path in production -
+ * /api/candles worked, /api/auth/nonce did not, which took sign-in down. A
+ * rewrite we write ourselves is a rule we can read, and it carries the
+ * original path in a query parameter so this function never has to guess what
+ * was asked for.
  *
  * The cost is honest and worth stating: every route now shares one function,
  * so a cold start loads all of them, and they can no longer be given
@@ -65,16 +73,24 @@ const ROUTES = {
  * covers anything odd rather than trying to repair it, because a URL that
  * does not name a route exactly is not a route.
  *
- * @param {string} pathname
+ * Takes the path in either spelling: the full pathname, which is what the dev
+ * server passes and what a direct request carries, or the bare route that the
+ * production rewrite puts in `?path=`. Accepting both means local and
+ * deployed go down the same line of code rather than two that can drift.
+ *
+ * @param {string} value `/api/chat/messages` or `chat/messages`
  * @returns {string|null}
  */
-export function routeKey(pathname) {
-  if (typeof pathname !== 'string' || !pathname.startsWith('/api/')) return null
+export function routeKey(value) {
+  if (typeof value !== 'string') return null
 
   // Trailing slash tolerated, because /api/profile/ is the same request any
   // reader would say it is.
-  const path = pathname.slice(5).replace(/\/+$/, '')
+  const path = (value.startsWith('/api/') ? value.slice(5) : value).replace(/^\/+|\/+$/g, '')
   if (!path) return null
+
+  // A pathname that is not under /api is not a route, however it is spelled.
+  if (value.startsWith('/') && !value.startsWith('/api/')) return null
 
   /*
    * A conservative shape, applied before the lookup: lowercase letters,
@@ -89,15 +105,16 @@ export function routeKey(pathname) {
 
 export default async function handler(req, res) {
   /*
-   * Parsed from req.url rather than taken from req.query.path.
+   * The rewrite's `?path=` first, then the pathname.
    *
-   * Vercel populates the query for a catch-all, but the handlers below read
-   * req.url themselves for their own query strings, so there is one source of
-   * truth about what was requested either way - and this works identically
-   * under the dev server, which has no such query.
+   * In production vercel.json rewrites /api/<anything> here and forwards the
+   * matched segments as `path`, so that is the authoritative answer. Under the
+   * dev server there is no rewrite and the original pathname arrives intact,
+   * which the fallback handles. Neither spelling is guessed at: both are read,
+   * in a fixed order, and anything that is neither is a 404.
    */
-  const { pathname } = new URL(req.url, 'http://localhost')
-  const key = routeKey(pathname)
+  const url = new URL(req.url, 'http://localhost')
+  const key = routeKey(url.searchParams.get('path') || url.pathname)
 
   if (!key) {
     res.setHeader('Cache-Control', 'no-store')

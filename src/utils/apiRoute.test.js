@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { routeKey } from '../../api/[...path].js'
+import { routeKey } from '../../api/router.js'
 
 /**
  * The router's path parsing.
@@ -10,6 +10,20 @@ import { routeKey } from '../../api/[...path].js'
  * exactly is not a route.
  */
 describe('routeKey', () => {
+  it('accepts the bare route the production rewrite forwards', () => {
+    // vercel.json rewrites /api/auth/nonce to /api/router?path=auth/nonce,
+    // so this spelling is what production actually passes in.
+    expect(routeKey('auth/nonce')).toBe('auth/nonce')
+    expect(routeKey('chat/messages')).toBe('chat/messages')
+    expect(routeKey('profile')).toBe('profile')
+  })
+
+  it('is null for an empty or missing path', () => {
+    expect(routeKey('')).toBeNull()
+    expect(routeKey('/')).toBeNull()
+    expect(routeKey('/api/')).toBeNull()
+  })
+
   it('finds a single-segment route', () => {
     expect(routeKey('/api/profile')).toBe('profile')
     expect(routeKey('/api/posts')).toBe('posts')

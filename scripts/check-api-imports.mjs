@@ -57,7 +57,7 @@ for (const file of files) {
      * that export named functions and nothing else, and demanding a default
      * from those would fail every one of them.
      */
-    const isHandler = name.includes('_routes') || name.includes('[...path]')
+    const isHandler = name.includes('_routes') || name.endsWith('router.js')
     if (isHandler && typeof module.default !== 'function') {
       failures.push(`${name}: no default export`)
       continue

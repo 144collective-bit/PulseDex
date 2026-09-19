@@ -43,7 +43,8 @@ const REFUSALS = {
  * and a generated mark until the realtime feed brings the same post round
  * again - a visible flicker, on your own post, every time.
  */
-const POST_FIELDS = 'id, address, body, created_at, profiles ( handle, avatar_id, avatar_url )'
+const POST_FIELDS =
+  'id, address, body, created_at, profiles!posts_address_fkey ( handle, avatar_id, avatar_url )'
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store')

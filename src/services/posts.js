@@ -15,7 +15,8 @@ import { PAGE_SIZE, hasMoreBefore } from '../utils/chatPaging'
  * is rendered in that order.
  */
 
-const POST_FIELDS = 'id, address, body, created_at, profiles ( handle, avatar_id, avatar_url )'
+const POST_FIELDS =
+  'id, address, body, created_at, profiles!posts_address_fkey ( handle, avatar_id, avatar_url )'
 
 /** Flatten the joined row into something a component can render without
  *  knowing the shape of the query that produced it. */
