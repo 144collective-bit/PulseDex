@@ -2,6 +2,7 @@ import { SESSION_COOKIE, getCookie, readSession } from '../_lib/session.js'
 import { isSameOrigin, rateLimit } from '../_lib/guard.js'
 import { serviceClient } from '../_lib/supabase.js'
 import { normaliseAddress } from '../../src/utils/chatAdmin.js'
+import { notifyFollow } from '../_lib/notify.js'
 
 /**
  * Following somebody, and stopping.
@@ -94,6 +95,11 @@ async function follow(req, res, db, follower) {
     console.error('follows: the insert failed:', error.message)
     return res.status(503).json({ error: 'That could not be saved.' })
   }
+
+  // Awaited, because an unawaited promise in a serverless function is killed
+  // with the process the moment the response goes out. It cannot fail this
+  // request - notifyFollow swallows and logs its own errors.
+  await notifyFollow(db, { follower, followee })
 
   return res.status(201).json({ address: followee, following: true })
 }

@@ -19,6 +19,7 @@ import SidebarPairs from './components/SidebarPairs'
 import PairHeader from './components/PairHeader'
 import TokenDetails from './components/TokenDetails'
 import { SiweAuthProvider, useSiweAuth } from './context/SiweAuthContext'
+import { NotificationsProvider } from './context/NotificationsContext'
 
 /*
  * Tabs are fetched when they are first opened, not before.
@@ -514,9 +515,14 @@ export default function App() {
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
         <SiweAuthProvider>
+          {/* Inside the auth provider, which it reads to know whether there
+              is anybody to have notifications, and outside everything that
+              draws the unread count. */}
+          <NotificationsProvider>
           <UserProfileProvider>
             <MainApp />
           </UserProfileProvider>
+          </NotificationsProvider>
         </SiweAuthProvider>
       </QueryClientProvider>
     </WagmiProvider>

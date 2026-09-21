@@ -2006,3 +2006,155 @@
   background-position: center;
   background-blend-mode: normal;
 }
+
+/* ---------------------------------------------------------------------------
+   A person named inside a post
+
+   A button rather than an anchor: this navigates by address through the app's
+   own routing, and an <a href> here would be a full page load that throws
+   away the feed behind it. Styled as a link because that is what it is to
+   anybody reading.
+   --------------------------------------------------------------------------- */
+.feed-post-mention {
+  display: inline;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--pulse-cyan);
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.feed-post-mention:hover {
+  text-decoration: underline;
+}
+
+.feed-post-mention:focus-visible {
+  outline: 2px solid var(--pulse-cyan);
+  outline-offset: 1px;
+}
+
+/* ---------------------------------------------------------------------------
+   Notifications
+   --------------------------------------------------------------------------- */
+
+/* The count on the tab. Absolute would leave it overlapping the label on a
+   narrow phone, so it sits in the flow and the tab grows by its width. */
+.xp-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  margin-left: 5px;
+  border-radius: var(--radius-full);
+  background: var(--pulse-cyan);
+  color: #04141a;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.notif-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.notif-row {
+  display: grid;
+  grid-template-columns: 22px 28px 1fr auto;
+  align-items: start;
+  gap: 10px;
+  padding: 11px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Unread is a tint and a rule, not a colour swap: the row still has to be as
+   readable as every other one, and a list where half the rows are a different
+   colour reads as two lists. */
+.notif-row.is-unread {
+  background: rgba(0, 229, 255, 0.045);
+  box-shadow: inset 2px 0 0 var(--pulse-cyan);
+}
+
+.notif-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+}
+
+.notif-icon.is-mention { color: var(--pulse-cyan); }
+.notif-icon.is-reply { color: var(--pulse-green); }
+.notif-icon.is-follow { color: #a78bfa; }
+.notif-icon.is-reaction { color: var(--pulse-amber, #ffb020); }
+
+.notif-actor {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.notif-body {
+  min-width: 0;
+}
+
+.notif-line {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.notif-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.notif-name:hover {
+  color: var(--pulse-cyan);
+}
+
+/* Two lines at most. A notification about a long post should not be a long
+   notification - the post itself is one tap away. */
+.notif-excerpt {
+  margin: 3px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.notif-when {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.xp-empty-hint {
+  max-width: 340px;
+  margin: 4px auto 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}

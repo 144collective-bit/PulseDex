@@ -1,16 +1,18 @@
 import { useState } from 'react'
-import { Compass, LogIn, MessagesSquare, Rss, UserRound } from 'lucide-react'
+import { Bell, Compass, LogIn, MessagesSquare, Rss, UserRound } from 'lucide-react'
 import RoomList from './social/RoomList'
 import RoomPanel from './social/RoomPanel'
 import PublicFeed from './social/PublicFeed'
 import DiscoverPanel from './social/DiscoverPanel'
+import NotificationsPanel from './social/NotificationsPanel'
 import ProfilePage from './social/ProfilePage'
 import { useSiweAuth } from '../context/SiweAuthContext'
+import { useNotifications } from '../context/NotificationsContext'
 import { DEFAULT_ROOM, findRoom } from '../config/rooms'
 import '../styles/social.css'
 
 /**
- * The social section: four things, one row of tabs.
+ * The social section: five things, one row of tabs.
  *
  * They were scattered before this - the feed and the rooms shared a sidebar,
  * your own profile was behind a menu item in the header, and there was no way
@@ -47,6 +49,20 @@ const TABS = [
     icon: Compass,
     lede: 'Find people worth following.',
   },
+  /*
+   * Last in the row and first in importance.
+   *
+   * Last because it is the one tab that is about the reader rather than about
+   * the site, and a row that opens on "your stuff" reads as an account screen
+   * rather than a place to look around. It carries the unread count, which is
+   * the only thing in this strip that changes on its own.
+   */
+  {
+    id: 'notifications',
+    name: 'Notifications',
+    icon: Bell,
+    lede: 'Mentions, replies, follows and reactions.',
+  },
 ]
 
 export default function SocialView({ onOpenProfile }) {
@@ -54,6 +70,7 @@ export default function SocialView({ onOpenProfile }) {
 
   const [tab, setTab] = useState('feed')
   const [room, setRoom] = useState(DEFAULT_ROOM)
+  const { unread } = useNotifications()
 
   const active = TABS.find((t) => t.id === tab) || TABS[0]
   const activeRoom = findRoom(room)
@@ -85,6 +102,14 @@ export default function SocialView({ onOpenProfile }) {
           >
             <entry.icon size={13} className="social-tab-icon" />
             <span>{entry.name}</span>
+            {/* Only on the tab it belongs to, and only when it is not zero:
+                a badge showing "0" is a badge that has stopped meaning
+                anything. */}
+            {entry.id === 'notifications' && unread > 0 && (
+              <span className="xp-tab-badge" aria-label={`${unread} unread`}>
+                {unread > 99 ? '99+' : unread}
+              </span>
+            )}
           </button>
         ))}
       </nav>
@@ -92,6 +117,8 @@ export default function SocialView({ onOpenProfile }) {
       {tab === 'feed' && <PublicFeed onOpenProfile={onOpenProfile} />}
 
       {tab === 'discover' && <DiscoverPanel onOpenProfile={onOpenProfile} />}
+
+      {tab === 'notifications' && <NotificationsPanel onOpenProfile={onOpenProfile} />}
 
       {tab === 'profile' &&
         (isSignedIn && account ? (

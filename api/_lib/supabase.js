@@ -41,3 +41,37 @@ export function serviceClient() {
   })
   return cached
 }
+
+let cachedAnon = null
+
+/**
+ * The same connection a visitor's browser gets.
+ *
+ * Read-only in practice: the anon key holds no privilege beyond what row-level
+ * security grants it, which in this project is reading the public tables and
+ * writing nothing.
+ *
+ * It exists for one caller - api/_routes/health.js - so that a deployment
+ * without the service role key can still prove its selects parse and its
+ * relationships resolve. That is the check that matters most and the one that
+ * has caught real breakage twice: a `profiles` embed that PostgREST cannot
+ * disambiguate fails identically whichever key asks, so the anon key is enough
+ * to catch it.
+ *
+ * Which is what lets Preview deployments verify a pull request against the
+ * real schema without being handed the production service role key. A branch
+ * gets no more reach into the database than any visitor already has.
+ */
+export function anonClient() {
+  if (cachedAnon) return cachedAnon
+
+  const url = process.env.VITE_SUPABASE_URL
+  const key = process.env.VITE_SUPABASE_ANON_KEY
+  if (!url || !key) return null
+
+  cachedAnon = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    realtime: { params: { eventsPerSecond: 0 } },
+  })
+  return cachedAnon
+}

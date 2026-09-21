@@ -1,6 +1,7 @@
 import { Trash2, Flag, Ban, MessageCircle } from 'lucide-react'
 import ChatAvatar from './ChatAvatar'
 import { formatAddress, formatTimeAgo } from '../../utils/formatters'
+import PostBody from './PostBody'
 
 /**
  * One post.
@@ -79,13 +80,11 @@ export default function PostCard({
         </header>
 
         {/*
-         * Rendered as text, never as markup. Everything here was typed by a
-         * stranger and is shown at full width to anybody who loads the site.
-         * React escapes it; the `white-space: pre-wrap` in the stylesheet
-         * keeps the paragraphs the author wrote without letting them write
-         * tags.
+         * Rendered as text, never as markup - see PostBody, which also turns
+         * the people a post names into links without ever building HTML from
+         * what a stranger typed.
          */}
-        <p className="feed-post-text">{post.body}</p>
+        <PostBody post={post} onOpenProfile={onOpenProfile} />
 
         <div className="feed-post-tools">
           {/*

@@ -31,6 +31,17 @@ function toPost(row) {
     // Null for a top-level post, the parent's id for a reply. The feed shows
     // only the former; a profile's Replies tab shows only the latter.
     parentId: row.parent_id || null,
+    /*
+     * Who this post names, as rows rather than as something to find in the
+     * text. A handle here may contain spaces, so there is no pattern that
+     * could recover them from the body - see src/utils/mentions.js.
+     *
+     * The handle is whatever that account is called now, not what was typed,
+     * which is what makes a mention survive a rename.
+     */
+    mentions: (row.post_mentions || [])
+      .map((m) => ({ address: m.address, handle: m.profiles?.handle || null }))
+      .filter((m) => m.handle),
   }
 }
 

@@ -1,5 +1,5 @@
-import { serviceClient } from '../_lib/supabase.js'
-import { MESSAGE_FIELDS, POST_FIELDS, PUBLIC_PROFILE_FIELDS } from '../../src/config/queries.js'
+import { serviceClient, anonClient } from '../_lib/supabase.js'
+import { MESSAGE_FIELDS, NOTIFICATION_FIELDS, POST_FIELDS, PUBLIC_PROFILE_FIELDS } from '../../src/config/queries.js'
 
 /**
  * Does this deployment actually work?
@@ -54,27 +54,64 @@ export default async function handler(req, res) {
    * says "chat is not configured here" and works otherwise. Saying which it is
    * turns "the smoke test failed" into something actionable.
    */
+  /*
+   * Two clients, because two different questions are being asked.
+   *
+   * `reader` is whichever connection exists. The selects below are the part
+   * that has actually broken in production - a column a migration never added,
+   * an embed PostgREST cannot disambiguate - and none of that depends on which
+   * key asks: a `profiles` embed with two paths to it fails identically for
+   * the anon key and the service role.
+   *
+   * So a deployment holding only the anon key can still prove its schema. That
+   * is what lets a Preview build verify a pull request against the real
+   * database without being handed the production service role key, which would
+   * give every branch full write access to live data before anybody reviewed
+   * it.
+   */
   const db = serviceClient()
-  checks.push({ name: 'supabase-configured', ok: Boolean(db) })
+  const reader = db || anonClient()
+
+  checks.push({ name: 'supabase-configured', ok: Boolean(reader) })
   checks.push({ name: 'session-secret', ok: (process.env.SESSION_SECRET || '').length >= 32 })
 
-  if (db) {
+  if (reader) {
     /*
      * The queries themselves. `head: true` asks for a count and no rows, so
      * this exercises exactly the parsing and relationship resolution that
      * breaks, and returns nobody's messages while doing it.
      */
-    checks.push(await query(db, 'messages-select', 'messages', MESSAGE_FIELDS))
-    checks.push(await query(db, 'posts-select', 'posts', POST_FIELDS))
-    checks.push(await query(db, 'profiles-select', 'profiles', PUBLIC_PROFILE_FIELDS))
+    checks.push(await query(reader, 'messages-select', 'messages', MESSAGE_FIELDS))
+    checks.push(await query(reader, 'posts-select', 'posts', POST_FIELDS))
+    checks.push(await query(reader, 'profiles-select', 'profiles', PUBLIC_PROFILE_FIELDS))
+    checks.push(await query(reader, 'reactions-table', 'message_reactions', 'emoji'))
+    checks.push(await query(reader, 'follows-table', 'follows', 'follower'))
+    // Added by 0010. A deployment whose migration has not been run reports
+    // this as failing instead of presenting as a feed that will not load.
+    checks.push(await query(reader, 'mentions-table', 'post_mentions', 'address'))
+  }
 
-    // The tables with no read policy, which the endpoints reach with the
-    // service role. A failure here means moderation is broken even though
-    // everything a visitor can see still works.
+  /*
+   * The tables with no read policy at all, which only the service role can
+   * reach. A failure here means moderation or the inbox is broken even though
+   * everything a visitor can see still works.
+   *
+   * Absent rather than failed when there is no service role key. A Preview
+   * deployment is not misconfigured for lacking one - it is deliberately
+   * without it - and reporting that as a failure would make every preview red
+   * and teach everybody to ignore the colour.
+   */
+  if (db) {
     checks.push(await query(db, 'blocked-table', 'blocked', 'address'))
     checks.push(await query(db, 'reports-table', 'post_reports', 'id'))
-    checks.push(await query(db, 'reactions-table', 'message_reactions', 'emoji'))
-    checks.push(await query(db, 'follows-table', 'follows', 'follower'))
+    /*
+     * The whole select the inbox uses, not just a column from the table.
+     * Checking `kind` alone proved the table existed and said nothing about
+     * the embed beside it - which is the half that actually breaks.
+     */
+    checks.push(await query(db, 'notifications-select', 'notifications', NOTIFICATION_FIELDS))
+  } else if (reader) {
+    checks.push({ name: 'service-role', ok: true, note: 'absent: private tables not checked' })
   }
 
   const ok = checks.every((check) => check.ok)

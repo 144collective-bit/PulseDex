@@ -55,13 +55,48 @@ export const MESSAGE_FIELDS =
 export const MESSAGE_WRITE_FIELDS = `id, address, room, body, created_at, edited_at, ${MESSAGE_AUTHOR}`
 
 /**
+ * Who a post names.
+ *
+ * Joined rather than fetched per post, for the reason reactions are: twenty
+ * posts would otherwise be twenty round trips before a single link could be
+ * drawn. The foreign key is named for the same reason as the others -
+ * `post_mentions` reaches `profiles` through `address`, and `posts` reaches it
+ * through its own, so an unqualified embed here is the "more than one
+ * relationship was found" error that has taken this feed down twice.
+ */
+export const POST_MENTIONS =
+  'post_mentions ( address, profiles!post_mentions_address_fkey ( handle ) )'
+
+/**
  * A post, the same shape on both sides.
  *
  * `parent_id` rides along because a reply is a post with a parent, and the
  * feed has to tell them apart to know whether it is looking at something that
  * belongs at the top level or under something else.
  */
-export const POST_FIELDS = `id, address, body, created_at, parent_id, ${POST_AUTHOR}`
+export const POST_FIELDS =
+  `id, address, body, created_at, parent_id, ${POST_AUTHOR}, ${POST_MENTIONS}`
+
+/**
+ * One notification, as the inbox endpoint reads it.
+ *
+ * Here with the others rather than beside the handler that uses it, which is
+ * where it started and where it was wrong. This file's whole reason is that a
+ * select string is text - valid JavaScript whatever it says, so lint, the
+ * suite and the build all pass and Postgres is the first thing to disagree.
+ * Gathered here, api/_routes/health.js runs it against the real database and
+ * a deployment says so before anybody opens their inbox.
+ *
+ * `profiles!notifications_actor_fkey` is named because `notifications` reaches
+ * `profiles` twice - through `recipient` and through `actor` - so an
+ * unqualified embed is the "more than one relationship was found" error this
+ * project has shipped before. `posts` is reached once and needs no hint.
+ */
+export const NOTIFICATION_FIELDS = `
+  id, kind, created_at, read_at, post_id, message_id,
+  profiles!notifications_actor_fkey ( address, handle, avatar_id, avatar_url ),
+  posts ( id, body, parent_id )
+`
 
 /**
  * A public profile, as anybody reading somebody's page gets it.
