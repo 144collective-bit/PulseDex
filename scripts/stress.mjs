@@ -253,7 +253,19 @@ async function run(name, { viewport = DESKTOP, path = '/', steps, ...opts } = {}
    */
   if (opts.apiStatus && opts.apiStatus !== 200 && opts.errorState !== false) {
     const text = await page.evaluate(() => document.querySelector('main')?.innerText || '')
-    if (!DB_MESSAGES.some((m) => text.includes(m))) {
+    /*
+     * Told something, by any of the ways this app says it.
+     *
+     * This used to accept only the sentences dbError produces, which made it
+     * fail on a surface that was behaving perfectly well - the inbox reads
+     * through an endpoint rather than the database, so it says something
+     * dbError has never heard of. The check is about whether the reader was
+     * told, not about which module did the telling.
+     */
+    const announced = await page.evaluate(() =>
+      [...document.querySelectorAll('[role="alert"]')].some((el) => (el.innerText || '').trim().length > 8)
+    )
+    if (!announced && !DB_MESSAGES.some((m) => text.includes(m))) {
       errors.push(`NO ERROR STATE: a failing database produced no message for the reader - saw ${JSON.stringify(text.replace(/\s+/g, ' ').trim().slice(0, 160))}`)
     }
     const leak = /relation "|row-level security|violates|permission denied for|column .* does not exist|PGRST\d+|"public\./i.exec(text)

@@ -54,11 +54,10 @@ export default function NotificationsPanel({ onOpenProfile }) {
 
   return (
     <div className="xp-panel">
-      <header className="xp-panel-head">
-        <h2 className="xp-panel-title">Notifications</h2>
-        <p className="xp-panel-lede">Mentions, replies, follows and reactions.</p>
-      </header>
-
+      {/* No header of its own. SocialView already draws the name and the
+          blurb above the tab strip, and the panels beside this one - Discover,
+          the feed - leave it to do that. Repeating it put "Notifications"
+          twice on the screen, one line apart. */}
       {error && (
         <p className="xp-empty" role="alert">
           {error}
