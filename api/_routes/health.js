@@ -1,5 +1,5 @@
 import { serviceClient, anonClient } from '../_lib/supabase.js'
-import { MESSAGE_FIELDS, POST_FIELDS, PUBLIC_PROFILE_FIELDS } from '../../src/config/queries.js'
+import { MESSAGE_FIELDS, NOTIFICATION_FIELDS, POST_FIELDS, PUBLIC_PROFILE_FIELDS } from '../../src/config/queries.js'
 
 /**
  * Does this deployment actually work?
@@ -104,7 +104,12 @@ export default async function handler(req, res) {
   if (db) {
     checks.push(await query(db, 'blocked-table', 'blocked', 'address'))
     checks.push(await query(db, 'reports-table', 'post_reports', 'id'))
-    checks.push(await query(db, 'notifications-table', 'notifications', 'kind'))
+    /*
+     * The whole select the inbox uses, not just a column from the table.
+     * Checking `kind` alone proved the table existed and said nothing about
+     * the embed beside it - which is the half that actually breaks.
+     */
+    checks.push(await query(db, 'notifications-select', 'notifications', NOTIFICATION_FIELDS))
   } else if (reader) {
     checks.push({ name: 'service-role', ok: true, note: 'absent: private tables not checked' })
   }

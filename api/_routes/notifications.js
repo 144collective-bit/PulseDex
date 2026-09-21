@@ -1,6 +1,7 @@
 import { SESSION_COOKIE, getCookie, readSession } from '../_lib/session.js'
 import { isSameOrigin, rateLimit } from '../_lib/guard.js'
 import { serviceClient } from '../_lib/supabase.js'
+import { NOTIFICATION_FIELDS } from '../../src/config/queries.js'
 
 /**
  * One person's inbox.
@@ -49,27 +50,13 @@ export default async function handler(req, res) {
 /** How many to send at once. An inbox is read from the top, not paged through. */
 const PAGE = 30
 
-/*
- * The actor's profile, embedded.
- *
- * Named rather than left to PostgREST to work out: `notifications` points at
- * `profiles` twice, through `recipient` and through `actor`, so an unqualified
- * embed is ambiguous and fails with "more than one relationship was found".
- * That exact error has been shipped from this repository before.
- */
-const FIELDS = `
-  id, kind, created_at, read_at, post_id, message_id,
-  profiles!notifications_actor_fkey ( address, handle, avatar_id, avatar_url ),
-  posts ( id, body, parent_id )
-`
-
 async function read(req, res, db, address) {
   const url = new URL(req.url, 'http://localhost')
   const before = url.searchParams.get('before')
 
   let query = db
     .from('notifications')
-    .select(FIELDS)
+    .select(NOTIFICATION_FIELDS)
     .eq('recipient', address)
     .order('created_at', { ascending: false })
     .limit(PAGE)
