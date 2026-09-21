@@ -62,22 +62,38 @@ somewhere that is not pulsex.com. This holds everywhere links are displayed.
 Each is one session's work, shippable on its own, in this order. Order is not
 arbitrary: each one makes the next worth more.
 
-### Batch 1 — the return loop  ← next
+### Batch 1 — the return loop  ← in progress
 
 Nothing else compounds until this exists.
 
-- `@handle` parsing, with an autocomplete in both composers
-- A mention renders as a link to that profile, and only for a handle that
-  resolves — an unresolved `@word` is plain text, not a broken link
-- `notifications` table: recipient, kind, actor, subject, read_at
-- Kinds to start: mentioned, replied to, followed, reacted to
-- An inbox surface, unread counts, a badge on the Chat tab
-- Read state that survives a reload and does not drift
+Done, in `0010_notifications.sql` and the code around it:
 
-Things that will go wrong and are worth testing from the start: a
-notification whose post was deleted, a notification from an account that has
-since been blocked, unread counts drifting out of step with the rows, and a
-mention of a handle that changes hands later.
+- [x] `post_mentions` and `notifications` tables
+- [x] Mentions on posts, and notifications for mention, reply, follow, reaction
+- [x] `/api/notifications` — read the inbox, mark it read
+- [x] A Notifications tab with an unread badge, polled once a minute
+- [x] Mentions drawn as links in a post, by address rather than by name
+
+Still to do:
+
+- [ ] An autocomplete in the composers, which is what makes a handle
+      containing a space mentionable at all — the schema and the endpoint
+      already take picked addresses, so this is a client change
+- [ ] The badge in the main navigation, not only on the social tab strip
+- [ ] A notification should open the thing it is about, not just the profile
+
+**What the plan got wrong.** It assumed mentions could be parsed out of a post
+at render time. They cannot: a handle here may contain spaces, so
+`@Pulse Trader` has no unambiguous reading, and `profilePath.js` matches
+handles loosely on purpose so that no account is unreachable by its own name.
+Mentions are therefore stored as rows — which turned out better than the plan,
+because a row holds an address and a mention now survives its target renaming.
+
+The notifications table has no row-level security policy at all, for a reason
+worth remembering before adding another private surface: sign-in here is a
+cookie this app sets rather than Supabase auth, so `auth.uid()` is null in
+every request and RLS cannot express "your own rows". Anything private has to
+go through an endpoint with the service role.
 
 ### Batch 2 — profiles worth visiting
 

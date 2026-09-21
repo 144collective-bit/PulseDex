@@ -75,6 +75,10 @@ export default async function handler(req, res) {
     checks.push(await query(db, 'reports-table', 'post_reports', 'id'))
     checks.push(await query(db, 'reactions-table', 'message_reactions', 'emoji'))
     checks.push(await query(db, 'follows-table', 'follows', 'follower'))
+    // Added by 0010. A deployment whose migration has not been run reports
+    // these as failing instead of presenting as an inbox that never loads.
+    checks.push(await query(db, 'mentions-table', 'post_mentions', 'address'))
+    checks.push(await query(db, 'notifications-table', 'notifications', 'kind'))
   }
 
   const ok = checks.every((check) => check.ok)

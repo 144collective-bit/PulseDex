@@ -2,6 +2,7 @@ import { SESSION_COOKIE, getCookie, readSession } from '../../_lib/session.js'
 import { isSameOrigin, rateLimit } from '../../_lib/guard.js'
 import { serviceClient } from '../../_lib/supabase.js'
 import { isReaction } from '../../../src/config/reactions.js'
+import { notifyReaction } from '../../_lib/notify.js'
 
 /**
  * Reacting to a message, and taking it back.
@@ -101,6 +102,10 @@ async function add(req, res, db, address) {
     console.error('reactions: the insert failed:', error.message)
     return res.status(503).json({ error: 'That could not be saved.' })
   }
+
+  // Same reasoning as everywhere else this is called: awaited so it survives
+  // the response, and unable to fail the reaction that caused it.
+  await notifyReaction(db, { messageId: wanted.messageId, actor: address })
 
   return res.status(201).json({ ...wanted, reacted: true })
 }

@@ -4,6 +4,7 @@ import nonce from './_routes/auth/nonce.js'
 import verify from './_routes/auth/verify.js'
 import candles from './_routes/candles.js'
 import follows from './_routes/follows.js'
+import notifications from './_routes/notifications.js'
 import health from './_routes/health.js'
 import chatBlock from './_routes/chat/block.js'
 import chatMessages from './_routes/chat/messages.js'
@@ -65,6 +66,7 @@ const ROUTES = {
   'chat/block': chatBlock,
   'chat/messages': chatMessages,
   'chat/reactions': chatReactions,
+  notifications,
   posts,
   'posts/report': postsReport,
   profile,

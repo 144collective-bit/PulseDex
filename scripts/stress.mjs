@@ -138,6 +138,51 @@ async function wire(page, { fixture = 'healthy', signedIn = true, apiStatus = 20
       body: JSON.stringify({ address: signedIn ? ADDRESS : null }),
     })
   )
+  /*
+   * The inbox, which unlike everything else social is read through an
+   * endpoint rather than from the database - the notifications table has no
+   * read policy, because sign-in here is a cookie this app sets and RLS
+   * cannot express "your own rows".
+   */
+  await page.route('**/api/notifications**', (route) => {
+    if (route.request().method() === 'PATCH') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' })
+    }
+    if (apiStatus !== 200) {
+      return route.fulfill({ status: apiStatus, contentType: 'application/json', body: '{"error":"Your notifications could not be loaded."}' })
+    }
+    const rows =
+      fixture === 'empty'
+        ? []
+        : [
+            {
+              id: 1,
+              kind: 'mention',
+              created_at: fixture === 'nasty' ? null : '2026-09-20T10:00:00Z',
+              read_at: null,
+              post_id: 7,
+              message_id: null,
+              profiles: fixture === 'nasty' ? null : { address: ADDRESS, handle: 'degen', avatar_id: null, avatar_url: null },
+              posts: fixture === 'nasty' ? { id: 7, body: 'A'.repeat(40000), parent_id: null } : { id: 7, body: 'gm', parent_id: null },
+            },
+            {
+              id: 2,
+              kind: 'follow',
+              created_at: '2026-09-20T09:00:00Z',
+              read_at: '2026-09-20T09:30:00Z',
+              post_id: null,
+              message_id: null,
+              profiles: { address: ADDRESS, handle: null, avatar_id: null, avatar_url: null },
+              posts: null,
+            },
+          ]
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ notifications: rows, unread: rows.filter((r) => !r.read_at).length }),
+    })
+  })
+
   await page.route('**/api/profile', (route) =>
     apiStatus !== 200
       ? route.fulfill({ status: apiStatus, contentType: 'application/json', body: '{"error":"Profiles are unavailable right now."}' })
@@ -276,7 +321,7 @@ const socialTab = (label) => async (page) => {
 /* ------------------------------------------------------------ scenarios -- */
 
 const TABS = ['Home', 'Screener', 'Trenches', 'Chat', 'Portfolio']
-const SOCIAL = ['My Profile', 'Chat Rooms', 'Discover']
+const SOCIAL = ['My Profile', 'Chat Rooms', 'Discover', 'Notifications']
 
 // Every tab, signed in, on ordinary data. The floor.
 for (const t of TABS) await run(`desktop / ${t}`, { steps: tab(t) })
@@ -358,6 +403,43 @@ await run('races / hammer the social tabs', {
     }
     await page.waitForTimeout(2500)
   },
+})
+
+/*
+ * The inbox, which is the one surface here that is about one person.
+ *
+ * Signed out it must offer a reason to sign in rather than an empty list or a
+ * crash; signed in with nothing in it, the empty state has to say what would
+ * fill it, because on a new account that is the ordinary state and not a
+ * failure.
+ */
+await run('notifications / signed out', {
+  signedIn: false,
+  steps: socialTab('Notifications'),
+  expectText: 'Sign in',
+})
+
+await run('notifications / with unread', {
+  steps: socialTab('Notifications'),
+  expectText: 'mentioned you',
+})
+
+await run('notifications / empty inbox', {
+  fixture: 'empty',
+  steps: socialTab('Notifications'),
+  expectText: 'Nothing yet',
+})
+
+await run('notifications / phone', {
+  viewport: PHONE,
+  steps: async (page) => {
+    await mobileTab('Chat')(page)
+    const t = page.locator('.social-tabs .xp-tab', { hasText: 'Notifications' }).first()
+    if (!(await t.count())) throw new Error('no Notifications tab on a phone')
+    await t.click()
+    await page.waitForTimeout(1400)
+  },
+  expectText: 'mentioned you',
 })
 
 /*

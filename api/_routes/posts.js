@@ -10,6 +10,7 @@ import {
   longestWindowMs,
 } from '../../src/utils/chatRate.js'
 import { POST_FIELDS } from '../../src/config/queries.js'
+import { resolveMentions, recordMentions, notifyReply } from '../_lib/notify.js'
 
 /**
  * Publishing and removing posts.
@@ -202,6 +203,26 @@ async function publish(req, res) {
     console.error('posts: the insert failed:', inserted.error.message)
     return res.status(503).json({ error: 'Posting is unavailable right now.' })
   }
+
+  /*
+   * Mentions and notifications, after the post exists and before the reply.
+   *
+   * Awaited rather than left running, because this is a serverless function:
+   * work still outstanding when the response is sent is work that gets killed
+   * with the process. A promise nobody waits for is a notification that
+   * arrives on a fast machine and vanishes on a slow one.
+   *
+   * None of it can fail the request. The post is already written and is the
+   * thing that mattered; every function in _lib/notify.js swallows and logs
+   * its own errors rather than throwing into this path.
+   */
+  const mentioned = await resolveMentions(db, {
+    body: post.body,
+    author: address,
+    explicit: req.body?.mentions,
+  })
+  await recordMentions(db, { postId: inserted.data.id, author: address, addresses: mentioned })
+  await notifyReply(db, { postId: inserted.data.id, parentId, author: address })
 
   return res.status(201).json({ post: inserted.data })
 }
