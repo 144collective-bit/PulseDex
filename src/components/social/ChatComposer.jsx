@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Send, Loader2 } from 'lucide-react'
 import { useSiweAuth } from '../../context/SiweAuthContext'
 import { postMessage } from '../../services/chat'
@@ -14,10 +14,38 @@ const COUNTER_APPEARS_AT = MAX_MESSAGE_LENGTH - 100
  * is here rather than over the whole page because a conversation nobody can
  * read until they connect a wallet is a conversation nobody joins.
  */
-export default function ChatComposer({ room, onPosted }) {
+export default function ChatComposer({ room, onPosted, onTyping }) {
   const { isSignedIn, isBusy, signIn } = useSiweAuth()
 
   const [draft, setDraft] = useState('')
+
+  /*
+   * Saying "still typing", and stopping.
+   *
+   * The flag goes up on the first keystroke and comes down four seconds after
+   * the last one - long enough to ride out thinking mid-sentence, short
+   * enough that somebody who wandered off is not shown as typing for the rest
+   * of the afternoon.
+   *
+   * The timer restarts on every keystroke but `onTyping` itself is idempotent
+   * and ignores an unchanged value, so holding a key down is one websocket
+   * message rather than one per character.
+   */
+  const idle = useRef(null)
+
+  const typing = useCallback(() => {
+    onTyping?.(true)
+    clearTimeout(idle.current)
+    idle.current = setTimeout(() => onTyping?.(false), 4000)
+  }, [onTyping])
+
+  const stopTyping = useCallback(() => {
+    clearTimeout(idle.current)
+    onTyping?.(false)
+  }, [onTyping])
+
+  // Leaving the room mid-sentence should not leave the flag up behind you.
+  useEffect(() => stopTyping, [stopTyping])
   const [sending, setSending] = useState(false)
   const [error, setError] = useState(null)
 
@@ -45,6 +73,9 @@ export default function ChatComposer({ room, onPosted }) {
        * no longer see.
        */
       setDraft('')
+      // Sent, so no longer typing. Waiting for the four-second timer would
+      // leave the flag up over a message that has already arrived.
+      stopTyping()
       if (message) onPosted(message)
     } catch (err) {
       setError(err.message)
@@ -70,7 +101,12 @@ export default function ChatComposer({ room, onPosted }) {
       <textarea
         className="chat-input"
         value={draft}
-        onChange={(e) => setDraft(e.target.value)}
+        onChange={(e) => {
+          setDraft(e.target.value)
+          // Clearing the box is not typing - it is the opposite.
+          if (e.target.value) typing()
+          else stopTyping()
+        }}
         onKeyDown={(e) => {
           // Enter sends, shift-enter makes a new line: what every chat does,
           // and what people try first without being told.

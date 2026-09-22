@@ -2196,3 +2196,20 @@
 .room-item.active .room-unread {
   display: none;
 }
+
+/* Typing, in the line that otherwise holds the head count. The cyan marks it
+   as live rather than ambient - the count is a fact about the room, this is
+   something happening right now. */
+.chat-presence.is-typing {
+  color: var(--pulse-cyan);
+}
+
+/* The jump button, once it has a number on it. Filled rather than outlined:
+   with a count it stops being a way back to the bottom and becomes a thing
+   worth noticing. */
+.chat-jump.has-new {
+  background: var(--pulse-cyan);
+  border-color: var(--pulse-cyan);
+  color: #04141a;
+  font-weight: 700;
+}

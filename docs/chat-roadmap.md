@@ -90,21 +90,32 @@ Done, in `0011_room_reads.sql` and the code around it:
 - [x] Opening a room marks it read; staying in one keeps it read
 - [x] A room list that shows where the activity is
 
+- [x] Typing indicators, over the presence channel that already existed
+- [x] Jump-to-latest carries a count of what arrived while you were away
+
 Still to do:
 
-- [ ] Typing indicators, over the presence channel that already exists
 - [ ] Reply-to-message, one level, matching how posts already work
 - [ ] Message search within a room
-- [ ] Jump-to-latest that knows where "latest" was
 
-**What the plan got wrong.** Nothing yet, but two things were decided while
-building it and are worth not re-deciding.
+**What the plan got wrong.** Jump-to-latest was already built. The button has
+been there since the chat shipped; what it lacked was a number, and on a busy
+room that is the whole point - "Jump to latest" says there is a bottom, "12
+new messages" says whether going there is worth losing your place.
+
+Three things were decided while building the rest, and are worth not
+re-deciding.
 
 Unread state is server-side. localStorage was the tempting shortcut and would
 have meant reading on a laptop and then arriving on a phone to five rooms
 shouting about messages already read. It belongs to the account, not the
 device - which also makes it private, so it goes through an endpoint like the
 inbox does.
+
+Typing is broadcast with a name, not as "somebody is typing". The room
+otherwise reports only a head count, so this does reveal more than it did -
+but only about a person one keystroke away from sending a message with their
+name on it. It tells nobody anything they were not about to be told.
 
 The count comes from one `unread_counts` function rather than a query per
 room. Five rooms would have made per-room queries fine; a room per token

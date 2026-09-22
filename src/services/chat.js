@@ -311,14 +311,48 @@ export async function removeMessage(id) {
  * @param {{ room: string, onCount: (count: number) => void }} handlers
  * @returns {() => void} unsubscribe
  */
-export function subscribeToPresence({ room, onCount }) {
-  if (!hasSupabase) return () => {}
+export function subscribeToPresence({ room, onState, name = null }) {
+  if (!hasSupabase) return { stop: () => {}, setTyping: () => {} }
+
+  /*
+   * This tab's own presence key, kept rather than generated inline.
+   *
+   * It is how the tab recognises itself in the state it is reading back -
+   * without it there is no way to exclude yourself, and the first thing you
+   * would see on typing is a notice saying that you are typing.
+   */
+  const meKey = crypto.randomUUID()
 
   const channel = supabase.channel(`chat-presence-${room}-${crypto.randomUUID()}`, {
-    config: { presence: { key: crypto.randomUUID() } },
+    config: { presence: { key: meKey } },
   })
 
-  const report = () => onCount(Object.keys(channel.presenceState()).length)
+  // What this tab is currently saying about itself. Held so a typing update
+  // does not have to re-send the fields that have not changed.
+  let mine = { at: Date.now(), typing: false, name }
+  let joined = false
+
+  const report = () => {
+    const state = channel.presenceState()
+
+    /*
+     * Who is typing, by name, and never this tab.
+     *
+     * Names here rather than "somebody is typing", which was the cautious
+     * option. The room otherwise reports only a count, so this does reveal
+     * more than it did - but only about a person who is a keystroke away
+     * from sending a message with their name on it. It tells nobody
+     * anything they were not about to be told.
+     */
+    const typing = Object.entries(state)
+      .filter(([key]) => key !== meKey)
+      .flatMap(([, entries]) => entries)
+      .filter((entry) => entry?.typing)
+      .map((entry) => entry.name)
+      .filter(Boolean)
+
+    onState({ count: Object.keys(state).length, typing })
+  }
 
   channel
     .on('presence', { event: 'sync' }, report)
@@ -328,10 +362,25 @@ export function subscribeToPresence({ room, onCount }) {
       // Tracked only once the channel is actually joined; calling track before
       // that is dropped, and the tab would be counted by nobody including
       // itself.
-      if (status === 'SUBSCRIBED') channel.track({ at: Date.now() })
+      if (status === 'SUBSCRIBED') {
+        joined = true
+        channel.track(mine)
+      }
     })
 
-  return () => {
-    supabase.removeChannel(channel)
+  return {
+    stop: () => supabase.removeChannel(channel),
+    /**
+     * Say whether this tab is typing.
+     *
+     * Ignored when the value has not changed, because the composer calls it
+     * on every keystroke and re-tracking identical state is a websocket
+     * message per character typed.
+     */
+    setTyping: (typing) => {
+      if (!joined || mine.typing === typing) return
+      mine = { ...mine, typing, at: Date.now() }
+      channel.track(mine)
+    },
   }
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Loader2, AlertTriangle, ChevronUp, Users } from 'lucide-react'
+import { Loader2, AlertTriangle, ChevronUp, Users, PenLine } from 'lucide-react'
 import ChatMessageRow from './ChatMessageRow'
 import ChatComposer from './ChatComposer'
 import ChatProfileCard from './ChatProfileCard'
@@ -10,6 +10,8 @@ import { useSiweAuth } from '../../context/SiweAuthContext'
 import { removeMessage, editMessage, setReaction } from '../../services/chat'
 import { blockAddress } from '../../services/profile'
 import { useChatIdentity } from '../../hooks/useChatIdentity'
+import { useUserProfile } from '../../context/UserProfileContext'
+import { typingLine, countAfter } from '../../utils/chatPresence'
 import { formatAddress } from '../../utils/formatters'
 
 /** Close enough to the bottom that the reader is following along rather than
@@ -36,7 +38,13 @@ export default function RoomPanel({ room, onOpenProfile, onSeen }) {
   const isModerator = useIsModerator()
   const { messages, status, error, add, remove, replace, react, hasMore, loadingOlder, loadOlder } =
     useChatMessages(room)
-  const present = useRoomPresence(room)
+  const { profile } = useUserProfile()
+  /*
+   * The name broadcast while typing. Whatever this account is called here,
+   * falling back to nothing rather than to an address: "0x1a2b... is typing"
+   * is noise, and an unnamed typer is simply not announced.
+   */
+  const present = useRoomPresence(room, { name: profile?.username || profile?.displayName || null })
 
   /*
    * Reading a room while it moves keeps it read.
@@ -48,6 +56,7 @@ export default function RoomPanel({ room, onOpenProfile, onSeen }) {
    * anything.
    */
   const newest = messages.length > 0 ? messages[messages.length - 1].id : null
+
   useEffect(() => {
     if (newest) onSeen?.()
   }, [newest, onSeen])
@@ -56,6 +65,28 @@ export default function RoomPanel({ room, onOpenProfile, onSeen }) {
   const scroller = useRef(null)
   const [following, setFollowing] = useState(true)
   const [removeError, setRemoveError] = useState(null)
+
+  /*
+   * How much arrived while the reader was not looking at the live end.
+   *
+   * Below `following`, and that is not cosmetic - it read it from above and
+   * threw "Cannot access before initialization" the moment the room opened,
+   * which lint, 855 tests and the build all passed.
+   *
+   * Marked by the newest message at the moment they scrolled away, and
+   * counted forward from it rather than by comparing list lengths: the list
+   * also grows upward when older messages load, and a length comparison calls
+   * a backfill of fifty fifty new arrivals.
+   */
+  const awayFrom = useRef(null)
+  useEffect(() => {
+    // Only on the way out. Setting it while following would move the mark to
+    // every new message and the count would never be anything but zero.
+    if (!following && awayFrom.current === null) awayFrom.current = newest
+    if (following) awayFrom.current = null
+  }, [following, newest])
+
+  const missed = following ? 0 : countAfter(messages, awayFrom.current)
 
   /*
    * Whose profile is open, or null. An address rather than the message it was
@@ -251,10 +282,17 @@ export default function RoomPanel({ room, onOpenProfile, onSeen }) {
       {!following && messages.length > 0 && (
         <button
           type="button"
-          className="chat-jump font-mono"
+          className={`chat-jump font-mono ${missed > 0 ? 'has-new' : ''}`}
           onClick={() => setFollowing(true)}
         >
-          Jump to latest
+          {/*
+            The count is the whole point of the button on a busy room. "Jump
+            to latest" says there is a bottom; "12 new messages" says whether
+            going there is worth losing your place.
+          */}
+          {missed > 0
+            ? `${missed > 99 ? '99+' : missed} new message${missed === 1 ? '' : 's'}`
+            : 'Jump to latest'}
         </button>
       )}
 
@@ -264,14 +302,28 @@ export default function RoomPanel({ room, onOpenProfile, onSeen }) {
         </p>
       )}
 
-      {present > 0 && (
-        <p className="chat-presence font-mono" aria-live="polite">
-          <Users size={11} />
-          {present === 1 ? 'Just you here' : `${present} here`}
+      {/*
+        Typing, where there is any, and the head count otherwise.
+        
+        One line, not two. They answer the same question - is anybody else
+        here - and stacking them means the composer jumps down the moment
+        somebody touches a key, which moves the thing the reader is aiming at.
+      */}
+      {present.typing.length > 0 ? (
+        <p className="chat-presence is-typing font-mono" aria-live="polite">
+          <PenLine size={11} />
+          {typingLine(present.typing)}
         </p>
+      ) : (
+        present.count > 0 && (
+          <p className="chat-presence font-mono" aria-live="polite">
+            <Users size={11} />
+            {present.count === 1 ? 'Just you here' : `${present.count} here`}
+          </p>
+        )
       )}
 
-      <ChatComposer room={room} onPosted={add} />
+      <ChatComposer room={room} onPosted={add} onTyping={present.setTyping} />
 
       {openProfile && (
         <ChatProfileCard
