@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Bell, ChartCandlestick, Compass, LogIn, MessagesSquare, Rss, UserRound } from 'lucide-react'
 import RoomList from './social/RoomList'
+import NewGroup from './social/NewGroup'
 import RoomPanel from './social/RoomPanel'
 import PublicFeed from './social/PublicFeed'
 import DiscoverPanel from './social/DiscoverPanel'
@@ -9,7 +10,8 @@ import ProfilePage from './social/ProfilePage'
 import { useSiweAuth } from '../context/SiweAuthContext'
 import { useNotifications } from '../context/NotificationsContext'
 import { useRoomUnread } from '../hooks/useRoomUnread'
-import { DEFAULT_ROOM, findRoom, roomToken, tokenRoomLabel } from '../config/rooms'
+import { useGroups } from '../hooks/useGroups'
+import { DEFAULT_ROOM, findRoom, isGroupRoom, roomToken, tokenRoomLabel } from '../config/rooms'
 import '../styles/social.css'
 
 /**
@@ -79,6 +81,7 @@ export default function SocialView({ onOpenProfile, onOpenToken }) {
    * not asking about the rooms.
    */
   const rooms = useRoomUnread({ activeRoom: tab === 'rooms' ? room : null })
+  const { groups, refresh: refreshGroups } = useGroups({ enabled: tab === 'rooms' })
 
   const active = TABS.find((t) => t.id === tab) || TABS[0]
   /*
@@ -91,8 +94,19 @@ export default function SocialView({ onOpenProfile, onOpenToken }) {
    */
   const activeRoom = findRoom(room)
   const activeToken = roomToken(room)
-  const roomName = activeRoom?.name || (activeToken ? tokenRoomLabel(room) : null)
-  const roomLede = activeRoom?.blurb || (activeToken ? 'Everyone talking about this token.' : null)
+  /*
+   * A group is named by whoever made it, so its name comes from the row
+   * rather than from anywhere in this bundle. Found in the list the sidebar
+   * is already holding, which avoids a second query for one string.
+   */
+  const activeGroup = isGroupRoom(room) ? groups.find((g) => g.slug === room) : null
+
+  const roomName =
+    activeRoom?.name || activeGroup?.name || (activeToken ? tokenRoomLabel(room) : null)
+  const roomLede =
+    activeRoom?.blurb ||
+    activeGroup?.blurb ||
+    (activeToken ? 'Everyone talking about this token.' : null)
   const Icon = active.icon
 
   return (
@@ -189,7 +203,15 @@ export default function SocialView({ onOpenProfile, onOpenToken }) {
 
       {tab === 'rooms' && (
         <div className="social-body">
-          <RoomList current={room} onSelect={setRoom} unread={rooms.unread} />
+          <div className="room-column">
+            <RoomList
+              current={room}
+              onSelect={setRoom}
+              unread={rooms.unread}
+              groups={groups}
+            />
+            <NewGroup onCreated={refreshGroups} />
+          </div>
 
           <section
             className="social-panel"
@@ -205,7 +227,15 @@ export default function SocialView({ onOpenProfile, onOpenToken }) {
               this is a different conversation rather than the same one with
               different contents.
             */}
-            <RoomPanel key={room} room={room} onOpenProfile={onOpenProfile} onSeen={rooms.seen} />
+            <RoomPanel
+              key={room}
+              room={room}
+              onOpenProfile={onOpenProfile}
+              onSeen={rooms.seen}
+              /* The row the sidebar already holds, so the panel can state the
+                 room's rule without asking for it again. */
+              gatedOn={activeGroup}
+            />
           </section>
         </div>
       )}

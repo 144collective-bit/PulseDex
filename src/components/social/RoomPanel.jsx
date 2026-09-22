@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Loader2, AlertTriangle, ChevronUp, Users, PenLine, Search, X } from 'lucide-react'
+import { Loader2, AlertTriangle, ChevronUp, Users, PenLine, Search, X, Lock } from 'lucide-react'
 import ChatMessageRow from './ChatMessageRow'
 import ChatComposer from './ChatComposer'
 import ChatProfileCard from './ChatProfileCard'
@@ -15,6 +15,7 @@ import { useUserProfile } from '../../context/UserProfileContext'
 import { typingLine, countAfter } from '../../utils/chatPresence'
 import { searchTerm } from '../../utils/chatSearch'
 import { roomToken } from '../../config/rooms'
+import { fromBaseUnits, roomGate } from '../../utils/gate'
 import { useTokenClaim } from '../../hooks/useTokenClaim'
 import { formatAddress } from '../../utils/formatters'
 
@@ -37,7 +38,7 @@ const FOLLOWING_THRESHOLD_PX = 120
  * conversation is not the same conversation when the room changes, and saying
  * so to React is cheaper than maintaining the list.
  */
-export default function RoomPanel({ room, onOpenProfile, onSeen }) {
+export default function RoomPanel({ room, onOpenProfile, onSeen, gatedOn = null }) {
   const { account } = useSiweAuth()
   const isModerator = useIsModerator()
   const { messages, status, error, add, remove, replace, react, hasMore, loadingOlder, loadOlder } =
@@ -51,6 +52,16 @@ export default function RoomPanel({ room, onOpenProfile, onSeen }) {
    * the answer is the same for every row in it. Null for the five fixed
    * rooms, which are about no token and where nobody carries this badge.
    */
+  /*
+   * The room's gate in words, or null.
+   *
+   * Passed in rather than fetched: the caller already holds the room row -
+   * the sidebar listed it, the token page loaded it - and a second query per
+   * room open would be one for a string that is never used to decide
+   * anything.
+   */
+  const gate = describeGate(gatedOn)
+
   const { claim } = useTokenClaim(roomToken(room))
   const devAddress = claim?.address || null
 
@@ -481,6 +492,22 @@ export default function RoomPanel({ room, onOpenProfile, onSeen }) {
         )
       )}
 
+      {/*
+        What this room requires, said before anybody types.
+
+        Nothing here enforces it - the endpoint checks a balance on every
+        write, and a client-side check would be decoration. This exists so
+        that a refusal is not the first anybody hears of the rule: writing
+        three sentences and then being told the room is for holders is a
+        worse experience than knowing going in.
+      */}
+      {gate && (
+        <p className="chat-gate font-mono">
+          <Lock size={11} />
+          Holders only: {gate}
+        </p>
+      )}
+
       <ChatComposer
         room={room}
         onPosted={add}
@@ -509,4 +536,21 @@ function Notice({ icon: Icon, spinning = false, children }) {
       <span>{children}</span>
     </p>
   )
+}
+
+/**
+ * A room's holders-only rule, in words, or null when there is not one.
+ *
+ * Built from what was stored when the gate was set rather than from a fresh
+ * chain read: the decimals and symbol were captured then precisely so drawing
+ * this costs nothing. Falls back to base units rather than to silence - a
+ * rule that cannot state itself is a rule nobody can satisfy on purpose.
+ */
+function describeGate(room) {
+  const gate = roomGate(room)
+  if (!gate) return null
+
+  const amount = fromBaseUnits(room.min_balance, room.gate_decimals)
+  const symbol = room.gate_symbol || 'tokens'
+  return amount ? `${amount} ${symbol}` : `${room.min_balance} base units`
 }

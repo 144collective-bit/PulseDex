@@ -143,7 +143,14 @@ export const PUBLIC_PROFILE_FIELDS =
  * which is fine for what they do: order a list and show that a room is alive.
  */
 export const ROOM_FIELDS =
-  'slug, kind, token_address, name, blurb, message_count, last_message_at'
+  'slug, kind, token_address, name, blurb, message_count, last_message_at, ' +
+  /*
+   * The gate, read by the browser although nothing in the browser enforces
+   * it. A client-side balance check is decoration - the endpoint checks on
+   * every write - but a room that refuses a message without having said it
+   * was going to is worse than one that says so up front.
+   */
+  'gate_token, min_balance, gate_decimals, gate_symbol'
 
 /**
  * A dev claim as the browser reads one.

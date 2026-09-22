@@ -5,8 +5,11 @@ import {
   findRoom,
   isRoom,
   isTokenRoom,
+  groupSlug,
+  isGroupRoom,
   resolveRoom,
   roomToken,
+  slugGroup,
   tokenRoom,
   tokenRoomLabel,
 } from './rooms'
@@ -183,5 +186,111 @@ describe('resolveRoom', () => {
     // them in the Lounge is a better answer than an error page.
     expect(resolveRoom('removed-last-month')).toBe(DEFAULT_ROOM)
     expect(resolveRoom(undefined)).toBe(DEFAULT_ROOM)
+  })
+})
+
+/*
+ * Groups.
+ *
+ * The slug rules matter more here than for token rooms, because a group's
+ * name is chosen rather than derived - so this is the only place where two
+ * rooms could be made to look like each other on purpose.
+ */
+describe('groupSlug', () => {
+  it('builds a slug from a name', () => {
+    expect(groupSlug('degens')).toBe('group-degens')
+  })
+
+  it('lowercases, so casing is not a rule anybody has to guess', () => {
+    expect(groupSlug('Degens')).toBe('group-degens')
+    expect(groupSlug('  DeGeNs  ')).toBe('group-degens')
+  })
+
+  it('allows single hyphens inside', () => {
+    expect(groupSlug('the-trenches')).toBe('group-the-trenches')
+  })
+
+  it('refuses a double hyphen', () => {
+    // Invisible at a glance, which makes `my--group` a way to sit beside
+    // `my-group` in a list and be taken for it.
+    expect(groupSlug('my--group')).toBeNull()
+  })
+
+  it('refuses a leading or trailing hyphen', () => {
+    expect(groupSlug('-degens')).toBeNull()
+    expect(groupSlug('degens-')).toBeNull()
+  })
+
+  it('refuses names that are too short or too long', () => {
+    expect(groupSlug('a')).toBeNull()
+    expect(groupSlug('a'.repeat(25))).toBeNull()
+    expect(groupSlug('a'.repeat(24))).toBe(`group-${'a'.repeat(24)}`)
+  })
+
+  it('refuses the names of the fixed rooms', () => {
+    // A group called "help" is a group pretending to be the room everybody
+    // already trusts.
+    for (const room of ROOMS) {
+      expect(groupSlug(room.slug)).toBeNull()
+    }
+  })
+
+  it('refuses names that would read as another kind of room', () => {
+    expect(groupSlug('token')).toBeNull()
+    expect(groupSlug('group')).toBeNull()
+    expect(groupSlug('admin')).toBeNull()
+  })
+
+  it('refuses anything that is not a name', () => {
+    for (const value of [null, undefined, 42, {}, '', '   ', 'has space', 'CAPS_UNDERSCORE', 'emoji🙂']) {
+      expect(groupSlug(value)).toBeNull()
+    }
+  })
+
+  it('produces a slug the database will accept', () => {
+    // Matches rooms_group_slug_shape in 0016_groups_and_gating.sql.
+    expect(groupSlug('the-trenches')).toMatch(/^group-[a-z0-9][a-z0-9-]{0,22}[a-z0-9]$/)
+  })
+})
+
+describe('slugGroup', () => {
+  it('reads the name back out', () => {
+    expect(slugGroup('group-degens')).toBe('degens')
+  })
+
+  it('is null for anything that is not a group slug', () => {
+    for (const value of ['lounge', 'token-abc', 'group-', 'group--x', '', null, 42]) {
+      expect(slugGroup(value)).toBeNull()
+    }
+  })
+
+  it('still accepts a group whose name has since become reserved', () => {
+    // A name can be added to the reserved list after somebody made a group
+    // with it. The shape has to hold; the policy applies at creation, and a
+    // group that stopped resolving would be a room full of orphaned
+    // messages.
+    expect(slugGroup('group-admin')).toBe('admin')
+    expect(groupSlug('admin')).toBeNull()
+  })
+
+  it('agrees with isGroupRoom', () => {
+    for (const value of ['group-degens', 'lounge', 'group--x', undefined]) {
+      expect(isGroupRoom(value)).toBe(slugGroup(value) !== null)
+    }
+  })
+})
+
+describe('isRoom, with groups', () => {
+  it('accepts a well-formed group slug', () => {
+    // Only a shape check. Whether that group exists is the posting
+    // endpoint\'s question, and has to be - otherwise a well-formed slug
+    // would be enough to conjure a group by posting into it.
+    expect(isRoom('group-degens')).toBe(true)
+  })
+
+  it('refuses a malformed one', () => {
+    expect(isRoom('group-')).toBe(false)
+    expect(isRoom('group--x')).toBe(false)
+    expect(isRoom('group-Degens')).toBe(false)
   })
 })

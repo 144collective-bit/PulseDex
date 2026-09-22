@@ -76,6 +76,47 @@ export async function fetchTokenRoom(address) {
   return data ? toRoom(data) : null
 }
 
+/**
+ * The groups, busiest first.
+ *
+ * Unlike token rooms, a group with nothing said in it is still listed. One
+ * exists because a moderator made it deliberately, and a new group that is
+ * invisible until somebody posts is a group nobody can find to post in.
+ *
+ * @param {{limit?: number}} params
+ */
+export async function fetchGroups({ limit = 12 } = {}) {
+  if (!hasSupabase) return []
+
+  const { data, error } = await supabase
+    .from('rooms')
+    .select(ROOM_FIELDS)
+    .eq('kind', 'group')
+    // Nulls last, so a group nobody has posted in sits at the bottom rather
+    // than at the top where Postgres puts nulls by default on a descending
+    // sort.
+    .order('last_message_at', { ascending: false, nullsFirst: false })
+    .limit(limit)
+
+  if (error) throw dbError(error, 'load the groups')
+  return (data || []).map(toRoom).filter((room) => room.name)
+}
+
+/** Create a group. Moderators only; the endpoint answers 404 to anybody else,
+ *  so this offers no way to discover that the route exists. */
+export async function createGroup({ name, blurb, gateToken, minBalance }) {
+  const res = await fetch('/api/rooms/groups', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ name, blurb, gateToken, minBalance }),
+  })
+
+  const payload = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(payload.error || 'That group could not be created.')
+  return payload.group
+}
+
 /** Flatten a room row into what a component renders from. */
 function toRoom(row) {
   return {
@@ -93,5 +134,15 @@ function toRoom(row) {
     blurb: row.blurb || null,
     messageCount: Number(row.message_count) || 0,
     lastMessageAt: row.last_message_at || null,
+    /*
+     * The gate as the row holds it, unflattened on purpose: `roomGate` in
+     * src/utils/gate.js is the one place that decides what counts as a gate,
+     * and reshaping the columns here would be a second place that could
+     * disagree with it.
+     */
+    gate_token: row.gate_token || null,
+    min_balance: row.min_balance ?? null,
+    gate_decimals: row.gate_decimals ?? null,
+    gate_symbol: row.gate_symbol || null,
   }
 }

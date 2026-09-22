@@ -3,7 +3,9 @@ import { isSameOrigin, rateLimit } from '../../_lib/guard.js'
 import { serviceClient } from '../../_lib/supabase.js'
 import { normaliseMessage, REJECTED } from '../../../src/utils/chatMessage.js'
 import { parseAdminAddresses, isAdminAddress } from '../../../src/utils/chatAdmin.js'
-import { isRoom, roomToken } from '../../../src/config/rooms.js'
+import { isGroupRoom, isRoom, roomToken } from '../../../src/config/rooms.js'
+import { GATE, fromBaseUnits, gateDecision, roomGate } from '../../../src/utils/gate.js'
+import { cachedBalance, readBalance } from '../../_lib/tokenBalance.js'
 import {
   exceededLimit,
   retryAfterSeconds,
@@ -249,6 +251,45 @@ async function post(req, res) {
    * further down: without the row the insert cannot succeed, so carrying on
    * would only reach a worse error message.
    */
+  /*
+   * What kind of room this is, and whether it lets this person write.
+   *
+   * One read, before the room is touched, answering two questions that both
+   * have to be settled before a message is inserted.
+   *
+   * A group must already exist. `isRoom` above only checked the slug's shape,
+   * which for a group proves nothing - a group is made by a moderator, and
+   * without this check a well-formed slug would be enough to conjure one by
+   * posting into it.
+   *
+   * A gated room needs a balance. The gate is on the room row, so it arrives
+   * in the same read.
+   */
+  const existing = await db
+    .from('rooms')
+    .select('slug, kind, gate_token, min_balance, gate_symbol, gate_decimals')
+    .eq('slug', room)
+    .maybeSingle()
+
+  if (existing.error) {
+    console.error('chat: reading the room failed:', existing.error.message)
+    return res.status(503).json({ error: 'Chat is unavailable right now.' })
+  }
+
+  if (isGroupRoom(room) && existing.data?.kind !== 'group') {
+    // Deliberately the same sentence `isRoom` failing would produce. A group
+    // that does not exist and a slug that is malformed are the same fact to
+    // whoever is asking, and distinguishing them turns this into a way to
+    // enumerate which groups exist.
+    return res.status(400).json({ error: 'That room does not exist.' })
+  }
+
+  const gate = roomGate(existing.data)
+  if (gate) {
+    const refusal = await checkGate({ gate, address, room: existing.data })
+    if (refusal) return res.status(refusal.status).json({ error: refusal.error })
+  }
+
   const noted = await db.rpc('note_room_message', { room_slug: room, author: address })
 
   if (noted.error) {
@@ -336,31 +377,109 @@ async function edit(req, res) {
 }
 
 /**
- * Has this account claimed the token whose room holds this message?
+ * May this address write in this gated room?
  *
- * Two small reads rather than a join, because the answer has to be about the
- * message that is actually being removed. Reading the room from the message
- * means a request cannot name one room while pointing at a message in
- * another.
+ * Returns null to allow, or `{status, error}` to refuse. The check is on the
+ * write rather than on entry, which is the decision this whole feature rests
+ * on: a check when somebody joins is a snapshot that stops being true the
+ * moment they sell, and a room gated that way is a room where the gate is a
+ * formality after the first day.
+ *
+ * The cost is that posting now depends on a node answering, and the interesting
+ * case is when it does not. `gateDecision` holds that rule and the reasoning
+ * for it; this function is only the part that turns an answer into a sentence.
+ *
+ * Reading, reacting and searching are all unaffected. A gate is about who may
+ * write - a holders-only room nobody else can read is a different feature,
+ * and a more exclusionary one than anybody has asked for.
+ */
+async function checkGate({ gate, address, room }) {
+  const fresh = await readBalance(gate.token, address)
+  const decision = gateDecision({
+    fresh,
+    cached: cachedBalance(gate.token, address),
+    min: gate.min,
+  })
+
+  if (decision.state === GATE.allowed || decision.state === GATE.stale) return null
+
+  /*
+   * Says how much is needed, using what the chain said when the gate was
+   * set. Not how much they hold: that is their business, they can see it in
+   * their own wallet, and an endpoint that reports balances back is one more
+   * way to check an address without asking a node yourself.
+   */
+  const needed = describeGate(room)
+
+  if (decision.state === GATE.unknown) {
+    return {
+      status: 503,
+      error: `Your balance could not be checked right now. This room needs ${needed}.`,
+    }
+  }
+
+  return { status: 403, error: `This room is for holders. You need ${needed} to post here.` }
+}
+
+/** The gate in words, from what was stored when it was set. */
+function describeGate(room) {
+  const amount = fromBaseUnits(room?.min_balance, room?.gate_decimals)
+  const symbol = room?.gate_symbol || 'tokens'
+  // Falls back to the raw base units rather than to nothing. A refusal that
+  // cannot say how much is needed is a refusal nobody can act on.
+  return amount ? `${amount} ${symbol}` : `${room?.min_balance} base units of ${room?.gate_token}`
+}
+
+/**
+ * Does this account run the room this message is in?
+ *
+ * Two ways to, and they are the same shape: somebody who claimed the token a
+ * token room is about, and somebody who created a group. Both are moderation
+ * confined to one room, which is the only kind of moderation this site hands
+ * out to anybody who is not a site moderator.
+ *
+ * The room is read from the message rather than taken from the request, so
+ * the question answered is "is this message in a room this person runs" -
+ * which cannot be widened by asking differently.
  *
  * Answers false for anything unexpected - a message that is gone, a room that
- * is not a token's, a query that failed. False means the ordinary rule
- * applies and the caller may only remove their own, which is the safe
- * direction.
+ * is neither kind, a query that failed. False means the ordinary rule applies
+ * and the caller may only remove their own, which is the safe direction.
  */
-async function claimsThisRoom(db, address, messageId) {
+async function runsThisRoom(db, address, messageId) {
   const found = await db.from('messages').select('room').eq('id', messageId).maybeSingle()
-  const token = roomToken(found.data?.room)
-  if (!token) return false
+  const room = found.data?.room
+  if (!room) return false
 
-  const claim = await db
-    .from('token_claims')
-    .select('address')
-    .eq('token_address', token)
-    .is('revoked_at', null)
-    .maybeSingle()
+  const token = roomToken(room)
+  if (token) {
+    const claim = await db
+      .from('token_claims')
+      .select('address')
+      .eq('token_address', token)
+      .is('revoked_at', null)
+      .maybeSingle()
 
-  return claim.data?.address === address
+    return claim.data?.address === address
+  }
+
+  if (isGroupRoom(room)) {
+    /*
+     * The creator, and only while the row still says so. Not cached anywhere
+     * and not derived from the slug: a group's name says nothing about who
+     * made it, which is exactly why groups are created deliberately.
+     */
+    const group = await db
+      .from('rooms')
+      .select('created_by')
+      .eq('slug', room)
+      .eq('kind', 'group')
+      .maybeSingle()
+
+    return Boolean(group.data?.created_by) && group.data.created_by === address
+  }
+
+  return false
 }
 
 async function remove(req, res) {
@@ -396,11 +515,12 @@ async function remove(req, res) {
   /*
    * Three ways now, the third being narrow on purpose.
    *
-   * Somebody who has claimed a token may remove messages in that token's
-   * room, and nowhere else. It is the one power a claim carries, and the
-   * reason it carries it: a dev whose room fills with impersonators posting a
-   * fake contract address should not have to find a site moderator at two in
-   * the morning.
+   * Somebody who runs a room may remove messages in it, and nowhere else -
+   * the claimant of a token room, or the creator of a group. It is the one
+   * power either carries, and the reason it carries it: a dev whose room
+   * fills with impersonators posting a fake contract address should not have
+   * to find a site moderator at two in the morning, and neither should
+   * somebody whose group is being spammed.
    *
    * The scope is checked against the message's own room rather than against
    * anything the request said, so the question answered is "is this message
@@ -408,7 +528,7 @@ async function remove(req, res) {
    * by asking differently. Note what it is not: no blocking, which silences
    * an account everywhere, and no reach outside the one room.
    */
-  const dev = moderator ? false : await claimsThisRoom(db, address, id)
+  const dev = moderator ? false : await runsThisRoom(db, address, id)
 
   let update = db
     .from('messages')

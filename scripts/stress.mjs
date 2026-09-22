@@ -146,6 +146,56 @@ const REVOKED_CLAIM = {
   revoked_at: '2026-02-01T00:00:00Z',
 }
 
+/*
+ * Two groups: one open, one holders-only.
+ *
+ * The gated one carries a minimum of a thousand tokens at eighteen decimals,
+ * which is 10^21 base units - a number no JavaScript number holds exactly,
+ * and the reason every comparison in src/utils/gate.js is BigInt. A room
+ * whose stated requirement comes out as 1e+21 has lost the arithmetic
+ * somewhere.
+ */
+const OPEN_GROUP = {
+  slug: 'group-the-trenches',
+  kind: 'group',
+  token_address: null,
+  name: 'The Trenches',
+  blurb: 'Launches, and what went wrong with them',
+  message_count: 41,
+  last_message_at: '2026-03-01T00:00:00Z',
+  gate_token: null,
+  min_balance: null,
+  gate_decimals: null,
+  gate_symbol: null,
+}
+const GATED_GROUP = {
+  ...OPEN_GROUP,
+  slug: 'group-whales',
+  name: 'Whales',
+  blurb: 'Holders only',
+  message_count: 0,
+  last_message_at: null,
+  gate_token: ADDRESS,
+  min_balance: '1000000000000000000000',
+  gate_decimals: 18,
+  gate_symbol: 'PLSX',
+}
+/* A gate with half of itself missing, and one with a minimum of zero. Both
+   are refused by constraints in 0016; neither may render as a restriction. */
+const BROKEN_GATE = {
+  ...GATED_GROUP,
+  slug: 'group-broken',
+  name: 'Broken',
+  gate_token: ADDRESS,
+  min_balance: null,
+}
+const ZERO_GATE = {
+  ...GATED_GROUP,
+  slug: 'group-zero',
+  name: 'Zero',
+  min_balance: '0',
+}
+
 const FIXTURES = {
   /** The ordinary case, so a failure elsewhere is known to be the data. */
   healthy: (table) => {
@@ -155,7 +205,7 @@ const FIXTURES = {
       return [{ ...NASTY_POST, body: 'gm', created_at: '2026-01-01T00:00:00Z', profiles: { handle: 'degen', avatar_id: null, avatar_url: null } }]
     if (table === 'messages')
       return [{ ...NASTY_MESSAGE, body: 'gm', created_at: '2026-01-01T00:00:00Z', profiles: { handle: 'degen', avatar_id: null, avatar_url: null }, message_reactions: [] }]
-    if (table === 'rooms') return [TOKEN_ROOM]
+    if (table === 'rooms') return [TOKEN_ROOM, OPEN_GROUP, GATED_GROUP]
     if (table === 'token_claims') return [TOKEN_CLAIM]
     return []
   },
@@ -164,7 +214,7 @@ const FIXTURES = {
     if (table === 'profiles') return [NASTY_PROFILE]
     if (table === 'posts') return [NASTY_POST]
     if (table === 'messages') return [NASTY_MESSAGE, NASTY_REPLY]
-    if (table === 'rooms') return [NASTY_ROOM, TOKEN_ROOM]
+    if (table === 'rooms') return [NASTY_ROOM, TOKEN_ROOM, BROKEN_GATE, ZERO_GATE]
     // A revoked claim and one with nothing in it. Neither may draw a badge.
     if (table === 'token_claims')
       return [REVOKED_CLAIM, { token_address: null, address: null, claimed_at: null, revoked_at: null }]
@@ -649,6 +699,119 @@ await run('chat / a token room that cannot be linked to', {
     const listed = await page.locator('.room-item.is-token').count()
     // Two rows come back; one of them has a slug that is not an address.
     if (listed !== 1) throw new Error(`expected the unlinkable room to be dropped, drew ${listed}`)
+  },
+})
+
+/*
+ * Groups, and the holders-only rule.
+ *
+ * The rule is enforced on the write, server-side, so nothing a browser does
+ * can be trusted to keep anybody out - which means what is being checked
+ * here is the other half: that the room says what it requires before
+ * somebody types, and says it in units a person recognises.
+ */
+await run('chat / groups are listed above the token rooms', {
+  steps: async (page) => {
+    await socialTab('Chat Rooms')(page)
+    const headings = (await page.locator('.room-group').allInnerTexts()).map((h) => h.toLowerCase())
+    if (!headings.includes('groups')) throw new Error('no Groups heading')
+
+    const names = await page.locator('.room-item').allInnerTexts()
+    if (!names.some((n) => n.includes('The Trenches'))) throw new Error('a group is missing')
+
+    // The five are always first: they are the same on every deployment, and
+    // a list whose top entries move is a list nobody learns.
+    if (!names[0].includes('Lounge')) throw new Error(`the list starts with "${names[0]}"`)
+  },
+})
+
+await run('chat / a gated group says so without saying how much', {
+  steps: async (page) => {
+    await socialTab('Chat Rooms')(page)
+    const whales = page.locator('.room-item', { hasText: 'Whales' }).first()
+    if (!(await whales.count())) throw new Error('the gated group is not listed')
+    if (!(await whales.locator('.room-lock').count())) throw new Error('no padlock on a gated room')
+
+    /*
+     * A sidebar listing minimum holdings reads as a price list, so the
+     * entry says "gated" and not "gated on this much". Asserted on the
+     * room's own entry rather than on the whole column, which also holds
+     * shortened addresses full of digits.
+     */
+    const entry = await whales.innerText()
+    for (const leaked of ['1000', 'PLSX', ADDRESS.slice(0, 8)]) {
+      if (entry.includes(leaked)) throw new Error(`the sidebar entry says "${leaked}"`)
+    }
+  },
+})
+
+await run('chat / a gated room states its rule in human units', {
+  steps: async (page) => {
+    await socialTab('Chat Rooms')(page)
+    await page.locator('.room-item', { hasText: 'Whales' }).first().click()
+    await page.waitForTimeout(1500)
+
+    const gate = page.locator('.chat-gate')
+    if (!(await gate.count())) throw new Error('a gated room says nothing about its gate')
+
+    const said = await gate.innerText()
+    if (!said.includes('1000 PLSX')) throw new Error(`the gate reads "${said}"`)
+    // 10^21 through a JavaScript number comes out as 1e+21.
+    if (said.includes('e+')) throw new Error('the amount went through a float')
+
+    // The composer stays: the check is on the write, so somebody who holds
+    // the token must not be shut out of typing by a rule drawn in a browser.
+    if (!(await page.locator('.chat-input').isVisible())) {
+      throw new Error('a gated room hid the composer')
+    }
+  },
+})
+
+await run('chat / a broken gate is not drawn as a rule', {
+  fixture: 'nasty',
+  steps: async (page) => {
+    await socialTab('Chat Rooms')(page)
+
+    // Half a gate, and a gate of zero. Every address holds zero of every
+    // token, so neither restricts anybody and neither may claim to.
+    for (const name of ['Broken', 'Zero']) {
+      const item = page.locator('.room-item', { hasText: name }).first()
+      if (!(await item.count())) continue
+      if (await item.locator('.room-lock').count()) {
+        throw new Error(`"${name}" drew a padlock for a gate that gates nobody`)
+      }
+
+      await item.click()
+      await page.waitForTimeout(1200)
+      if (await page.locator('.chat-gate').count()) {
+        throw new Error(`"${name}" stated a requirement it does not have`)
+      }
+    }
+  },
+})
+
+await run('chat / groups on a phone', {
+  viewport: PHONE,
+  steps: async (page) => {
+    await mobileTab('Chat')(page)
+    const t = page.locator('.social-tabs .xp-tab', { hasText: 'Chat Rooms' }).first()
+    if (!(await t.count())) throw new Error('no Chat Rooms tab on a phone')
+    await t.click()
+    await page.waitForTimeout(1500)
+
+    const whales = page.locator('.room-item', { hasText: 'Whales' }).first()
+    if (!(await whales.count())) throw new Error('the gated group is not listed on a phone')
+  },
+})
+
+await run('chat / an ordinary account cannot make a group', {
+  steps: async (page) => {
+    await socialTab('Chat Rooms')(page)
+    // The endpoint refuses one too, with a 404. This is only about not
+    // drawing a control nobody can use.
+    if (await page.locator('.room-new').count()) {
+      throw new Error('a non-moderator was offered a way to create a group')
+    }
   },
 })
 

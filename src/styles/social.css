@@ -686,6 +686,124 @@
   color: inherit;
 }
 
+/* ── Groups, and holders-only rooms ── */
+
+.room-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* A padlock beside a gated group. Deliberately not the accent colour: it is
+   a fact about the room, not a warning, and a red lock in a navigation
+   column reads as something being wrong. */
+.room-lock {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.room-new {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  padding: 7px;
+  border: 1px dashed var(--ch-hairline);
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--text-muted);
+  font-size: var(--fs-label, 11px);
+  cursor: pointer;
+}
+
+.room-new:hover {
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.room-new-form {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-md);
+  background: var(--ch-surface);
+}
+
+.room-new-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: var(--fs-micro, 10px);
+  color: var(--text-muted);
+}
+
+.room-new-input {
+  width: 100%;
+  min-width: 0;
+  padding: 5px 7px;
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.room-new-input:focus {
+  outline: none;
+  border-color: rgba(0, 229, 255, 0.4);
+}
+
+.room-new-note {
+  margin: 0;
+  font-size: var(--fs-micro, 10px);
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.room-new-error {
+  margin: 0;
+  font-size: var(--fs-micro, 10px);
+  line-height: 1.45;
+  color: var(--pulse-red);
+}
+
+.room-new-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.room-new-cancel {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: var(--fs-label, 11px);
+  cursor: pointer;
+}
+
+/*
+ * What a gated room requires, above the composer.
+ *
+ * In the same place the typing indicator sits, and styled like it: this is
+ * ambient information about the room rather than an error, and somebody who
+ * holds the token should not be greeted by something that looks like a
+ * refusal every time they open the room.
+ */
+.chat-gate {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  padding: 4px 12px;
+  font-size: var(--fs-micro, 10px);
+  color: var(--text-muted);
+}
+
 /* ── The dev claim ── */
 
 /*

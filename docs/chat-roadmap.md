@@ -277,26 +277,66 @@ entirely. Transparency argues the other way here and lost: publishing "revoked
 - reported for a rug" over a public key is publishing an accusation. The badge
 goes away and nothing accuses anybody.
 
-### Batch D - groups, and gating
+### Batch D - groups, and gating  <- done, needs one check in production
 
-Smaller than it was, because groups start moderator-made.
+Done, in `0016_groups_and_gating.sql` and the code around it:
 
-- Creating a group, naming rules, a directory
-- The creator moderates their own group
-- **Holders-only rooms**: a `min_balance` on the room, checked server-side at
-  post time
+- [x] Creating a group, naming rules, a directory
+- [x] The creator moderates their own group
+- [x] **Holders-only rooms**: a `min_balance` on the room, checked server-side at
+      post time
 
-The gating is the hard half, and the honest version of it looks like this:
+Every line of the gating plan survived contact, which is worth recording
+because it is unusual:
 
-- The check belongs on the **write**, not on entry. A check on join is a
-  snapshot that is wrong the moment somebody sells.
-- Which means an RPC read of `balanceOf` in the posting path, so the write now
-  depends on a node answering. It needs a cache with a short life, and a
-  decision about what happens when the read fails - refusing every post
-  because an RPC is slow is worse than letting a seller talk for two minutes.
-- Selling costs the ability to post, not the messages already written. History
-  is not rewritten because somebody's balance changed.
-- It must be server-side. A client-side balance check is decoration.
+- [x] The check is on the **write**. Nothing is checked on entry, and reading
+      a gated room is not restricted at all - a gate is about who may write,
+      and a holders-only room nobody else can read is a different and more
+      exclusionary feature than anybody asked for.
+- [x] `balanceOf` sits in the posting path, cached per serverless instance for
+      sixty seconds.
+- [x] Selling costs the ability to post and nothing else. No message is ever
+      touched because a balance changed.
+- [x] It is server-side. The browser draws the rule; it never decides it.
+
+**Migration 0016 has to run before this deploys.**
+
+**What happens when the node does not answer** was the open question, and the
+answer is asymmetric on purpose. Somebody whose last known balance was enough
+keeps posting for ten minutes - they were in the room a minute ago and an RPC
+timeout is not evidence that they sold. Somebody with no cached reading at all
+is refused, because "we could not check" must never mean "come in" for a
+person nobody has ever checked; that turns every outage into an open door.
+Somebody whose last reading was *too small* stays refused: the grace window
+keeps people in, never lets them in. That rule is `gateDecision` in
+`src/utils/gate.js` and has a test per branch.
+
+**Every amount is a BigInt, everywhere.** A gate of a thousand 18-decimal
+tokens is 10^21 base units, which a JavaScript number renders as `1e+21` and
+compares wrongly well before that. The human amount is converted once, at
+creation, using the token's own `decimals()` read from the chain - so the
+comparison at post time is two integers and never a rescaling. `min_balance`
+is `numeric(78,0)` because a uint256 has 78 digits and a bigint holds 19.
+
+**The gate is stated before anybody types**, above the composer, in units a
+person recognises. Nothing about that is enforcement. It exists so a refusal
+is not the first anybody hears of the rule - writing three sentences and then
+being told the room is for holders is a worse experience than knowing going
+in. The sidebar shows a padlock and deliberately not the amount: a navigation
+column listing minimum holdings reads as a price list.
+
+**The same production check Batch C needs, for the same reason.** The balance
+read calls a node and this machine has no outbound network, so
+`readBalance` has never been observed against a real RPC. Unlike the deployer
+lookup there is no fallback source - `balanceOf` is standard, so the risk is
+lower - but **somebody should create one gated group and try to post in it**.
+If the node is unreachable the room refuses everybody who has not posted
+recently, which is safe and silent.
+
+**A group's name and its gate cannot be edited.** Changing who may speak in a
+room people are already in wants an audit row and a notice to the room, and
+neither exists. A group with the wrong gate is left alone and another made.
+That is a real limitation and the first thing to fix if groups get used.
 
 ---
 

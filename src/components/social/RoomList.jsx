@@ -1,5 +1,7 @@
+import { Lock } from 'lucide-react'
 import { ROOMS, isTokenRoom, tokenRoomLabel } from '../../config/rooms'
 import { useTokenRooms } from '../../hooks/useTokenRooms'
+import { roomGate } from '../../utils/gate'
 
 /**
  * The rooms, down the left.
@@ -26,7 +28,7 @@ import { useTokenRooms } from '../../hooks/useTokenRooms'
  * changes under the reader while the first never does. Presenting them as one
  * list would mean a room appearing and disappearing among the fixtures.
  */
-export default function RoomList({ current, onSelect, unread = {} }) {
+export default function RoomList({ current, onSelect, unread = {}, groups = [] }) {
   const tokenRooms = useTokenRooms()
 
   /*
@@ -80,6 +82,44 @@ export default function RoomList({ current, onSelect, unread = {} }) {
           )
         })}
       </ul>
+
+      {groups.length > 0 && (
+        <>
+          <h2 className="room-group font-mono">Groups</h2>
+          <ul role="tablist" aria-orientation="vertical">
+            {groups.map((group) => {
+              const active = group.slug === current
+              const gate = roomGate(group)
+              return (
+                <li key={group.slug}>
+                  <button
+                    type="button"
+                    role="tab"
+                    id={`room-tab-${group.slug}`}
+                    aria-selected={active}
+                    aria-controls="room-panel"
+                    className={`room-item ${active ? 'active' : ''}`}
+                    onClick={() => onSelect(group.slug)}
+                    title={group.blurb || undefined}
+                  >
+                    <span className="room-name font-mono">{group.name}</span>
+
+                    {/*
+                      A padlock on a gated group, and nothing more specific.
+                      What the gate actually is belongs where somebody is
+                      about to type, not in a navigation column - and a
+                      sidebar listing minimum holdings reads as a price list.
+                    */}
+                    {gate && (
+                      <Lock size={11} className="room-lock" aria-label="Holders only" />
+                    )}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </>
+      )}
 
       {shown.length > 0 && (
         <>
