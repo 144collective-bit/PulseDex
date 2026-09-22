@@ -58,21 +58,42 @@ breaks when a room changes kind.
 
 ## The batches
 
-### Batch 1 - a URL for every surface  <- next
+### Batch 1 - a URL for every surface  <- done
 
-The prerequisite for the rest, and worth shipping alone.
+- [x] `src/utils/socialPath.js`: parse and build `/feed`, `/me`, `/r/<slug>`,
+      `/discover`, `/notifications`. Pure and tested, the way
+      `src/utils/profilePath.js` already is.
+- [x] `src/hooks/useSocialRoute.js`: the browser half - read the path, push a
+      new one, stay in step through Back.
+- [x] `SocialView` reads the route instead of holding `useState('feed')`, and
+      selecting a room pushes `/r/<slug>`.
+- [x] A cold load of `/r/group-whales` lands in that room. Back and forward
+      work through the whole section.
 
-- `src/utils/socialPath.js`: parse and build `/feed`, `/r/<slug>`,
-  `/discover`, `/notifications`. Pure and tested, the way
-  `src/utils/profilePath.js` already is.
-- `src/hooks/useSocialRoute.js`: the browser half - read the path, push a new
-  one, stay in step through Back. Same shape as `useProfileRoute`.
-- `SocialView` reads the route instead of holding `useState('feed')`, and
-  selecting a room pushes `/r/<slug>`.
-- A cold load of `/r/group-whales` lands in that room. Back and forward work
-  through the whole section.
+**The tab is derived from the URL, not kept beside it.** `shownTab` in
+`App.jsx` is `socialRoute ? 'social' : activeTab`. A second copy in state is
+the copy that goes stale, and the way that fails is a cold load landing on
+Home with the address bar insisting it is in a room.
 
-Done when a room can be pasted into a chat somewhere else and it opens.
+**A link to a room that no longer exists lands on the rooms surface, not on
+the home page.** Shared links outlive the things they point at, so that is the
+ordinary case rather than the odd one. The address bar is then corrected with
+`replaceState` - push would put the broken link in history for Back to return
+to - so whoever copies it next passes on one that works. The round trip pinned
+down in `socialPath.test.js` is what stops that correction correcting itself
+forever.
+
+**`/me` exists** and is the one surface not in the original plan. Four of five
+sub-tabs having URLs and the fifth not would have been a worse inconsistency
+than one more path, and it survives Batch 2 - the account menu can point at it.
+
+**Three routers now share one address bar**, and the bug that cost the most
+time here came from exactly that: `closeToken` pushes `/` whether or not a
+token was open, so the first version of `closeSocial` checked the location,
+found it already moved, concluded there was nothing to do, and left the
+section mounted over the home page. None of the three can assume the URL is
+where it last left it. Unifying them is worth doing and is not Batch 2's job;
+if a fourth is ever needed, do that first.
 
 ### Batch 2 - flatten it
 

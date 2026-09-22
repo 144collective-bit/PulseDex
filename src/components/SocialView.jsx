@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback } from 'react'
 import { Bell, ChartCandlestick, Compass, LogIn, MessagesSquare, Rss, UserRound } from 'lucide-react'
 import RoomList from './social/RoomList'
 import NewGroup from './social/NewGroup'
@@ -68,11 +68,27 @@ const TABS = [
   },
 ]
 
-export default function SocialView({ onOpenProfile, onOpenToken }) {
+export default function SocialView({ route, onNavigate, onOpenProfile, onOpenToken }) {
   const { account, isSignedIn, signIn, isBusy } = useSiweAuth()
 
-  const [tab, setTab] = useState('feed')
-  const [room, setRoom] = useState(DEFAULT_ROOM)
+  /*
+   * Which surface and which room, from the URL.
+   *
+   * Held nowhere in this component, and that is the change: a tab in state
+   * and a path in the address bar are two copies of one fact, and the copy
+   * that is not shown is the one that goes stale. Reading both from the route
+   * means a cold load, a Back press and a click all arrive the same way.
+   *
+   * The defaults cover a caller that has not routed yet - the section always
+   * opens on the feed, and the rooms surface on the room every new visitor
+   * lands in.
+   */
+  const tab = route?.tab || 'feed'
+  const room = route?.room || DEFAULT_ROOM
+
+  const setTab = useCallback((id) => onNavigate?.({ tab: id }), [onNavigate])
+  const setRoom = useCallback((slug) => onNavigate?.({ tab: 'rooms', room: slug }), [onNavigate])
+
   const { unread } = useNotifications()
 
   /*

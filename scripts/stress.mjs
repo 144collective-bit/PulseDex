@@ -830,6 +830,95 @@ await run('direct / profile, nasty row', { path: `/u/${ADDRESS}`, fixture: 'nast
 await run('direct / profile, no such person', { path: `/u/${ADDRESS}`, fixture: 'empty' })
 await run('direct / unknown path', { path: '/no/such/page' })
 
+/*
+ * A cold load of every social surface.
+ *
+ * The scenario the navigation work exists for, and the one that would have
+ * caught every routing bug this codebase has had: a path typed into a fresh
+ * tab has to render the right surface, not the home page with the address bar
+ * insisting otherwise. Nothing is clicked - if the URL alone does not get
+ * there, a link somebody shared does not work.
+ */
+const SURFACES = [
+  ['/feed', 'Feed'],
+  ['/discover', 'Discover'],
+  ['/notifications', 'Notifications'],
+  ['/me', 'My Profile'],
+  ['/r/lounge', 'Chat Rooms'],
+  ['/r/trading', 'Chat Rooms'],
+  [`/r/token-${ADDRESS}`, 'Chat Rooms'],
+  ['/r/group-the-trenches', 'Chat Rooms'],
+]
+
+for (const [path, expected] of SURFACES) {
+  await run(`direct / ${path}`, {
+    path,
+    steps: async (page) => {
+      /*
+       * The sub-tab strip, not `.social-view` - ProfilePage carries that
+       * class too, so a check on it passes on a page that is not the social
+       * section at all. That mistake was made once while writing these.
+       */
+      if (!(await page.locator('.social-tabs').count())) {
+        throw new Error('the URL did not reach the social section')
+      }
+
+      const active = (await page.locator('.social-tabs .xp-tab.active').first().innerText()).trim()
+      if (active !== expected) throw new Error(`landed on "${active}" rather than "${expected}"`)
+
+      // The address bar must still say what was asked for. A surface that
+      // renders under a path it then rewrites is a link that changes when
+      // somebody opens it.
+      const pathname = new URL(page.url()).pathname
+      if (pathname !== path) throw new Error(`the URL became ${pathname}`)
+    },
+  })
+}
+
+/*
+ * A link to a room that is no longer there.
+ *
+ * Shared links outlive the things they point at, so this is the ordinary case
+ * rather than the odd one. It has to land on the rooms surface - answering
+ * with the home page would be answering a different question - and it has to
+ * correct the address bar, so that whoever copies it next passes on a link
+ * that works.
+ */
+await run('direct / a room that is not a room', {
+  path: '/r/a-room-that-was-deleted',
+  steps: async (page) => {
+    if (!(await page.locator('.social-tabs').count())) {
+      throw new Error('a dead room link left the social section')
+    }
+
+    const pathname = new URL(page.url()).pathname
+    if (pathname !== '/r/lounge') {
+      throw new Error(`the address bar still claims to be at ${pathname}`)
+    }
+  },
+})
+
+/*
+ * Leaving the section has to take the URL with it.
+ *
+ * Three routers share one address bar - this one, useTokenRoute and
+ * useProfileRoute - and none of them can assume it is where they last left
+ * it. The first version of this shipped with the section mounted over the
+ * home page because `closeToken` had already pushed `/` and the check here
+ * concluded there was nothing to do.
+ */
+await run('chat / leaving the section clears the URL', {
+  path: '/r/trading',
+  steps: async (page) => {
+    await tab('Home')(page)
+    const pathname = new URL(page.url()).pathname
+    if (pathname !== '/') throw new Error(`the URL is still ${pathname}`)
+    if (await page.locator('.social-tabs').count()) {
+      throw new Error('the social section is still on screen over Home')
+    }
+  },
+})
+
 // Behind the account menu.
 await run('account / Profile settings', { steps: accountMenu('Profile settings') })
 await run('account / My public profile', { steps: accountMenu('My public profile') })

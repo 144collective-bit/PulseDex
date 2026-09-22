@@ -64,6 +64,7 @@ const TradeHistory = lazyRoute(() => import('./components/TradeHistory'))
 const WalletConnectModal = lazyRoute(() => import('./components/WalletConnectModal'))
 const UserProfileModal = lazyRoute(() => import('./components/UserProfileModal'))
 import { UserProfileProvider, useUserProfile } from './context/UserProfileContext'
+import { useSocialRoute } from './hooks/useSocialRoute'
 import { FEATURES } from './config/features'
 
 import './App.css'
@@ -164,6 +165,7 @@ function MainApp() {
   // route to earn an exception from this app's state-based navigation, and for
   // the same reason as the first: it is a page people paste to each other.
   const { profileRoute, openProfile, closeProfile } = useProfileRoute()
+  const { socialRoute, openSocial, closeSocial } = useSocialRoute()
 
   // Curve prices are PLS-denominated, so the token page needs the live rate.
   const { data: plsPrice } = usePlsPrice()
@@ -186,11 +188,31 @@ function MainApp() {
     if (account) openProfile({ address: account })
   }, [account, openProfile])
 
+  /*
+   * Which tab is showing.
+   *
+   * The URL wins where it says anything. A path like /r/lounge is a request
+   * for the social section, and deriving the tab from it rather than keeping
+   * a second copy in state is what stops the two disagreeing - which is how
+   * a cold load lands on Home with the address bar insisting it is in a room.
+   */
+  const shownTab = socialRoute ? 'social' : activeTab
+
   const selectTab = (tab) => {
     closeToken()
     // Same reasoning for the profile page: it gates the content area too, so
     // leaving it mounted would give a nav that changes state and shows nothing.
     closeProfile()
+
+    /*
+     * The social tab is a URL now, so selecting it is a navigation rather
+     * than a state change - and selecting any other tab has to take the URL
+     * with it, or the address bar goes on claiming to be a room nobody is
+     * looking at.
+     */
+    if (tab === 'social') openSocial({ tab: 'feed' })
+    else closeSocial()
+
     setActiveTab(tab)
   }
   const [currentPair, setCurrentPair] = useState(null)
@@ -297,7 +319,7 @@ function MainApp() {
     <div className="app-shell">
       {/* Top Navbar */}
       <Navbar
-        activeTab={activeTab}
+        activeTab={shownTab}
         setActiveTab={selectTab}
         onOpenPublicProfile={openMyProfile}
         onSelectPair={handleSelectPair}
@@ -317,7 +339,7 @@ function MainApp() {
             rather than unmounting the app and leaving a white screen. Keyed on
             the current view, so moving to another tab clears a failure instead
             of leaving the message in place for every tab. */}
-        <RouteErrorBoundary resetKey={`${activeTab}|${tokenAddress || ''}|${profileRoute?.address || profileRoute?.handle || ''}`}>
+        <RouteErrorBoundary resetKey={`${shownTab}|${tokenAddress || ''}|${profileRoute?.address || profileRoute?.handle || ''}`}>
         <Suspense fallback={<TabLoading />}>
         {/* A direct /token/<address> link takes over the content area; the tab
             shell stays mounted underneath so Back returns to it instantly. */}
@@ -339,7 +361,7 @@ function MainApp() {
           />
         ) : (
         <>
-        {activeTab === 'screener' && (
+        {shownTab === 'screener' && (
           <div className="screener-view-wrapper">
             {/* Mobile Screener Segment Control (Full-Width Responsive Menu) */}
             <div className="mobile-screener-switcher font-mono">
@@ -435,19 +457,26 @@ function MainApp() {
           </div>
         )}
 
-        {activeTab === 'home' && (
+        {shownTab === 'home' && (
           <HomeView onSelectPairForChart={handleSelectPair} />
         )}
 
-        {activeTab === 'trenches' && (
+        {shownTab === 'trenches' && (
           <TrenchesView onSelectPairForChart={handleSelectPair} onOpenTokenPage={openToken} />
         )}
 
-        {FEATURES.social && activeTab === 'social' && (
-          <SocialView onOpenProfile={openProfile} onOpenToken={openToken} />
+        {FEATURES.social && shownTab === 'social' && (
+          <SocialView
+            /* Which surface, and which room, come from the URL. The section
+               holds no tab state of its own any more - see useSocialRoute. */
+            route={socialRoute}
+            onNavigate={openSocial}
+            onOpenProfile={openProfile}
+            onOpenToken={openToken}
+          />
         )}
 
-        {FEATURES.markets && activeTab === 'markets' && (
+        {FEATURES.markets && shownTab === 'markets' && (
           <MarketOverview
             pairs={topPairs}
             isLoading={isLoadingTopPairs}
@@ -459,7 +488,7 @@ function MainApp() {
 
         {/* Watchlist now lives inside the portfolio section rather than in
             its own nav slot - both are ways of tracking assets you care about. */}
-        {(activeTab === 'portfolio' || activeTab === 'watchlist') && (
+        {(shownTab === 'portfolio' || shownTab === 'watchlist') && (
           <PortfolioSection
             watchlist={watchlist}
             pairs={topPairs}
@@ -468,7 +497,7 @@ function MainApp() {
           />
         )}
 
-        {FEATURES.profile && activeTab === 'profile' && (
+        {FEATURES.profile && shownTab === 'profile' && (
           <ProfileView onOpenPublicProfile={openMyProfile} />
         )}
 
@@ -480,7 +509,7 @@ function MainApp() {
 
       {/* Mobile Native Bottom Navigation */}
       <MobileBottomNav
-        activeTab={activeTab}
+        activeTab={shownTab}
         setActiveTab={selectTab}
         watchlistCount={watchlist.length}
       />
