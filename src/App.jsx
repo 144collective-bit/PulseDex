@@ -332,6 +332,9 @@ function MainApp() {
             address={tokenAddress}
             plsPrice={plsPrice}
             onBack={closeToken}
+            /* So the chat tab on a token page can open somebody's profile.
+               The board's modal gets no such route and does not offer it. */
+            onOpenProfile={openProfile}
           />
         ) : (
         <>
@@ -440,7 +443,7 @@ function MainApp() {
         )}
 
         {FEATURES.social && activeTab === 'social' && (
-          <SocialView onOpenProfile={openProfile} />
+          <SocialView onOpenProfile={openProfile} onOpenToken={openToken} />
         )}
 
         {FEATURES.markets && activeTab === 'markets' && (

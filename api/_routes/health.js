@@ -1,5 +1,5 @@
 import { serviceClient, anonClient } from '../_lib/supabase.js'
-import { MESSAGE_FIELDS, NOTIFICATION_FIELDS, POST_FIELDS, PUBLIC_PROFILE_FIELDS } from '../../src/config/queries.js'
+import { MESSAGE_FIELDS, NOTIFICATION_FIELDS, POST_FIELDS, PUBLIC_PROFILE_FIELDS, ROOM_FIELDS } from '../../src/config/queries.js'
 
 /**
  * Does this deployment actually work?
@@ -98,6 +98,12 @@ export default async function handler(req, res) {
      * no reason why.
      */
     checks.push(await query(reader, 'room-reads-table', 'room_reads', 'room'))
+    /*
+     * The room list, which as of 0014 lives in the database rather than only
+     * in src/config/rooms.js. Anon-readable, because both the sidebar's token
+     * rooms and the token page read it straight from the browser.
+     */
+    checks.push(await query(reader, 'rooms-select', 'rooms', ROOM_FIELDS))
   }
 
   /*
@@ -123,6 +129,18 @@ export default async function handler(req, res) {
   }
 
   if (db) {
+    /*
+     * `note_room_message` is deliberately not probed here, unlike
+     * `unread_counts` above.
+     *
+     * That one is a read and calling it costs nothing. This one writes - it
+     * creates a room and bumps its count - and this endpoint is polled. A
+     * probe would add a message to the Lounge's tally every time anybody
+     * checked whether the site was up, which is a health check quietly
+     * corrupting the thing it is reporting on. The `rooms` select above
+     * proves the table and its shape; the function is exercised by posting.
+     */
+
     checks.push(await query(db, 'blocked-table', 'blocked', 'address'))
     checks.push(await query(db, 'reports-table', 'post_reports', 'id'))
     /*

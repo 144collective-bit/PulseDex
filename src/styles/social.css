@@ -139,6 +139,71 @@
   letter-spacing: 0.02em;
 }
 
+/*
+ * The heading over the token rooms.
+ *
+ * A heading rather than a divider, because the two groups are not the same
+ * kind of thing in a list: the five above are permanent and named by a
+ * person, these arrive and leave as people talk about tokens. A rule between
+ * them would say "more of the same, further down".
+ */
+.room-group {
+  margin: 14px 4px 6px;
+  font-size: var(--fs-micro, 10px);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* An address is a monospace string of no interest in itself, so it is set
+   quieter than a room somebody named. */
+.room-item.is-token .room-name {
+  font-size: 11.5px;
+  letter-spacing: 0;
+  color: var(--text-muted);
+}
+
+.room-item.is-token:hover .room-name,
+.room-item.is-token.active .room-name {
+  color: inherit;
+}
+
+/*
+ * How much has been said in a token room.
+ *
+ * Deliberately not the unread badge's shape. That one is a filled pill in the
+ * accent colour and means "something here is new to you"; this is a count of
+ * everything ever said and means "this is where people are talking". Making
+ * them look alike would be the sidebar telling a reader they had forty
+ * unread messages about a token they have never opened.
+ */
+.room-count {
+  font-size: var(--fs-micro, 10px);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* The way back to the chart from a token's room. Inline in the lede, because
+   it is a continuation of the sentence describing where you are rather than
+   an action on the page. */
+.social-head-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: var(--fs-label, 11px);
+  color: var(--pulse-cyan);
+  cursor: pointer;
+}
+
+.social-head-link:hover {
+  text-decoration: underline;
+}
+
 /* ── The conversation ── */
 
 .social-panel {

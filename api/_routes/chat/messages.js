@@ -127,13 +127,22 @@ async function post(req, res) {
   }
 
   /*
-   * The room is checked against the list, not merely against the slug shape.
+   * The room is one of the five, or it names a token.
    *
    * It arrives in a request body, and a body is whatever the sender decided to
-   * send. A slug that only satisfies the database's shape constraint would
-   * create a room that exists in the data and nowhere in the app: absent from
-   * the sidebar, unreachable by navigation, and so unmoderatable through the
-   * interface built to moderate it.
+   * send. `isRoom` used to mean "on the list", which made this the check that
+   * stopped a message landing in a room that existed in the data and nowhere
+   * in the app - absent from the sidebar, unreachable by navigation, and so
+   * unmoderatable through the interface built to moderate it.
+   *
+   * It means something weaker now, and the weakening is the feature: a token
+   * room has no list to be on, so for those this is a check that the slug is
+   * `token-` followed by a real address. That is enough to keep the guarantee
+   * that mattered - every room this creates is one the app can navigate to,
+   * because the address in its name is the page it belongs to. What it no
+   * longer does is bound how many rooms exist. `rooms.created_by` records who
+   * made each one, and the rate limit above is what stops somebody making
+   * thousands.
    *
    * Refused rather than redirected into the default. A post is a write, and
    * quietly filing somebody's message somewhere other than where they aimed it
@@ -221,6 +230,30 @@ async function post(req, res) {
       .eq('id', wanted)
       .maybeSingle()
     if (parent.data && parent.data.room === room) replyTo = parent.data.id
+  }
+
+  /*
+   * The room exists, because this message is about to make it exist.
+   *
+   * Before the insert rather than after, because `messages.room` has a
+   * foreign key to `rooms` as of 0014 and the insert below is refused
+   * outright if the row is not there yet. That is the ordinary path for a
+   * token room: nobody creates one, somebody says something about a token and
+   * the room is where it lands.
+   *
+   * The same call records that the room was posted in, which is what orders a
+   * list of token rooms - there is no hand-written order for a set that grows
+   * one entry per address anybody opens.
+   *
+   * A failure here is fatal to the post, unlike the notification writes
+   * further down: without the row the insert cannot succeed, so carrying on
+   * would only reach a worse error message.
+   */
+  const noted = await db.rpc('note_room_message', { room_slug: room, author: address })
+
+  if (noted.error) {
+    console.error('chat: recording the room failed:', noted.error.message)
+    return res.status(503).json({ error: 'Chat is unavailable right now.' })
   }
 
   const inserted = await db

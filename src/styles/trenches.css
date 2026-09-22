@@ -1244,6 +1244,53 @@
   overflow-y: auto;
 }
 
+/*
+ * The chat tab.
+ *
+ * `.token-room` is the box RoomPanel lives in, and the only thing it does is
+ * give the panel a height and a column to lay itself out in - the panel is
+ * flex children all the way down (a search bar, a scroller that takes the
+ * slack, a composer) and in a container with no height it collapses to the
+ * composer alone.
+ *
+ * A fixed height rather than `flex: 1`, and it is worth saying why: this box
+ * sits inside a modal whose other tabs are tables with their own max-height,
+ * so there is no tall parent to divide up. 360px is roughly the table's
+ * height, which keeps the dialog from jumping as somebody moves between tabs.
+ */
+.token-room {
+  display: flex;
+  flex-direction: column;
+  height: 360px;
+  min-height: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/*
+ * The table, while the chat has the floor.
+ *
+ * Hidden rather than unmounted so that moving to the chat and back does not
+ * reload the tape or lose where somebody had scrolled to in it - the same
+ * reason the room keeps its conversation while its own search results are up.
+ */
+.tm-table-scroll.is-hidden {
+  display: none;
+}
+
+/* The composer's own border would double the box's. */
+.token-room .chat-composer {
+  border-bottom: none;
+}
+
+@media (max-width: 640px) {
+  /* Shorter on a phone, where 360px of chat plus a chart plus a header is
+     more than one screen and the composer ends up below the fold - which on
+     a chat is the one control that has to be reachable. */
+  .token-room {
+    height: 300px;
+  }
+}
+
 .tm-trade, .tm-holder {
   display: grid;
   align-items: center;

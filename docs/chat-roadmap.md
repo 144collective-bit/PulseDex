@@ -156,16 +156,63 @@ back to the account's creation date rather than the beginning of time, so
 somebody signing in for the first time is not greeted by every message ever
 posted marked unread.
 
-### Batch B - a room per token
+### Batch B - a room per token  <- done, bar the screener signal
 
 The thing that makes this chat belong to this app.
 
-- `rooms` table, seeded with the five, `messages.room` gains its foreign key
-- A token room created the first time somebody opens one
-- A Chat tab on the token page, which is where people already are when they
-  have a question about a token
-- Message volume fed back to the screener: "being talked about" is a signal
-  the rest of the app can show
+Done, in `0014_token_rooms.sql` and the code around it:
+
+- [x] `rooms` table, seeded with the five, `messages.room` gains its foreign key
+- [x] A token room created the first time somebody posts in one
+- [x] A Chat tab on the token page, which is where people already are when they
+      have a question about a token
+- [x] The token rooms with something happening in them, listed under the five
+      in the sidebar, with a way back to the chart from each
+
+Not done:
+
+- [ ] Message volume fed back to the screener: "being talked about" is a signal
+      the rest of the app can show
+
+The data for it is in place - `rooms.message_count` and `rooms.last_message_at`
+are maintained by the posting endpoint, and `rooms_token_idx` is the index a
+screener asking about a list of tokens would use. What is missing is the
+design decision: where on a screener row a chat signal goes without pushing
+out a number somebody is trading on. That is a screener question, not a chat
+one, and guessing at it here would have meant shipping a badge nobody had
+looked at.
+
+**Migration 0014 has to run before this deploys**, and it is the first one
+that will refuse to run against a database in the wrong state: it adds a
+foreign key from `messages.room` to `rooms.slug`, so any message in a room
+that is not one of the five stops the migration. It adopts those rooms first
+rather than failing, but the adoption is worth reading before running it.
+
+**Rooms created by posting, not by opening.** Opening a token's chat tab
+writes nothing: a room with no messages is a room that does not exist, which
+is also what it looks like from the reader's side - the empty state. The
+alternative was creating one on open, which would have meant a write on every
+chart anybody glanced at and a table filled by whoever felt like walking the
+address space.
+
+**A token room has no name, and deliberately never will.** A name would have
+to come from somebody - realistically whoever posted first - which is a text
+field attached to a stranger's token, shown to everybody: "OFFICIAL", "DO NOT
+BUY". They are titled by their address, and by the symbol on the one page that
+already knows it.
+
+**Anyone signed in can create a room by posting in it.** That is the feature,
+and it is also the moderation surface this batch adds: `rooms.created_by`
+records who, and the existing post rate limit is what bounds it. There is no
+way to delete a room yet, which is the next thing this will want.
+
+**The token page was unstyled when reached directly**, and this batch found
+it: `trenches.css` was imported only by the board's view, so a cold load of
+`/token/<address>` rendered the whole page as unformatted markup. Same cause
+as the public profile bug - Vite attaches a stylesheet to whichever chunk
+imports it, and these are two lazy routes. Importing it in the component that
+uses it puts it in both. A stress scenario now fails if the page loads without
+its own padding.
 
 ### Batch C - the dev claim
 

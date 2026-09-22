@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bell, Compass, LogIn, MessagesSquare, Rss, UserRound } from 'lucide-react'
+import { Bell, ChartCandlestick, Compass, LogIn, MessagesSquare, Rss, UserRound } from 'lucide-react'
 import RoomList from './social/RoomList'
 import RoomPanel from './social/RoomPanel'
 import PublicFeed from './social/PublicFeed'
@@ -9,7 +9,7 @@ import ProfilePage from './social/ProfilePage'
 import { useSiweAuth } from '../context/SiweAuthContext'
 import { useNotifications } from '../context/NotificationsContext'
 import { useRoomUnread } from '../hooks/useRoomUnread'
-import { DEFAULT_ROOM, findRoom } from '../config/rooms'
+import { DEFAULT_ROOM, findRoom, roomToken, tokenRoomLabel } from '../config/rooms'
 import '../styles/social.css'
 
 /**
@@ -66,7 +66,7 @@ const TABS = [
   },
 ]
 
-export default function SocialView({ onOpenProfile }) {
+export default function SocialView({ onOpenProfile, onOpenToken }) {
   const { account, isSignedIn, signIn, isBusy } = useSiweAuth()
 
   const [tab, setTab] = useState('feed')
@@ -81,7 +81,18 @@ export default function SocialView({ onOpenProfile }) {
   const rooms = useRoomUnread({ activeRoom: tab === 'rooms' ? room : null })
 
   const active = TABS.find((t) => t.id === tab) || TABS[0]
+  /*
+   * What to call the room at the top of the page.
+   *
+   * `findRoom` only knows the five. A token room has no name and no blurb -
+   * see src/config/rooms.js for why it deliberately never will - so it is
+   * titled by its address and described by what it is, which is the same
+   * sentence for every one of them.
+   */
   const activeRoom = findRoom(room)
+  const activeToken = roomToken(room)
+  const roomName = activeRoom?.name || (activeToken ? tokenRoomLabel(room) : null)
+  const roomLede = activeRoom?.blurb || (activeToken ? 'Everyone talking about this token.' : null)
   const Icon = active.icon
 
   return (
@@ -89,10 +100,28 @@ export default function SocialView({ onOpenProfile }) {
       <header className="social-head">
         <div className="social-head-title">
           <Icon size={18} className="social-head-icon" />
-          <h1 className="font-mono">{tab === 'rooms' ? activeRoom?.name : active.name}</h1>
+          <h1 className="font-mono">{tab === 'rooms' ? roomName : active.name}</h1>
         </div>
         <p className="social-head-lede">
-          {tab === 'rooms' ? activeRoom?.blurb : active.lede}
+          {tab === 'rooms' ? roomLede : active.lede}
+          {/*
+            Back to the chart, from the conversation about it.
+
+            The other direction already exists - the token page has a Chat tab
+            - and without this the room is a dead end: somebody arriving from
+            the sidebar can read what is being said about a token and has no
+            way to see the token. One link closes the loop.
+          */}
+          {tab === 'rooms' && activeToken && onOpenToken && (
+            <button
+              type="button"
+              className="social-head-link font-mono"
+              onClick={() => onOpenToken(activeToken)}
+            >
+              <ChartCandlestick size={11} />
+              View the token
+            </button>
+          )}
         </p>
       </header>
 

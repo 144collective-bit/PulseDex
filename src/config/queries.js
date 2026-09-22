@@ -129,3 +129,18 @@ export const NOTIFICATION_FIELDS = `
  */
 export const PUBLIC_PROFILE_FIELDS =
   'address, handle, avatar_id, avatar_url, banner_url, bio, links, created_at'
+
+/**
+ * A room as the app reads one.
+ *
+ * `name` and `blurb` are null for a token room and written by a person for
+ * the five, so anything drawing this has to cope with both - the list falls
+ * back to the token's address, and the token page uses the symbol it is
+ * already showing.
+ *
+ * `message_count` and `last_message_at` are maintained by the endpoint that
+ * writes messages rather than counted here. They can lag a removal by one,
+ * which is fine for what they do: order a list and show that a room is alive.
+ */
+export const ROOM_FIELDS =
+  'slug, kind, token_address, name, blurb, message_count, last_message_at'

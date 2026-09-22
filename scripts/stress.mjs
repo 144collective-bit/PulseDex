@@ -96,6 +96,35 @@ const NASTY_REPLY = {
   reply: { id: 1, address: ADDRESS, body: HUGE, deleted_at: '2026-01-01T00:00:00Z', profiles: null },
 }
 
+/*
+ * A token room, and a token room that should never have existed.
+ *
+ * The slug is what every link is built from and what the address shown beside
+ * it is read back out of, so the row that matters here is the second one: a
+ * slug that is not an address cannot be linked anywhere, and the service
+ * drops it rather than drawing a dead entry. The check constraint in 0014
+ * makes it unreachable in the real database, which is exactly why the code
+ * that does not depend on that being true needs a row to prove it on.
+ */
+const TOKEN_ROOM = {
+  slug: `token-${ADDRESS}`,
+  kind: 'token',
+  token_address: ADDRESS,
+  name: null,
+  blurb: null,
+  message_count: 41,
+  last_message_at: '2026-01-01T00:00:00Z',
+}
+const NASTY_ROOM = {
+  slug: 'token-not-an-address',
+  kind: 'token',
+  token_address: null,
+  name: null,
+  blurb: null,
+  message_count: null,
+  last_message_at: null,
+}
+
 const FIXTURES = {
   /** The ordinary case, so a failure elsewhere is known to be the data. */
   healthy: (table) => {
@@ -105,6 +134,7 @@ const FIXTURES = {
       return [{ ...NASTY_POST, body: 'gm', created_at: '2026-01-01T00:00:00Z', profiles: { handle: 'degen', avatar_id: null, avatar_url: null } }]
     if (table === 'messages')
       return [{ ...NASTY_MESSAGE, body: 'gm', created_at: '2026-01-01T00:00:00Z', profiles: { handle: 'degen', avatar_id: null, avatar_url: null }, message_reactions: [] }]
+    if (table === 'rooms') return [TOKEN_ROOM]
     return []
   },
   /** Nulls everywhere a column is nullable, and a body nobody would type. */
@@ -112,6 +142,7 @@ const FIXTURES = {
     if (table === 'profiles') return [NASTY_PROFILE]
     if (table === 'posts') return [NASTY_POST]
     if (table === 'messages') return [NASTY_MESSAGE, NASTY_REPLY]
+    if (table === 'rooms') return [NASTY_ROOM, TOKEN_ROOM]
     return []
   },
   /** Nothing at all - the state every one of these tables starts in. */
@@ -119,11 +150,32 @@ const FIXTURES = {
 }
 
 /** Answer the database, the session and the app's own endpoints. */
-async function wire(page, { fixture = 'healthy', signedIn = true, apiStatus = 200 } = {}) {
+async function wire(page, { fixture = 'healthy', signedIn = true, apiStatus = 200, token = false } = {}) {
   // Nothing leaves localhost, so the run says the same thing everywhere.
   await page.route('**/*', (route) =>
     route.request().url().startsWith(BASE) ? route.continue() : route.abort()
   )
+
+  /*
+   * The launchpad, for the scenarios that need a token page with a token on
+   * it rather than its "no launchpad token at this address" state.
+   *
+   * Opt-in rather than always on, so `direct / token page` keeps testing that
+   * empty state - it is the ordinary outcome for any address that is not one
+   * of the curve's launches, which is most of them.
+   */
+  if (token) {
+    await page.route('**/api2.pump.tires/api/tokens/**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          token: { address: ADDRESS, name: 'Stress Token', symbol: 'STRESS' },
+          holders: [],
+        }),
+      })
+    )
+  }
 
   await page.route('**/rest/v1/**', (route) => {
     const table = new URL(route.request().url()).pathname.split('/rest/v1/')[1]?.split('?')[0] || ''
@@ -412,6 +464,108 @@ await run('db 500 / Profile settings', {
 
 // Direct routes, opened cold, with no tab clicked first.
 await run('direct / token page', { path: `/token/${ADDRESS}` })
+
+/*
+ * A token's own room, on the token's page.
+ *
+ * The whole point of Batch B: a question about a token asked under the chart
+ * of that token. Two things have to hold and both have broken before - the
+ * tab has to open the room rather than nothing, and the page has to be
+ * styled, which it was not: `trenches.css` was imported only by the board, so
+ * /token/<address> reached directly came up as unformatted markup.
+ */
+const tokenChat = async (page) => {
+  const tab = page.locator('.tm-tab', { hasText: 'CHAT' }).first()
+  if (!(await tab.count())) throw new Error('no Chat tab on the token page')
+
+  const padding = await page
+    .locator('.tm-tab')
+    .first()
+    .evaluate((el) => getComputedStyle(el).padding)
+  if (padding === '0px') throw new Error('the token page loaded without its stylesheet')
+
+  await tab.click()
+  await page.waitForTimeout(1600)
+
+  const room = page.locator('.token-room')
+  if (!(await room.count())) throw new Error('the Chat tab opened nothing')
+
+  const height = await room.evaluate((el) => el.getBoundingClientRect().height)
+  if (height < 100) throw new Error(`the room collapsed to ${Math.round(height)}px`)
+
+  // The composer is the one control a chat cannot do without, and the first
+  // thing a container with no height loses.
+  if (!(await page.locator('.token-room .chat-composer').isVisible())) {
+    throw new Error('the composer is not on screen')
+  }
+}
+
+await run('token page / the chat tab', {
+  path: `/token/${ADDRESS}`,
+  token: true,
+  steps: tokenChat,
+})
+
+await run('token page / the chat tab on a phone', {
+  path: `/token/${ADDRESS}`,
+  token: true,
+  viewport: PHONE,
+  steps: tokenChat,
+})
+
+await run('token page / chat with nothing said yet', {
+  path: `/token/${ADDRESS}`,
+  token: true,
+  fixture: 'empty',
+  steps: tokenChat,
+})
+
+await run('token page / chat on rows full of nulls', {
+  path: `/token/${ADDRESS}`,
+  token: true,
+  fixture: 'nasty',
+  steps: tokenChat,
+})
+
+/*
+ * Token rooms in the sidebar.
+ *
+ * They are listed from the `rooms` table rather than from the config file, so
+ * unlike the five above them the list is whatever the database returns - and
+ * a row whose slug is not an address has nowhere to link to. It must be left
+ * out rather than drawn as an entry that goes nowhere.
+ */
+await run('chat / token rooms in the sidebar', {
+  steps: async (page) => {
+    await socialTab('Chat Rooms')(page)
+    const listed = await page.locator('.room-item.is-token').count()
+    if (listed !== 1) throw new Error(`expected one token room, drew ${listed}`)
+
+    const label = await page.locator('.room-item.is-token .room-name').first().innerText()
+    if (!label.startsWith('0x')) throw new Error(`a token room is labelled "${label}"`)
+  },
+  expectText: '41',
+})
+
+await run('chat / a token room that cannot be linked to', {
+  fixture: 'nasty',
+  steps: async (page) => {
+    await socialTab('Chat Rooms')(page)
+    const listed = await page.locator('.room-item.is-token').count()
+    // Two rows come back; one of them has a slug that is not an address.
+    if (listed !== 1) throw new Error(`expected the unlinkable room to be dropped, drew ${listed}`)
+  },
+})
+
+await run('chat / no token rooms yet', {
+  fixture: 'empty',
+  steps: async (page) => {
+    await socialTab('Chat Rooms')(page)
+    if (await page.locator('.room-group').count()) {
+      throw new Error('a "Tokens" heading over an empty list')
+    }
+  },
+})
 await run('direct / profile by address', { path: `/u/${ADDRESS}` })
 await run('direct / profile by handle', { path: '/u/@degen' })
 await run('direct / profile, nasty row', { path: `/u/${ADDRESS}`, fixture: 'nasty' })
