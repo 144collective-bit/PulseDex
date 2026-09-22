@@ -2158,3 +2158,41 @@
   line-height: 1.6;
   color: var(--text-muted);
 }
+
+/* ---------------------------------------------------------------------------
+   Unread, in the room list
+
+   The count, not a dot. "3" and "40" are different situations and a reader
+   decides which room to open on exactly that difference - a dot makes them
+   the same and turns the list back into a guess.
+   --------------------------------------------------------------------------- */
+.room-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.room-unread {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  background: var(--pulse-cyan);
+  color: #04141a;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* On the active room the label is already the brightest thing in the list, so
+   a badge beside it would be competing with itself - and it is hidden there
+   anyway, since nobody needs telling about what they are reading. */
+.room-item.active .room-unread {
+  display: none;
+}

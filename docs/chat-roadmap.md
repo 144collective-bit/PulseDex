@@ -79,16 +79,39 @@ can say anything.
 
 ## The batches
 
-### Batch A - a room you can actually follow
+### Batch A - a room you can actually follow  <- in progress
 
 No new concepts; this is what makes the rest worth having. A room nobody can
 tell has new messages in it is a room nobody comes back to.
 
-- Unread per room, and a jump-to-latest that knows where "latest" was
-- Typing indicators, over the presence channel that already exists
-- Reply-to-message, one level, matching how posts already work
-- Message search within a room
-- A room list that shows where the activity is
+Done, in `0011_room_reads.sql` and the code around it:
+
+- [x] Unread per room, counted server-side and badged in the list
+- [x] Opening a room marks it read; staying in one keeps it read
+- [x] A room list that shows where the activity is
+
+Still to do:
+
+- [ ] Typing indicators, over the presence channel that already exists
+- [ ] Reply-to-message, one level, matching how posts already work
+- [ ] Message search within a room
+- [ ] Jump-to-latest that knows where "latest" was
+
+**What the plan got wrong.** Nothing yet, but two things were decided while
+building it and are worth not re-deciding.
+
+Unread state is server-side. localStorage was the tempting shortcut and would
+have meant reading on a laptop and then arriving on a phone to five rooms
+shouting about messages already read. It belongs to the account, not the
+device - which also makes it private, so it goes through an endpoint like the
+inbox does.
+
+The count comes from one `unread_counts` function rather than a query per
+room. Five rooms would have made per-room queries fine; a room per token
+would not, and the shape of the answer does not change. The function falls
+back to the account's creation date rather than the beginning of time, so
+somebody signing in for the first time is not greeted by every message ever
+posted marked unread.
 
 ### Batch B - a room per token
 

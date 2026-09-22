@@ -89,6 +89,15 @@ export default async function handler(req, res) {
     // Added by 0010. A deployment whose migration has not been run reports
     // this as failing instead of presenting as a feed that will not load.
     checks.push(await query(reader, 'mentions-table', 'post_mentions', 'address'))
+    /*
+     * Added by 0011. Both halves: the table, and the function that counts
+     * against it. A function is the one thing here that can be absent while
+     * every table it touches is present - `create or replace` on a deployment
+     * whose migration has not been run leaves the app asking PostgREST for an
+     * RPC that does not exist, which presents as a sidebar with no badges and
+     * no reason why.
+     */
+    checks.push(await query(reader, 'room-reads-table', 'room_reads', 'room'))
   }
 
   /*
@@ -101,6 +110,18 @@ export default async function handler(req, res) {
    * without it - and reporting that as a failure would make every preview red
    * and teach everybody to ignore the colour.
    */
+  if (reader) {
+    // The unread-count function, called the way the endpoint calls it. An
+    // address nobody holds returns no rows, which is a pass: the question is
+    // whether the function exists and its body still parses.
+    const probe = await reader.rpc('unread_counts', { reader: '0x' + '0'.repeat(40) })
+    checks.push(
+      probe.error
+        ? { name: 'unread-counts-fn', ok: false, error: probe.error.message }
+        : { name: 'unread-counts-fn', ok: true }
+    )
+  }
+
   if (db) {
     checks.push(await query(db, 'blocked-table', 'blocked', 'address'))
     checks.push(await query(db, 'reports-table', 'post_reports', 'id'))

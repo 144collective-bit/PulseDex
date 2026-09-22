@@ -183,6 +183,27 @@ async function wire(page, { fixture = 'healthy', signedIn = true, apiStatus = 20
     })
   })
 
+  /*
+   * Unread counts, which like the inbox go through an endpoint rather than
+   * the database - room_reads has no read policy, because where somebody has
+   * read up to is nobody else's business.
+   */
+  await page.route('**/api/chat/reads**', (route) => {
+    if (route.request().method() === 'POST') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' })
+    }
+    if (apiStatus !== 200) {
+      return route.fulfill({ status: apiStatus, contentType: 'application/json', body: '{"error":"Unread counts are unavailable right now."}' })
+    }
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      // Deliberately including a three-digit one: the badge has to say "99+"
+      // rather than widen the room list until the names no longer fit.
+      body: JSON.stringify({ unread: fixture === 'empty' ? {} : { trading: 3, trenches: 140 } }),
+    })
+  })
+
   await page.route('**/api/profile', (route) =>
     apiStatus !== 200
       ? route.fulfill({ status: apiStatus, contentType: 'application/json', body: '{"error":"Profiles are unavailable right now."}' })
@@ -415,6 +436,51 @@ await run('races / hammer the social tabs', {
     }
     await page.waitForTimeout(2500)
   },
+})
+
+/*
+ * The room list, which used to be five identical words.
+ *
+ * A badge has to appear on a room with something in it, never on the room
+ * being read - that one is being read - and a big number has to stay inside
+ * the sidebar rather than pushing the names out of it.
+ */
+await run('chat / unread badges', {
+  steps: socialTab('Chat Rooms'),
+  expectText: '99+',
+})
+
+/*
+ * Opening a room is reading it, and the badge has to go straight away -
+ * waiting for the server to agree would leave a count over a conversation
+ * plainly already open.
+ */
+await run('chat / opening a room clears its badge', {
+  steps: async (page) => {
+    await socialTab('Chat Rooms')(page)
+    const trading = page.locator('.room-item', { hasText: 'Trading' }).first()
+    if (!(await trading.count())) throw new Error('no Trading room in the list')
+
+    const before = await trading.locator('.room-unread').count()
+    if (before === 0) throw new Error('Trading had no badge to clear')
+
+    await trading.click()
+    await page.waitForTimeout(1200)
+
+    if (await trading.locator('.room-unread').isVisible().catch(() => false)) {
+      throw new Error('the room being read is still badged')
+    }
+  },
+})
+
+await run('chat / no badges when nothing is unread', {
+  fixture: 'empty',
+  steps: socialTab('Chat Rooms'),
+})
+
+await run('chat / signed out has no badges to fetch', {
+  signedIn: false,
+  steps: socialTab('Chat Rooms'),
 })
 
 /*

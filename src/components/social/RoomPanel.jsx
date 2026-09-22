@@ -31,12 +31,26 @@ const FOLLOWING_THRESHOLD_PX = 120
  * conversation is not the same conversation when the room changes, and saying
  * so to React is cheaper than maintaining the list.
  */
-export default function RoomPanel({ room, onOpenProfile }) {
+export default function RoomPanel({ room, onOpenProfile, onSeen }) {
   const { account } = useSiweAuth()
   const isModerator = useIsModerator()
   const { messages, status, error, add, remove, replace, react, hasMore, loadingOlder, loadOlder } =
     useChatMessages(room)
   const present = useRoomPresence(room)
+
+  /*
+   * Reading a room while it moves keeps it read.
+   *
+   * Without this, sitting in a busy room for ten minutes marks it read as of
+   * when it was opened, and everything said while it was on the screen comes
+   * back as unread the moment the reader leaves. Keyed on the newest message
+   * rather than the count, so an older page loading in does not re-mark
+   * anything.
+   */
+  const newest = messages.length > 0 ? messages[messages.length - 1].id : null
+  useEffect(() => {
+    if (newest) onSeen?.()
+  }, [newest, onSeen])
   const { error: identityError } = useChatIdentity()
 
   const scroller = useRef(null)

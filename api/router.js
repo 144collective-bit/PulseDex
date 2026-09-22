@@ -9,6 +9,7 @@ import health from './_routes/health.js'
 import chatBlock from './_routes/chat/block.js'
 import chatMessages from './_routes/chat/messages.js'
 import chatReactions from './_routes/chat/reactions.js'
+import chatReads from './_routes/chat/reads.js'
 import posts from './_routes/posts.js'
 import postsReport from './_routes/posts/report.js'
 import profile from './_routes/profile.js'
@@ -66,6 +67,7 @@ const ROUTES = {
   'chat/block': chatBlock,
   'chat/messages': chatMessages,
   'chat/reactions': chatReactions,
+  'chat/reads': chatReads,
   notifications,
   posts,
   'posts/report': postsReport,

@@ -8,6 +8,7 @@ import NotificationsPanel from './social/NotificationsPanel'
 import ProfilePage from './social/ProfilePage'
 import { useSiweAuth } from '../context/SiweAuthContext'
 import { useNotifications } from '../context/NotificationsContext'
+import { useRoomUnread } from '../hooks/useRoomUnread'
 import { DEFAULT_ROOM, findRoom } from '../config/rooms'
 import '../styles/social.css'
 
@@ -71,6 +72,13 @@ export default function SocialView({ onOpenProfile }) {
   const [tab, setTab] = useState('feed')
   const [room, setRoom] = useState(DEFAULT_ROOM)
   const { unread } = useNotifications()
+
+  /*
+   * Only counted while the rooms tab is open. Polling for badges nobody can
+   * see is a request a minute for nothing, and somebody reading the feed is
+   * not asking about the rooms.
+   */
+  const rooms = useRoomUnread({ activeRoom: tab === 'rooms' ? room : null })
 
   const active = TABS.find((t) => t.id === tab) || TABS[0]
   const activeRoom = findRoom(room)
@@ -151,7 +159,7 @@ export default function SocialView({ onOpenProfile }) {
 
       {tab === 'rooms' && (
         <div className="social-body">
-          <RoomList current={room} onSelect={setRoom} />
+          <RoomList current={room} onSelect={setRoom} unread={rooms.unread} />
 
           <section
             className="social-panel"
@@ -167,7 +175,7 @@ export default function SocialView({ onOpenProfile }) {
               this is a different conversation rather than the same one with
               different contents.
             */}
-            <RoomPanel key={room} room={room} onOpenProfile={onOpenProfile} />
+            <RoomPanel key={room} room={room} onOpenProfile={onOpenProfile} onSeen={rooms.seen} />
           </section>
         </div>
       )}

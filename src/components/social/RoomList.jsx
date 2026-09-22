@@ -17,7 +17,7 @@ import { ROOMS } from '../../config/rooms'
  * place to talk, the feed is everything anybody published, and listing them
  * together made the feed read as a sixth subject.
  */
-export default function RoomList({ current, onSelect }) {
+export default function RoomList({ current, onSelect, unread = {} }) {
   return (
     <nav className="room-list" aria-label="Chat rooms">
       <ul role="tablist" aria-orientation="vertical">
@@ -36,6 +36,20 @@ export default function RoomList({ current, onSelect }) {
                 title={room.blurb}
               >
                 <span className="room-name font-mono">{room.name}</span>
+                {/*
+                  Only where there is something, and never on the room being
+                  read. A badge showing "0" is a badge that has stopped
+                  meaning anything, and one on the room in front of you is
+                  counting what you are looking at.
+                */}
+                {!active && unread[room.slug] > 0 && (
+                  <span
+                    className="room-unread"
+                    aria-label={`${unread[room.slug]} unread`}
+                  >
+                    {unread[room.slug] > 99 ? '99+' : unread[room.slug]}
+                  </span>
+                )}
               </button>
             </li>
           )
