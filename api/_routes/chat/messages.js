@@ -200,9 +200,32 @@ async function post(req, res) {
     return res.status(503).json({ error: 'Chat is unavailable right now.' })
   }
 
+  /*
+   * What this answers, checked rather than trusted.
+   *
+   * A body can name any id it likes, so the reply is only recorded when the
+   * message exists and is in this room. Without the room check a reply could
+   * be pinned to a conversation in another one - the quote would render
+   * happily and point somewhere the reader cannot go.
+   *
+   * An id that does not survive that is dropped rather than refused. Somebody
+   * answering a message that was hard-deleted while they typed should have
+   * their message posted, not rejected.
+   */
+  let replyTo = null
+  const wanted = Number(req.body?.replyTo)
+  if (Number.isInteger(wanted) && wanted > 0) {
+    const parent = await db
+      .from('messages')
+      .select('id, room')
+      .eq('id', wanted)
+      .maybeSingle()
+    if (parent.data && parent.data.room === room) replyTo = parent.data.id
+  }
+
   const inserted = await db
     .from('messages')
-    .insert({ address, room, body: message.body })
+    .insert({ address, room, body: message.body, reply_to: replyTo })
     /*
      * The author's profile comes back with the row, so the message the poster
      * sees immediately carries their own name and picture. Without the join

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Loader2, AlertTriangle, ChevronUp, Users, PenLine } from 'lucide-react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Loader2, AlertTriangle, ChevronUp, Users, PenLine, Search, X } from 'lucide-react'
 import ChatMessageRow from './ChatMessageRow'
 import ChatComposer from './ChatComposer'
 import ChatProfileCard from './ChatProfileCard'
+import RoomSearchResults from './RoomSearchResults'
 import { useChatMessages, CHAT_STATUS } from '../../hooks/useChatMessages'
 import { useIsModerator } from '../../hooks/useIsModerator'
 import { useRoomPresence } from '../../hooks/useRoomPresence'
@@ -12,6 +13,7 @@ import { blockAddress } from '../../services/profile'
 import { useChatIdentity } from '../../hooks/useChatIdentity'
 import { useUserProfile } from '../../context/UserProfileContext'
 import { typingLine, countAfter } from '../../utils/chatPresence'
+import { searchTerm } from '../../utils/chatSearch'
 import { formatAddress } from '../../utils/formatters'
 
 /** Close enough to the bottom that the reader is following along rather than
@@ -65,6 +67,80 @@ export default function RoomPanel({ room, onOpenProfile, onSeen }) {
   const scroller = useRef(null)
   const [following, setFollowing] = useState(true)
   const [removeError, setRemoveError] = useState(null)
+
+  /*
+   * What is in the search box.
+   *
+   * Held here rather than inside the search component because the room has to
+   * know: while there is a term the conversation is replaced by the results,
+   * and the controls that are about a scroll position have nothing to point
+   * at. Kept as raw text - trimming it here would stop anybody typing a space
+   * between two words.
+   */
+  const [query, setQuery] = useState('')
+  const searching = searchTerm(query).length > 0
+
+  /*
+   * What the composer is answering, or null.
+   *
+   * Held here rather than in the composer because it is started from a message
+   * row, and the two are siblings. Flattened to what the strip needs - a name
+   * and a line of text - so holding it does not pin a whole message object in
+   * state long after the list has replaced it.
+   *
+   * Nothing clears it on a room change: this panel is mounted with the room as
+   * its key, so switching rooms builds a new one and this starts null because
+   * it is new.
+   */
+  const [replyTo, setReplyTo] = useState(null)
+  const cancelReply = useCallback(() => setReplyTo(null), [])
+
+  const onReply = useCallback((message) => {
+    setReplyTo({
+      id: message.id,
+      name: message.handle || formatAddress(message.address),
+      body: message.body,
+    })
+  }, [])
+
+  /*
+   * Which message a quote or a result has just been followed to, so it can be
+   * marked for a moment. Landing in the middle of a wall of text with no
+   * indication of which line was the destination is the failure mode of every
+   * jump-to-message that does not do this.
+   */
+  const [highlighted, setHighlighted] = useState(null)
+  const highlightTimer = useRef(null)
+  useEffect(() => () => clearTimeout(highlightTimer.current), [])
+
+  /*
+   * Which messages are on screen, for deciding whether a quote or a result
+   * can be followed. Built once per render rather than searched per row: a
+   * room holds fifty messages and a scan of the list from each of them is the
+   * kind of quadratic that only shows up once somebody has a long room open
+   * on a phone.
+   */
+  const loadedIds = useMemo(() => new Set(messages.map((m) => m.id)), [messages])
+
+  const onJumpTo = useCallback((id) => {
+    /*
+     * Out of the results before the scroll. The conversation is still mounted
+     * underneath - that is the point of hiding it rather than unmounting it -
+     * but it is `display: none`, and scrolling something with no box does
+     * nothing at all. A frame later it has one.
+     */
+    setQuery('')
+
+    requestAnimationFrame(() => {
+      const el = scroller.current?.querySelector(`[data-message-id="${id}"]`)
+      if (!el) return
+
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      setHighlighted(id)
+      clearTimeout(highlightTimer.current)
+      highlightTimer.current = setTimeout(() => setHighlighted(null), 1600)
+    })
+  }, [])
 
   /*
    * How much arrived while the reader was not looking at the live end.
@@ -242,7 +318,57 @@ export default function RoomPanel({ room, onOpenProfile, onSeen }) {
 
   return (
     <>
-      <div className="chat-scroll" ref={scroller} onScroll={onScroll}>
+      {/*
+        Above the conversation rather than in the room's header, because it
+        searches this room and only this room - put beside the room's title it
+        would read as searching the chat, which is deliberately not what it
+        does.
+      */}
+      <div className="chat-search">
+        <Search size={13} className="chat-search-icon" />
+        <input
+          type="search"
+          className="chat-search-input"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            // Escape clears, which is what a browser's own search field does
+            // and what people try before looking for a button.
+            if (e.key === 'Escape') setQuery('')
+          }}
+          placeholder="Search this room"
+          aria-label="Search this room"
+        />
+        {searching && (
+          <button
+            type="button"
+            className="chat-tool"
+            onClick={() => setQuery('')}
+            aria-label="Clear the search"
+            title="Clear"
+          >
+            <X size={12} />
+          </button>
+        )}
+      </div>
+
+      {/*
+        The results stand in for the conversation while there is a term, and
+        the conversation is not unmounted - it is this component's own state,
+        so clearing the box puts it back exactly as it was rather than
+        reloading the room.
+      */}
+      {searching && (
+        <RoomSearchResults
+          room={room}
+          term={query}
+          loadedIds={loadedIds}
+          onJumpTo={onJumpTo}
+          onOpenProfile={setOpenProfile}
+        />
+      )}
+
+      <div className={`chat-scroll ${searching ? 'is-hidden' : ''}`} ref={scroller} onScroll={onScroll}>
         {hasMore && (
           <button
             type="button"
@@ -274,12 +400,18 @@ export default function RoomPanel({ room, onOpenProfile, onSeen }) {
               onOpenProfile={setOpenProfile}
               onEdit={onEdit}
               onReact={onReact}
+              onReply={onReply}
+              onJumpTo={onJumpTo}
+              canJump={Boolean(message.reply) && loadedIds.has(message.reply.id)}
+              highlighted={highlighted === message.id}
             />
           ))
         )}
       </div>
 
-      {!following && messages.length > 0 && (
+      {/* Hidden while searching: it is about a scroll position in a list that
+          is not on screen, and pressing it would look like it did nothing. */}
+      {!searching && !following && messages.length > 0 && (
         <button
           type="button"
           className={`chat-jump font-mono ${missed > 0 ? 'has-new' : ''}`}
@@ -323,7 +455,13 @@ export default function RoomPanel({ room, onOpenProfile, onSeen }) {
         )
       )}
 
-      <ChatComposer room={room} onPosted={add} onTyping={present.setTyping} />
+      <ChatComposer
+        room={room}
+        onPosted={add}
+        onTyping={present.setTyping}
+        replyTo={replyTo}
+        onCancelReply={cancelReply}
+      />
 
       {openProfile && (
         <ChatProfileCard

@@ -73,8 +73,27 @@ const NASTY_MESSAGE = {
   body: HUGE,
   created_at: null,
   edited_at: null,
+  reply_to: null,
+  reply: null,
   profiles: null,
   message_reactions: null,
+}
+
+/*
+ * A reply whose quoted message is as bad as the row quoting it.
+ *
+ * Every field in the embed is reachable in production: the join comes back
+ * with no profile for somebody who never made one, and `deleted_at` is set on
+ * anything a moderator has taken down - at which point the body is still in
+ * the row and must not be drawn. A quote that renders 40,000 characters, or
+ * that shows the text of a removed message, is the failure this exists to
+ * catch.
+ */
+const NASTY_REPLY = {
+  ...NASTY_MESSAGE,
+  id: 2,
+  reply_to: 1,
+  reply: { id: 1, address: ADDRESS, body: HUGE, deleted_at: '2026-01-01T00:00:00Z', profiles: null },
 }
 
 const FIXTURES = {
@@ -92,7 +111,7 @@ const FIXTURES = {
   nasty: (table) => {
     if (table === 'profiles') return [NASTY_PROFILE]
     if (table === 'posts') return [NASTY_POST]
-    if (table === 'messages') return [NASTY_MESSAGE]
+    if (table === 'messages') return [NASTY_MESSAGE, NASTY_REPLY]
     return []
   },
   /** Nothing at all - the state every one of these tables starts in. */
@@ -482,6 +501,79 @@ await run('chat / signed out has no badges to fetch', {
   signedIn: false,
   steps: socialTab('Chat Rooms'),
 })
+
+/*
+ * Replying, on rows where everything that can be null is.
+ *
+ * The quote above a reply is a join, so it arrives null for a hard-deleted
+ * original and with a null profile for an author who never made one. Drawing
+ * it is the only place in the chat that renders one message inside another,
+ * and the check that matters is the one below: a removed original must show
+ * that it was removed and not its text.
+ */
+await run('chat / a quoted message with nothing in it', {
+  fixture: 'nasty',
+  steps: socialTab('Chat Rooms'),
+  expectText: 'message removed',
+})
+
+await run('chat / the quote never shows a removed message', {
+  fixture: 'nasty',
+  steps: async (page) => {
+    await socialTab('Chat Rooms')(page)
+    const quoted = await page.locator('.chat-quote-body').first().innerText()
+    if (quoted.length > 200) throw new Error('a removed message was quoted in full')
+  },
+})
+
+/*
+ * Searching a room.
+ *
+ * The term is whatever somebody typed, and both the query and the highlight
+ * are built from it - so the scenarios that matter are the ones where that
+ * text is a wildcard, a regular expression, or longer than the box.
+ */
+const search = (term, { phone = false } = {}) => async (page) => {
+  // The room is reached through the bottom nav on a phone: the tab strip
+  // along the top is not on screen at that width, so the desktop route here
+  // would time out waiting for a button nobody can press.
+  if (phone) {
+    await mobileTab('Chat')(page)
+    const t = page.locator('.social-tabs .xp-tab', { hasText: 'Chat Rooms' }).first()
+    if (!(await t.count())) throw new Error('no Chat Rooms tab on a phone')
+    await t.click()
+    await page.waitForTimeout(1400)
+  } else {
+    await socialTab('Chat Rooms')(page)
+  }
+  const box = page.locator('.chat-search-input').first()
+  if (!(await box.count())) throw new Error('no search box in the room')
+  await box.fill(term)
+  await page.waitForTimeout(1200)
+  if (await page.locator('.chat-scroll').isVisible()) {
+    throw new Error('the conversation is still on screen under the results')
+  }
+}
+
+await run('chat / searching a room', { steps: search('gm') })
+await run('chat / searching on a phone', { viewport: PHONE, steps: search('gm', { phone: true }) })
+await run('chat / searching for a wildcard', { steps: search('%_%') })
+await run('chat / searching with a regular expression', { steps: search('(a|b)[c-z]*+?$') })
+await run('chat / searching a room with nothing in it', {
+  fixture: 'empty',
+  steps: search('anything'),
+  expectText: 'Nothing in this room matches',
+})
+await run('chat / searching for something absurd', { steps: search(HUGE.slice(0, 500)) })
+/*
+ * Not here: a search the database refuses.
+ *
+ * With the database answering 500 the room itself never loads, so the panel
+ * is a failure notice and there is no search box to type in - the scenario
+ * would be asserting on a control that correctly does not exist. The case
+ * that would be worth covering is a room that loaded and a search that then
+ * failed, and this harness fails the two together.
+ */
 
 /*
  * The inbox, which is the one surface here that is about one person.

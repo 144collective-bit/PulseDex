@@ -42,8 +42,23 @@ export const POST_AUTHOR = 'profiles!posts_address_fkey ( handle, avatar_id, ava
  * Reactions come with the page rather than in a request per message: fifty
  * messages would otherwise be fifty round trips before anything is drawn.
  */
+/**
+ * The message this one is answering, quoted above it.
+ *
+ * Two foreign key hints in one embed, and both are load-bearing. The outer
+ * one picks `messages.reply_to` out of the several ways `messages` reaches
+ * itself and `profiles`; the inner one is the same `messages_address_fkey`
+ * problem one level down, because the quoted message reaches `profiles`
+ * exactly as its parent does.
+ *
+ * `deleted_at` rides along so the quote can say a message was removed rather
+ * than showing its text to somebody it was taken away from.
+ */
+export const MESSAGE_REPLY =
+  'reply:messages!messages_reply_to_fkey ( id, address, body, deleted_at, profiles!messages_address_fkey ( handle ) )'
+
 export const MESSAGE_FIELDS =
-  `id, address, room, body, created_at, edited_at, ${MESSAGE_AUTHOR}, message_reactions ( emoji, address )`
+  `id, address, room, body, created_at, edited_at, reply_to, ${MESSAGE_AUTHOR}, ${MESSAGE_REPLY}, message_reactions ( emoji, address )`
 
 /**
  * A message as an endpoint returns it after writing one.
@@ -52,7 +67,8 @@ export const MESSAGE_FIELDS =
  * none that the writer does not already know about - and with them the insert
  * would join a table it has no reason to touch.
  */
-export const MESSAGE_WRITE_FIELDS = `id, address, room, body, created_at, edited_at, ${MESSAGE_AUTHOR}`
+export const MESSAGE_WRITE_FIELDS =
+  `id, address, room, body, created_at, edited_at, reply_to, ${MESSAGE_AUTHOR}, ${MESSAGE_REPLY}`
 
 /**
  * Who a post names.
