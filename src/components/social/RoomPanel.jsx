@@ -14,6 +14,8 @@ import { useChatIdentity } from '../../hooks/useChatIdentity'
 import { useUserProfile } from '../../context/UserProfileContext'
 import { typingLine, countAfter } from '../../utils/chatPresence'
 import { searchTerm } from '../../utils/chatSearch'
+import { roomToken } from '../../config/rooms'
+import { useTokenClaim } from '../../hooks/useTokenClaim'
 import { formatAddress } from '../../utils/formatters'
 
 /** Close enough to the bottom that the reader is following along rather than
@@ -41,6 +43,28 @@ export default function RoomPanel({ room, onOpenProfile, onSeen }) {
   const { messages, status, error, add, remove, replace, react, hasMore, loadingOlder, loadOlder } =
     useChatMessages(room)
   const { profile } = useUserProfile()
+
+  /*
+   * Who, if anybody, has claimed the token this room is about.
+   *
+   * One question per room rather than per message: a room is one token, so
+   * the answer is the same for every row in it. Null for the five fixed
+   * rooms, which are about no token and where nobody carries this badge.
+   */
+  const { claim } = useTokenClaim(roomToken(room))
+  const devAddress = claim?.address || null
+
+  /*
+   * Whether the person reading may moderate this room because they claimed
+   * its token. Separate from `devAddress`, which is about the author of a
+   * given message - see ChatMessageRow for why keeping them apart matters.
+   *
+   * The endpoint checks the same thing again on every removal. A control that
+   * is not drawn is not a permission; it is a button somebody else can send
+   * the request without.
+   */
+  const viewerIsRoomDev =
+    Boolean(devAddress) && Boolean(account) && account.toLowerCase() === devAddress
   /*
    * The name broadcast while typing. Whatever this account is called here,
    * falling back to nothing rather than to an address: "0x1a2b... is typing"
@@ -400,6 +424,8 @@ export default function RoomPanel({ room, onOpenProfile, onSeen }) {
               onOpenProfile={setOpenProfile}
               onEdit={onEdit}
               onReact={onReact}
+              authorIsDev={Boolean(devAddress) && message.address === devAddress}
+              viewerIsRoomDev={viewerIsRoomDev}
               onReply={onReply}
               onJumpTo={onJumpTo}
               canJump={Boolean(message.reply) && loadedIds.has(message.reply.id)}

@@ -214,15 +214,68 @@ imports it, and these are two lazy routes. Importing it in the component that
 uses it puts it in both. A stress scenario now fails if the page loads without
 its own padding.
 
-### Batch C - the dev claim
+### Batch C - the dev claim  <- done, needs one check in production
 
-- Read the creation transaction for a token, get the deploying address
-- A claim flow: sign from that address, and the signature is checked against
-  what the chain says rather than against anything the client sent
-- One claim per token, revocable, with an audit row for who revoked it and why
-- The badge, worded as above, on the profile and beside their messages in
-  their own token's room
-- Moderator powers for the claimant, **in that room only**
+Done, in `0015_token_claims.sql` and the code around it:
+
+- [x] Read the creation transaction for a token, get the deploying address
+- [x] A claim flow: sign from that address, and the signature is checked against
+      what the chain says rather than against anything the client sent
+- [x] One claim per token, revocable, with an audit row for who revoked it and why
+- [x] The badge, worded as above, on the profile and beside their messages in
+      their own token's room
+- [x] Moderator powers for the claimant, **in that room only**
+
+**Migration 0015 has to run before this deploys.**
+
+**The deploying wallet is the creation transaction's sender, not the
+contract's creator.** The plan said "read the creation transaction" and that
+turns out to be load-bearing rather than loose phrasing. A token launched on a
+bonding curve was *created* by the launchpad's factory - an address nobody
+holds a key to - so a claim checked against the contract's creator would be
+impossible for exactly the tokens this site is mostly about. The `from` of the
+transaction that asked for the launch is the person. For a directly deployed
+token the two are the same address, so one rule covers both, and "whoever sent
+the creation transaction" is also what the badge can honestly say.
+
+**The one thing that cannot be checked from a development machine**, and the
+reason this batch is not simply "done": the deployer lookup calls a node, and
+this sandbox has no outbound network. The code asks Otterscan's
+`ots_getContractCreator` first and falls back to a Blockscout explorer, both
+overridable by `PULSECHAIN_RPC_URL` and `PULSECHAIN_EXPLORER_API`, because
+`ots_*` is an extension not every node exposes. Whether the configured
+PulseChain node answers it has not been observed. **Someone has to attempt one
+real claim against production and watch what happens.** The failure mode if
+neither source answers is that nobody can claim - the endpoint refuses rather
+than guessing - which is the right direction but is also silent.
+
+**The badge is built as a scam vector, because it is one.** It says
+*Deployer*, never "verified" or "official"; it carries the sentence "Controls
+the wallet that sent this token's creation transaction. Not a safety check,
+and not an endorsement." wherever there is room and in its tooltip where there
+is not; and it is styled quieter than the brand's own accents, because a badge
+that glows is a badge that recommends. A stress scenario fails the build if
+any of that wording changes to include a word the claim cannot support.
+
+**A claim buys removal in one room and nothing else.** Not blocking, which
+silences an account across the whole site. The endpoint reads the room from
+the message being removed rather than from the request, so the scope cannot be
+widened by asking differently. The case this exists for is a dev whose room
+fills with impersonators posting a fake contract address at two in the
+morning.
+
+**Revocation needs a reason and nothing is ever deleted.** A revoked claim is
+the same row with three more columns filled in, and a partial unique index
+lets the token be claimed again without the history going anywhere. The
+claimant cannot revoke their own - a dev who has just rugged should not be
+able to erase the record that this site showed a badge for them.
+
+**A revoked claim looks, from the browser, exactly like a token nobody ever
+claimed.** `revoked_reason` is a moderator's note about a person and the anon
+key is readable by everybody, so the select policy hides revoked rows
+entirely. Transparency argues the other way here and lost: publishing "revoked
+- reported for a rug" over a public key is publishing an accusation. The badge
+goes away and nothing accuses anybody.
 
 ### Batch D - groups, and gating
 

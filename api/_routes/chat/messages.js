@@ -3,7 +3,7 @@ import { isSameOrigin, rateLimit } from '../../_lib/guard.js'
 import { serviceClient } from '../../_lib/supabase.js'
 import { normaliseMessage, REJECTED } from '../../../src/utils/chatMessage.js'
 import { parseAdminAddresses, isAdminAddress } from '../../../src/utils/chatAdmin.js'
-import { isRoom } from '../../../src/config/rooms.js'
+import { isRoom, roomToken } from '../../../src/config/rooms.js'
 import {
   exceededLimit,
   retryAfterSeconds,
@@ -335,6 +335,34 @@ async function edit(req, res) {
   return res.status(200).json({ message: updated.data[0] })
 }
 
+/**
+ * Has this account claimed the token whose room holds this message?
+ *
+ * Two small reads rather than a join, because the answer has to be about the
+ * message that is actually being removed. Reading the room from the message
+ * means a request cannot name one room while pointing at a message in
+ * another.
+ *
+ * Answers false for anything unexpected - a message that is gone, a room that
+ * is not a token's, a query that failed. False means the ordinary rule
+ * applies and the caller may only remove their own, which is the safe
+ * direction.
+ */
+async function claimsThisRoom(db, address, messageId) {
+  const found = await db.from('messages').select('room').eq('id', messageId).maybeSingle()
+  const token = roomToken(found.data?.room)
+  if (!token) return false
+
+  const claim = await db
+    .from('token_claims')
+    .select('address')
+    .eq('token_address', token)
+    .is('revoked_at', null)
+    .maybeSingle()
+
+  return claim.data?.address === address
+}
+
 async function remove(req, res) {
   const address = await signedInAddress(req)
   if (!address) return res.status(401).json({ error: 'Sign in first.' })
@@ -365,13 +393,30 @@ async function remove(req, res) {
   const admins = parseAdminAddresses(process.env.ADMIN_ADDRESSES)
   const moderator = isAdminAddress(address, admins)
 
+  /*
+   * Three ways now, the third being narrow on purpose.
+   *
+   * Somebody who has claimed a token may remove messages in that token's
+   * room, and nowhere else. It is the one power a claim carries, and the
+   * reason it carries it: a dev whose room fills with impersonators posting a
+   * fake contract address should not have to find a site moderator at two in
+   * the morning.
+   *
+   * The scope is checked against the message's own room rather than against
+   * anything the request said, so the question answered is "is this message
+   * in a room whose token this person has claimed" - which cannot be widened
+   * by asking differently. Note what it is not: no blocking, which silences
+   * an account everywhere, and no reach outside the one room.
+   */
+  const dev = moderator ? false : await claimsThisRoom(db, address, id)
+
   let update = db
     .from('messages')
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', id)
     .is('deleted_at', null)
 
-  if (!moderator) update = update.eq('address', address)
+  if (!moderator && !dev) update = update.eq('address', address)
 
   const removed = await update.select('id')
 
@@ -386,6 +431,12 @@ async function remove(req, res) {
    * A moderator gets success either way - they wanted it gone and it is. For
    * anybody else the two cases answer 404 together, so this does not become a
    * way of asking whether a given id exists and who wrote it.
+   *
+   * A token room's claimant is deliberately on the "anybody else" side of
+   * that line. They may remove anything in their room, so a 404 here means
+   * the message was already gone - which is true, and is not an oracle,
+   * because the only ids it answers about are ones in a room they can read
+   * in full anyway.
    */
   if (!removed.data.length && !moderator) return res.status(404).json({ error: 'Not found.' })
 

@@ -125,6 +125,27 @@ const NASTY_ROOM = {
   last_message_at: null,
 }
 
+/*
+ * A live dev claim, and one that should never be drawn.
+ *
+ * The second row is revoked. The select policy in 0015 already hides those,
+ * so it can only reach the browser if that policy is ever loosened - which is
+ * exactly the change that would silently put a badge back on a token a
+ * moderator took it away from. The service states the condition a second time
+ * for that reason, and this row is what proves the second statement works.
+ */
+const TOKEN_CLAIM = {
+  token_address: ADDRESS,
+  address: ADDRESS,
+  claimed_at: '2026-01-01T00:00:00Z',
+  revoked_at: null,
+}
+const REVOKED_CLAIM = {
+  ...TOKEN_CLAIM,
+  token_address: '0x' + '9'.repeat(40),
+  revoked_at: '2026-02-01T00:00:00Z',
+}
+
 const FIXTURES = {
   /** The ordinary case, so a failure elsewhere is known to be the data. */
   healthy: (table) => {
@@ -135,6 +156,7 @@ const FIXTURES = {
     if (table === 'messages')
       return [{ ...NASTY_MESSAGE, body: 'gm', created_at: '2026-01-01T00:00:00Z', profiles: { handle: 'degen', avatar_id: null, avatar_url: null }, message_reactions: [] }]
     if (table === 'rooms') return [TOKEN_ROOM]
+    if (table === 'token_claims') return [TOKEN_CLAIM]
     return []
   },
   /** Nulls everywhere a column is nullable, and a body nobody would type. */
@@ -143,6 +165,9 @@ const FIXTURES = {
     if (table === 'posts') return [NASTY_POST]
     if (table === 'messages') return [NASTY_MESSAGE, NASTY_REPLY]
     if (table === 'rooms') return [NASTY_ROOM, TOKEN_ROOM]
+    // A revoked claim and one with nothing in it. Neither may draw a badge.
+    if (table === 'token_claims')
+      return [REVOKED_CLAIM, { token_address: null, address: null, claimed_at: null, revoked_at: null }]
     return []
   },
   /** Nothing at all - the state every one of these tables starts in. */
@@ -525,6 +550,76 @@ await run('token page / chat on rows full of nulls', {
   token: true,
   fixture: 'nasty',
   steps: tokenChat,
+})
+
+/*
+ * The dev badge, which is the one thing on this site that could be worth
+ * money to somebody it should not be.
+ *
+ * The wording is asserted on rather than the markup, because the wording is
+ * the feature. A badge that says "verified" is this site's credibility being
+ * spent by whoever claimed a token last, and the person it will be spent by
+ * is a rugger. If a future change makes this louder or shorter, this fails.
+ */
+await run('token page / the dev badge says only what it proves', {
+  path: `/token/${ADDRESS}`,
+  token: true,
+  steps: async (page) => {
+    await tokenChat(page)
+
+    const badge = page.locator('.dev-badge').first()
+    if (!(await badge.count())) throw new Error('no badge on a claimed token')
+
+    const said = [
+      (await badge.innerText()).toLowerCase(),
+      ((await badge.getAttribute('title')) || '').toLowerCase(),
+    ].join(' ')
+
+    /*
+     * Whole words, not substrings. The badge's own disclaimer contains
+     * "safety check", and a substring match on "safe" fails the wording for
+     * saying exactly the thing that makes it honest.
+     */
+    for (const forbidden of ['verified', 'official', 'trusted', 'safe', 'audited', 'legit']) {
+      if (new RegExp(`\\b${forbidden}\\b`).test(said)) {
+        throw new Error(`the badge says "${forbidden}", which it cannot prove`)
+      }
+    }
+    if (!said.includes('creation transaction')) {
+      throw new Error('the badge does not say what it actually proves')
+    }
+    if (!said.includes('not an endorsement')) {
+      throw new Error('the badge does not disclaim being an endorsement')
+    }
+  },
+})
+
+await run('token page / a revoked claim draws no badge', {
+  path: `/token/${ADDRESS}`,
+  token: true,
+  fixture: 'nasty',
+  steps: async (page) => {
+    await tokenChat(page)
+    if (await page.locator('.dev-badge').count()) {
+      throw new Error('a revoked or malformed claim was drawn as a badge')
+    }
+  },
+})
+
+await run('token page / claiming is offered when nobody has', {
+  path: `/token/${ADDRESS}`,
+  token: true,
+  fixture: 'empty',
+  steps: async (page) => {
+    await tokenChat(page)
+    const strip = page.locator('.token-claim')
+    if (!(await strip.count())) throw new Error('no way to claim an unclaimed token')
+
+    const note = (await strip.innerText()).toLowerCase()
+    if (!note.includes('creation transaction')) {
+      throw new Error('the claim prompt does not say what will be checked')
+    }
+  },
 })
 
 /*

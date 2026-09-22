@@ -170,6 +170,7 @@ export default function SocialView({ onOpenProfile, onOpenToken }) {
             route={{ address: account.toLowerCase(), handle: null }}
             embedded
             onOpenProfile={onOpenProfile}
+            onOpenToken={onOpenToken}
           />
         ) : (
           <div className="social-signin">

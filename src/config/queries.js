@@ -144,3 +144,16 @@ export const PUBLIC_PROFILE_FIELDS =
  */
 export const ROOM_FIELDS =
   'slug, kind, token_address, name, blurb, message_count, last_message_at'
+
+/**
+ * A dev claim as the browser reads one.
+ *
+ * `revoked_at` is selected although the policy only returns rows where it is
+ * null, so the service can state the same condition in its query. Saying it
+ * twice costs nothing and means a policy loosened later does not silently
+ * start drawing badges for claims a moderator has taken away.
+ *
+ * `revoked_reason` is deliberately absent. It is a moderator's note about a
+ * person, and the anon key is readable by everybody.
+ */
+export const CLAIM_FIELDS = 'token_address, address, claimed_at, revoked_at'

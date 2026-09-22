@@ -1,6 +1,8 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import RoomPanel from './RoomPanel'
+import ClaimToken from './ClaimToken'
 import { tokenRoom } from '../../config/rooms'
+import { useTokenClaim } from '../../hooks/useTokenClaim'
 import '../../styles/social.css'
 
 /**
@@ -26,6 +28,25 @@ import '../../styles/social.css'
 export default function TokenRoom({ address, onOpenProfile }) {
   const room = tokenRoom(address)
 
+  const { claim, refresh } = useTokenClaim(address)
+
+  /*
+   * Bumped when a claim lands, and used as the panel's key.
+   *
+   * The panel reads the claim itself, to badge the right author's messages.
+   * Rather than threading a second copy into it - and giving a shared
+   * component a prop only this caller has - a successful claim remounts it,
+   * which makes it ask again. It happens once in the life of a token, to the
+   * person who just watched their own wallet pop up, so the cost of throwing
+   * away a loaded conversation is a reload nobody else ever sees.
+   */
+  const [claimed, setClaimed] = useState(0)
+
+  const onClaimed = useCallback(() => {
+    refresh()
+    setClaimed((n) => n + 1)
+  }, [refresh])
+
   /*
    * Nothing to mark read from here.
    *
@@ -45,7 +66,19 @@ export default function TokenRoom({ address, onOpenProfile }) {
 
   return (
     <div className="token-room">
-      <RoomPanel key={room} room={room} onOpenProfile={onOpenProfile} onSeen={noop} />
+      {/*
+        Above the conversation, because it is about who this room belongs to
+        rather than about anything said in it - and because the badge it
+        grants shows up on the messages below.
+      */}
+      <ClaimToken token={address} claim={claim} onClaimed={onClaimed} />
+
+      <RoomPanel
+        key={`${room}:${claimed}`}
+        room={room}
+        onOpenProfile={onOpenProfile}
+        onSeen={noop}
+      />
     </div>
   )
 }

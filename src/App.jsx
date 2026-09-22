@@ -325,6 +325,7 @@ function MainApp() {
           <ProfilePage
             route={profileRoute}
             onOpenProfile={openProfile}
+            onOpenToken={openToken}
             onClose={closeProfile}
           />
         ) : tokenAddress ? (

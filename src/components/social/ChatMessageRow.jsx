@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Trash2, Ban, Pencil, Check, X, Reply } from 'lucide-react'
 import ChatAvatar from './ChatAvatar'
+import DevBadge from './DevBadge'
 import MessageReactions from './MessageReactions'
 import { tallyReactions } from '../../services/chat'
 import { messageLength, MAX_MESSAGE_LENGTH } from '../../utils/chatMessage'
@@ -39,6 +40,21 @@ export default function ChatMessageRow({
   onJumpTo,
   canJump = false,
   highlighted = false,
+  /*
+   * Two different facts about the same claim, and they must not be one prop.
+   *
+   * `authorIsDev` is about whoever wrote this message and decides whether the
+   * badge is drawn. `viewerIsRoomDev` is about whoever is reading and decides
+   * whether they may remove it. Folded into one, the badge's own value would
+   * have granted everybody the power to delete the dev's messages - which is
+   * precisely backwards.
+   *
+   * Both are passed down rather than looked up per row: a room is one token,
+   * so it is one question, and asking it per message would be fifty identical
+   * queries.
+   */
+  authorIsDev = false,
+  viewerIsRoomDev = false,
 }) {
   const posted = Date.parse(message.createdAt)
 
@@ -61,7 +77,15 @@ export default function ChatMessageRow({
    * is not a permission - it is a button somebody else can send the request
    * without.
    */
-  const canRemove = isOwn || isModerator
+  /*
+   * Removal widens for a token room's claimant; blocking does not.
+   *
+   * The split is the whole shape of what a claim buys. Removing a message is
+   * visible, reversible by reposting, and confined to the one room somebody
+   * proved a connection to. Blocking silences an account across the entire
+   * site, and nobody gets that for having sent a transaction.
+   */
+  const canRemove = isOwn || isModerator || viewerIsRoomDev
   const canEdit = isOwn
   const canBlock = isModerator && !isOwn
   const canReact = Boolean(account)
@@ -121,6 +145,11 @@ export default function ChatMessageRow({
               {formatAddress(message.address)}
             </span>
           )}
+
+          {/* Only in the room about the token they claimed. The same account
+              in the Lounge is just an account - the claim is about one token,
+              so the badge belongs where that token is the subject. */}
+          {authorIsDev && <DevBadge />}
 
           <time
             className="chat-time"

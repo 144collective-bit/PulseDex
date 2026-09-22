@@ -686,6 +686,141 @@
   color: inherit;
 }
 
+/* ── The dev claim ── */
+
+/*
+ * Visually quiet, and that is a decision rather than a default.
+ *
+ * Every instinct with a verification badge is to make it the brightest thing
+ * in the row - a tick, an accent colour, a glow. All of that reads as
+ * endorsement, and this badge endorses nothing: it says somebody signed from
+ * the wallet that sent a creation transaction. A rug pull with a glowing
+ * badge beside it is this site's reputation being spent by a stranger.
+ *
+ * So: muted foreground, a hairline, no fill, no accent. It should read as a
+ * label, in the way a filename extension is a label.
+ */
+.dev-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-micro, 10px);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  /* Never picks up the row's colour. An own-message bubble is tinted green
+     and a badge inheriting that would be the accent this must not have. */
+  background: none;
+}
+
+.dev-badge-label {
+  white-space: nowrap;
+}
+
+/* The full form, on a page with room for the sentence. A tooltip is not read
+   on a phone and is not read by anybody in a hurry, which is exactly the
+   person this wording is for. */
+.dev-badge.is-full {
+  align-items: flex-start;
+  gap: 6px;
+  padding: 7px 9px;
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.dev-badge.is-full .dev-badge-label {
+  font-weight: 700;
+}
+
+.dev-badge-note {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+/* Present for a screen reader, which cannot read a tooltip, and out of the
+   way of everybody else. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Claimed tokens, on a profile. */
+.xp-claims {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 0;
+  max-width: 44em;
+}
+
+.xp-claim-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.xp-claim {
+  padding: 3px 8px;
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-sm);
+  background: none;
+  font-size: var(--fs-label, 11px);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.xp-claim:hover {
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* The claim strip, above a token's conversation. */
+.token-claim {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ch-hairline);
+}
+
+.token-claim.is-claimed {
+  align-items: flex-start;
+}
+
+.token-claim-who {
+  font-size: var(--fs-label, 11px);
+  color: var(--text-muted);
+}
+
+.token-claim-note {
+  margin: 0;
+  flex: 1 1 260px;
+  min-width: 0;
+  font-size: var(--fs-label, 11px);
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.token-claim-note.is-error {
+  color: var(--pulse-red);
+}
+
 /* ── States that are not a conversation ── */
 
 .chat-notice,

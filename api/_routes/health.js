@@ -1,5 +1,5 @@
 import { serviceClient, anonClient } from '../_lib/supabase.js'
-import { MESSAGE_FIELDS, NOTIFICATION_FIELDS, POST_FIELDS, PUBLIC_PROFILE_FIELDS, ROOM_FIELDS } from '../../src/config/queries.js'
+import { MESSAGE_FIELDS, NOTIFICATION_FIELDS, POST_FIELDS, PUBLIC_PROFILE_FIELDS, ROOM_FIELDS, CLAIM_FIELDS } from '../../src/config/queries.js'
 
 /**
  * Does this deployment actually work?
@@ -104,6 +104,13 @@ export default async function handler(req, res) {
      * rooms and the token page read it straight from the browser.
      */
     checks.push(await query(reader, 'rooms-select', 'rooms', ROOM_FIELDS))
+    /*
+     * Dev claims. Anon-readable by policy, but only the live ones - so this
+     * passing proves the table and the select, not that the policy is right.
+     * What it does catch is the shape drifting, which is how the badge would
+     * silently stop being drawn.
+     */
+    checks.push(await query(reader, 'claims-select', 'token_claims', CLAIM_FIELDS))
   }
 
   /*

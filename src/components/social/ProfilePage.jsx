@@ -36,7 +36,13 @@ import '../../styles/social.css'
  * nothing here is private - a profile that only members could see would be a
  * profile nobody discovers.
  */
-export default function ProfilePage({ route, onOpenProfile, onClose, embedded = false }) {
+export default function ProfilePage({
+  route,
+  onOpenProfile,
+  onClose,
+  onOpenToken,
+  embedded = false,
+}) {
   const isModerator = useIsModerator()
   const { account } = useSiweAuth()
 
@@ -158,6 +164,7 @@ export default function ProfilePage({ route, onOpenProfile, onClose, embedded = 
   return (
     <Frame onClose={onClose} embedded={embedded}>
       <ProfileHeader
+        onOpenToken={onOpenToken}
         profile={profile}
         address={shown.address}
         postCount={postCount}
