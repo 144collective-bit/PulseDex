@@ -1,0 +1,149 @@
+# The chat, and where it goes next
+
+Companion to `social-roadmap.md`, which covers the feed, profiles and
+notifications. This one is about the rooms.
+
+Read it before starting chat work; update it when you finish a batch, and
+write down what the plan got wrong.
+
+---
+
+## What exists
+
+Five rooms - Lounge, Trading, Trenches, HEX, Help - defined in
+`src/config/rooms.js` as a frozen array rather than a table. That was a
+deliberate trade and the file says so: one source of truth that the sidebar,
+the endpoint and the tests all read, no admin screen to build, and no way for
+the database to contain a room the app has never heard of.
+
+It also predicted its own end:
+
+> It stops being the right shape the moment rooms need to be created by
+> anyone who is not holding a git checkout.
+
+That moment is this document.
+
+Working today: 500-character messages, realtime inserts, soft deletion so
+moderation is reversible, editing with `edited_at`, emoji reactions, a live
+presence count, per-address blocking, per-message removal, rate limits, and
+profile cards.
+
+Missing, and the gap is wider than a feature list suggests:
+
+- **No unread state.** Nothing says which room has anything new in it, so the
+  sidebar is five identical words and a guess.
+- **No typing indicator.** Presence exists but only counts heads.
+- **No threads.** A busy room is unreadable.
+- **No search, no images, no pinned messages.**
+- **Nothing ties the chat to a token**, which is the only thing that would
+  make a chat inside a DEX screener different from a chat anywhere else.
+
+---
+
+## Decisions
+
+**Rooms become a table.** Seeded with the five that exist, so `messages.room`
+keeps working and can take a foreign key.
+
+**Three kinds of room**, one table: `core` (the five), `token` (one per token
+address), `group` (made by hand). Same messages, same moderation, same
+everything - the kind decides who may enter and who moderates, nothing else.
+
+**Token rooms are created on first use**, not for every token that exists.
+There are tens of thousands of tokens and almost none of them will ever have a
+conversation in them.
+
+**Holders-only rooms are in scope.** A room may require a minimum balance of
+its token. See the batch for what that actually costs.
+
+**Groups are moderator-made, at first.** Anybody creating them means spam,
+squatted names, and tooling to deal with both before anyone has established
+that people want groups at all. Starting closed is reversible; starting open
+is not.
+
+**A dev claims a token from the deploying wallet, and nothing else.** Signing
+from the address that sent the creation transaction. It is provable from chain
+data, it still works when ownership has been renounced, and no contract can
+lie about it - `owner()` is whatever the contract says it is, and a hostile one
+can say anything.
+
+> **The badge is a scam vector, and has to be built as one.** Get it wrong and
+> this site's credibility is lending itself to a rugger. So: it says exactly
+> what it proves - *controls the deploying wallet* - and never "official" or
+> "verified" unqualified. It is revocable by a moderator, because the case it
+> will be tested on is a dev who claims and then rugs. And the deploying
+> wallet is not the team, is sometimes a factory, and is sometimes a burner:
+> the badge claims control of an address, which is all it can honestly claim.
+
+---
+
+## The batches
+
+### Batch A - a room you can actually follow
+
+No new concepts; this is what makes the rest worth having. A room nobody can
+tell has new messages in it is a room nobody comes back to.
+
+- Unread per room, and a jump-to-latest that knows where "latest" was
+- Typing indicators, over the presence channel that already exists
+- Reply-to-message, one level, matching how posts already work
+- Message search within a room
+- A room list that shows where the activity is
+
+### Batch B - a room per token
+
+The thing that makes this chat belong to this app.
+
+- `rooms` table, seeded with the five, `messages.room` gains its foreign key
+- A token room created the first time somebody opens one
+- A Chat tab on the token page, which is where people already are when they
+  have a question about a token
+- Message volume fed back to the screener: "being talked about" is a signal
+  the rest of the app can show
+
+### Batch C - the dev claim
+
+- Read the creation transaction for a token, get the deploying address
+- A claim flow: sign from that address, and the signature is checked against
+  what the chain says rather than against anything the client sent
+- One claim per token, revocable, with an audit row for who revoked it and why
+- The badge, worded as above, on the profile and beside their messages in
+  their own token's room
+- Moderator powers for the claimant, **in that room only**
+
+### Batch D - groups, and gating
+
+Smaller than it was, because groups start moderator-made.
+
+- Creating a group, naming rules, a directory
+- The creator moderates their own group
+- **Holders-only rooms**: a `min_balance` on the room, checked server-side at
+  post time
+
+The gating is the hard half, and the honest version of it looks like this:
+
+- The check belongs on the **write**, not on entry. A check on join is a
+  snapshot that is wrong the moment somebody sells.
+- Which means an RPC read of `balanceOf` in the posting path, so the write now
+  depends on a node answering. It needs a cache with a short life, and a
+  decision about what happens when the read fails - refusing every post
+  because an RPC is slow is worse than letting a seller talk for two minutes.
+- Selling costs the ability to post, not the messages already written. History
+  is not rewritten because somebody's balance changed.
+- It must be server-side. A client-side balance check is decoration.
+
+---
+
+## Working on this
+
+Read `CLAUDE.md`, then this. One batch, one PR.
+
+Every batch extends `scripts/stress.mjs`. Rooms have the failure shape that
+only a browser catches: an unread count that drifts, a realtime channel that
+outlives its room, a gated room that lets the wrong person post.
+
+Migrations are numbered and forward-only. `0006` is deliberately absent - it
+belongs to a parked branch.
+
+Preview deployments now verify their own database queries before merge, so a
+new select or embed is proven at the pull request rather than after it.

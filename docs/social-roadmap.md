@@ -126,13 +126,11 @@ Today a profile is a banner, a bio and a list of posts. What it needs:
 - An edit window, with `edited_at` already in the schema and shown
 - A real thread view rather than a flat reply list
 
-### Batch 4 — chat that feels alive
+### Batch 4 — chat
 
-- Typing indicators and presence (presence already exists, unused)
-- Unread markers per room, and jump-to-latest
-- Reply-to-message inside a room
-- Message search
-- A room list that shows where the activity is
+Moved out to **`docs/chat-roadmap.md`**, which outgrew a bullet list the
+moment rooms stopped being five fixed strings. It covers unread state and
+threads, a room per token, the dev claim, groups, and holders-only rooms.
 
 ### Batch 5 — safety that scales past one person
 
