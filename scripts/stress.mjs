@@ -490,7 +490,7 @@ const accountMenu = (label) => async (page) => {
 }
 
 const socialTab = (label) => async (page) => {
-  await tab('Chat')(page)
+  await tab('Social')(page)
   const t = page.locator('.social-tabs .xp-tab', { hasText: label }).first()
   if (!(await t.count())) throw new Error(`no "${label}" social tab`)
   await t.click()
@@ -499,8 +499,13 @@ const socialTab = (label) => async (page) => {
 
 /* ------------------------------------------------------------ scenarios -- */
 
-const TABS = ['Home', 'Screener', 'Trenches', 'Chat', 'Portfolio']
-const SOCIAL = ['My Profile', 'Chat Rooms', 'Discover', 'Notifications']
+const TABS = ['Home', 'Screener', 'Trenches', 'Social', 'Portfolio']
+/*
+ * The three the row offers. My Profile and Notifications left it in the
+ * flattening - they are reached from the account menu and the bell, and are
+ * covered by their own scenarios below rather than by walking the strip.
+ */
+const SOCIAL = ['Rooms', 'Discover']
 
 // Every tab, signed in, on ordinary data. The floor.
 for (const t of TABS) await run(`desktop / ${t}`, { steps: tab(t) })
@@ -682,7 +687,7 @@ await run('token page / claiming is offered when nobody has', {
  */
 await run('chat / token rooms in the sidebar', {
   steps: async (page) => {
-    await socialTab('Chat Rooms')(page)
+    await socialTab('Rooms')(page)
     const listed = await page.locator('.room-item.is-token').count()
     if (listed !== 1) throw new Error(`expected one token room, drew ${listed}`)
 
@@ -695,7 +700,7 @@ await run('chat / token rooms in the sidebar', {
 await run('chat / a token room that cannot be linked to', {
   fixture: 'nasty',
   steps: async (page) => {
-    await socialTab('Chat Rooms')(page)
+    await socialTab('Rooms')(page)
     const listed = await page.locator('.room-item.is-token').count()
     // Two rows come back; one of them has a slug that is not an address.
     if (listed !== 1) throw new Error(`expected the unlinkable room to be dropped, drew ${listed}`)
@@ -712,7 +717,7 @@ await run('chat / a token room that cannot be linked to', {
  */
 await run('chat / groups are listed above the token rooms', {
   steps: async (page) => {
-    await socialTab('Chat Rooms')(page)
+    await socialTab('Rooms')(page)
     const headings = (await page.locator('.room-group').allInnerTexts()).map((h) => h.toLowerCase())
     if (!headings.includes('groups')) throw new Error('no Groups heading')
 
@@ -727,7 +732,7 @@ await run('chat / groups are listed above the token rooms', {
 
 await run('chat / a gated group says so without saying how much', {
   steps: async (page) => {
-    await socialTab('Chat Rooms')(page)
+    await socialTab('Rooms')(page)
     const whales = page.locator('.room-item', { hasText: 'Whales' }).first()
     if (!(await whales.count())) throw new Error('the gated group is not listed')
     if (!(await whales.locator('.room-lock').count())) throw new Error('no padlock on a gated room')
@@ -747,7 +752,7 @@ await run('chat / a gated group says so without saying how much', {
 
 await run('chat / a gated room states its rule in human units', {
   steps: async (page) => {
-    await socialTab('Chat Rooms')(page)
+    await socialTab('Rooms')(page)
     await page.locator('.room-item', { hasText: 'Whales' }).first().click()
     await page.waitForTimeout(1500)
 
@@ -770,7 +775,7 @@ await run('chat / a gated room states its rule in human units', {
 await run('chat / a broken gate is not drawn as a rule', {
   fixture: 'nasty',
   steps: async (page) => {
-    await socialTab('Chat Rooms')(page)
+    await socialTab('Rooms')(page)
 
     // Half a gate, and a gate of zero. Every address holds zero of every
     // token, so neither restricts anybody and neither may claim to.
@@ -793,9 +798,9 @@ await run('chat / a broken gate is not drawn as a rule', {
 await run('chat / groups on a phone', {
   viewport: PHONE,
   steps: async (page) => {
-    await mobileTab('Chat')(page)
-    const t = page.locator('.social-tabs .xp-tab', { hasText: 'Chat Rooms' }).first()
-    if (!(await t.count())) throw new Error('no Chat Rooms tab on a phone')
+    await mobileTab('Social')(page)
+    const t = page.locator('.social-tabs .xp-tab', { hasText: 'Rooms' }).first()
+    if (!(await t.count())) throw new Error('no Rooms tab on a phone')
     await t.click()
     await page.waitForTimeout(1500)
 
@@ -806,7 +811,7 @@ await run('chat / groups on a phone', {
 
 await run('chat / an ordinary account cannot make a group', {
   steps: async (page) => {
-    await socialTab('Chat Rooms')(page)
+    await socialTab('Rooms')(page)
     // The endpoint refuses one too, with a 404. This is only about not
     // drawing a control nobody can use.
     if (await page.locator('.room-new').count()) {
@@ -818,7 +823,7 @@ await run('chat / an ordinary account cannot make a group', {
 await run('chat / no token rooms yet', {
   fixture: 'empty',
   steps: async (page) => {
-    await socialTab('Chat Rooms')(page)
+    await socialTab('Rooms')(page)
     if (await page.locator('.room-group').count()) {
       throw new Error('a "Tokens" heading over an empty list')
     }
@@ -842,13 +847,47 @@ await run('direct / unknown path', { path: '/no/such/page' })
 const SURFACES = [
   ['/feed', 'Feed'],
   ['/discover', 'Discover'],
+  ['/r/lounge', 'Rooms'],
+  ['/r/trading', 'Rooms'],
+  [`/r/token-${ADDRESS}`, 'Rooms'],
+  ['/r/group-the-trenches', 'Rooms'],
+]
+
+/*
+ * The two surfaces that are not tabs.
+ *
+ * They still have URLs and still render inside the section - they are just
+ * reached from the chrome now. Checked separately because the assertion is
+ * the opposite: the header names them and *no* tab is selected.
+ */
+const CHROME_SURFACES = [
   ['/notifications', 'Notifications'],
   ['/me', 'My Profile'],
-  ['/r/lounge', 'Chat Rooms'],
-  ['/r/trading', 'Chat Rooms'],
-  [`/r/token-${ADDRESS}`, 'Chat Rooms'],
-  ['/r/group-the-trenches', 'Chat Rooms'],
 ]
+
+for (const [path, expected] of CHROME_SURFACES) {
+  await run(`direct / ${path}`, {
+    path,
+    steps: async (page) => {
+      if (!(await page.locator('.social-tabs').count())) {
+        throw new Error('the URL did not reach the social section')
+      }
+
+      const title = (await page.locator('.social-head-title h1').innerText()).trim()
+      if (title !== expected) throw new Error(`the header says "${title}"`)
+
+      if (await page.locator('.social-tabs .xp-tab.active').count()) {
+        throw new Error('a tab is selected on a surface that is not one of the three')
+      }
+
+      // The row stays so there is a way back in. Without it, somebody on
+      // their own inbox has only the browser's Back button.
+      if ((await page.locator('.social-tabs .xp-tab').count()) !== 3) {
+        throw new Error('the tab row is missing or the wrong size')
+      }
+    },
+  })
+}
 
 for (const [path, expected] of SURFACES) {
   await run(`direct / ${path}`, {
@@ -907,6 +946,71 @@ await run('direct / a room that is not a room', {
  * home page because `closeToken` had already pushed `/` and the check here
  * concluded there was nothing to do.
  */
+/*
+ * The bell.
+ *
+ * The unread count used to be a badge on a sub-tab, which meant it was only
+ * visible once you had already opened the section it was counting. The whole
+ * point of moving it is that it is legible from the screener, so that is what
+ * is checked: it is there on a tab that has nothing to do with the social
+ * section, and pressing it lands on the inbox.
+ */
+await run('chrome / the bell is visible outside the social section', {
+  steps: async (page) => {
+    await tab('Screener')(page)
+
+    const bell = page.locator('.notif-bell')
+    if (!(await bell.isVisible())) throw new Error('no bell on the screener')
+
+    // The count is in the label as well as the badge. A screen reader gets
+    // nothing from a number in a span beside an icon called "Bell".
+    const label = (await bell.getAttribute('aria-label')) || ''
+    if (!/notification/i.test(label)) throw new Error(`the bell is labelled "${label}"`)
+  },
+})
+
+await run('chrome / the bell opens the inbox', {
+  steps: async (page) => {
+    await tab('Screener')(page)
+    await page.locator('.notif-bell').click()
+    await page.waitForTimeout(1800)
+
+    const pathname = new URL(page.url()).pathname
+    if (pathname !== '/notifications') throw new Error(`landed on ${pathname}`)
+    if (!(await page.locator('.social-tabs').count())) {
+      throw new Error('the bell left the social section')
+    }
+  },
+})
+
+await run('chrome / no bell when signed out', {
+  signedIn: false,
+  steps: async (page) => {
+    await tab('Screener')(page)
+    // A bell that is always empty teaches people to ignore the one control
+    // on this bar that is allowed to demand attention.
+    if (await page.locator('.notif-bell').count()) {
+      throw new Error('a signed-out visitor was shown a notification bell')
+    }
+  },
+})
+
+await run('chat / the row is three, and none of them is the inbox', {
+  steps: async (page) => {
+    await socialTab('Rooms')(page)
+
+    const names = (await page.locator('.social-tabs .xp-tab').allInnerTexts()).map((n) => n.trim())
+    if (names.length !== 3) throw new Error(`the row has ${names.length} tabs: ${names.join('/')}`)
+    if (names.join('|') !== 'Feed|Rooms|Discover') throw new Error(names.join('|'))
+
+    // The badge moved to the chrome. One left behind here would mean two
+    // places claiming to be the count, which is how they drift apart.
+    if (await page.locator('.social-tabs .xp-tab-badge').count()) {
+      throw new Error('an unread badge is still on a sub-tab')
+    }
+  },
+})
+
 await run('chat / leaving the section clears the URL', {
   path: '/r/trading',
   steps: async (page) => {
@@ -946,7 +1050,7 @@ await run('races / hammer the tabs', {
 
 await run('races / hammer the social tabs', {
   steps: async (page) => {
-    await tab('Chat')(page)
+    await tab('Social')(page)
     for (let i = 0; i < 4; i += 1) {
       for (const t of ['Feed', ...SOCIAL]) {
         const el = page.locator('.social-tabs .xp-tab', { hasText: t }).first()
@@ -966,7 +1070,7 @@ await run('races / hammer the social tabs', {
  * the sidebar rather than pushing the names out of it.
  */
 await run('chat / unread badges', {
-  steps: socialTab('Chat Rooms'),
+  steps: socialTab('Rooms'),
   expectText: '99+',
 })
 
@@ -977,7 +1081,7 @@ await run('chat / unread badges', {
  */
 await run('chat / opening a room clears its badge', {
   steps: async (page) => {
-    await socialTab('Chat Rooms')(page)
+    await socialTab('Rooms')(page)
     const trading = page.locator('.room-item', { hasText: 'Trading' }).first()
     if (!(await trading.count())) throw new Error('no Trading room in the list')
 
@@ -995,12 +1099,12 @@ await run('chat / opening a room clears its badge', {
 
 await run('chat / no badges when nothing is unread', {
   fixture: 'empty',
-  steps: socialTab('Chat Rooms'),
+  steps: socialTab('Rooms'),
 })
 
 await run('chat / signed out has no badges to fetch', {
   signedIn: false,
-  steps: socialTab('Chat Rooms'),
+  steps: socialTab('Rooms'),
 })
 
 /*
@@ -1014,14 +1118,14 @@ await run('chat / signed out has no badges to fetch', {
  */
 await run('chat / a quoted message with nothing in it', {
   fixture: 'nasty',
-  steps: socialTab('Chat Rooms'),
+  steps: socialTab('Rooms'),
   expectText: 'message removed',
 })
 
 await run('chat / the quote never shows a removed message', {
   fixture: 'nasty',
   steps: async (page) => {
-    await socialTab('Chat Rooms')(page)
+    await socialTab('Rooms')(page)
     const quoted = await page.locator('.chat-quote-body').first().innerText()
     if (quoted.length > 200) throw new Error('a removed message was quoted in full')
   },
@@ -1039,13 +1143,13 @@ const search = (term, { phone = false } = {}) => async (page) => {
   // along the top is not on screen at that width, so the desktop route here
   // would time out waiting for a button nobody can press.
   if (phone) {
-    await mobileTab('Chat')(page)
-    const t = page.locator('.social-tabs .xp-tab', { hasText: 'Chat Rooms' }).first()
-    if (!(await t.count())) throw new Error('no Chat Rooms tab on a phone')
+    await mobileTab('Social')(page)
+    const t = page.locator('.social-tabs .xp-tab', { hasText: 'Rooms' }).first()
+    if (!(await t.count())) throw new Error('no Rooms tab on a phone')
     await t.click()
     await page.waitForTimeout(1400)
   } else {
-    await socialTab('Chat Rooms')(page)
+    await socialTab('Rooms')(page)
   }
   const box = page.locator('.chat-search-input').first()
   if (!(await box.count())) throw new Error('no search box in the room')
@@ -1104,7 +1208,7 @@ await run('notifications / empty inbox', {
 await run('notifications / phone', {
   viewport: PHONE,
   steps: async (page) => {
-    await mobileTab('Chat')(page)
+    await mobileTab('Social')(page)
     const t = page.locator('.social-tabs .xp-tab', { hasText: 'Notifications' }).first()
     if (!(await t.count())) throw new Error('no Notifications tab on a phone')
     await t.click()

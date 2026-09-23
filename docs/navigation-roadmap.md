@@ -95,16 +95,39 @@ section mounted over the home page. None of the three can assume the URL is
 where it last left it. Unifying them is worth doing and is not Batch 2's job;
 if a fourth is ever needed, do that first.
 
-### Batch 2 - flatten it
+### Batch 2 - flatten it  <- done
 
-- Five sub-tabs become three: **Feed**, **Rooms**, **Discover**.
-- **Profile** moves to the account menu, where every social product puts it.
-  Half of this exists already - the menu has "My public profile".
-- **Notifications** move to the header as a bell with a count, visible from
-  Screener and Portfolio as well. The inbox itself stays at
-  `/notifications`.
-- The top-level tab stops being called "Chat". It is the social section and
-  should say so.
+- [x] Five sub-tabs become three: **Feed**, **Rooms**, **Discover**.
+- [x] **Profile** moves to the account menu, which already had it.
+- [x] **Notifications** move to the header as a bell with a count, visible
+      from Screener and Portfolio as well. The inbox stays at
+      `/notifications`.
+- [x] The top-level tab stops being called "Chat".
+
+**The two that left the row still exist and still have URLs.** `/me` and
+`/notifications` render inside the section with no tab selected, which is
+honest: you are in the section, on something that is not one of the three.
+The row is still drawn there. Hiding it would be tidier and would leave
+somebody on their own inbox with no way back except the browser's Back
+button.
+
+**Why those two and not others.** Your profile and your inbox are not places
+to browse - they are things you go to on purpose, from the chrome, which is
+where every social product has put them. Leaving them in the row made the row
+an account screen with a feed attached. The three that remain are the ones
+about the site rather than about you.
+
+**The badge moved rather than being copied.** There is exactly one unread
+count and it is the bell. Two places claiming to be the count is how they
+drift apart, so the sub-tab badge is gone rather than kept in sympathy.
+
+**The bell is absent when signed out, not empty.** A control that is always
+empty teaches people to ignore the one thing in that bar permitted to demand
+attention.
+
+**"Social", not "Chat".** The section holds a feed, an inbox, a way to find
+people and the rooms. Naming it after one of the four is why nobody looking
+for their notifications found them.
 
 ### Batch 3 - one directory instead of three lists
 

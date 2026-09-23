@@ -215,6 +215,23 @@ function MainApp() {
 
     setActiveTab(tab)
   }
+
+  /**
+   * Open one surface of the social section from the chrome.
+   *
+   * The bell in the navbar is on every tab, so pressing it from the screener
+   * has to do everything `selectTab` does - close a token, close a profile -
+   * and then land on a specific surface rather than on the feed.
+   */
+  const openSocialAt = useCallback(
+    (where) => {
+      closeToken()
+      closeProfile()
+      openSocial(where)
+      setActiveTab('social')
+    },
+    [closeToken, closeProfile, openSocial],
+  )
   const [currentPair, setCurrentPair] = useState(null)
   const [topPairs, setTopPairs] = useState([])
   const [isLoadingTopPairs, setIsLoadingTopPairs] = useState(true)
@@ -321,6 +338,7 @@ function MainApp() {
       <Navbar
         activeTab={shownTab}
         setActiveTab={selectTab}
+        onOpenNotifications={() => openSocialAt({ tab: 'notifications' })}
         onOpenPublicProfile={openMyProfile}
         onSelectPair={handleSelectPair}
         watchlistCount={watchlist.length}

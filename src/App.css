@@ -6278,6 +6278,64 @@
   border-color: rgba(0, 229, 255, 0.35);
 }
 
+/*
+ * The notification bell, beside the account button.
+ *
+ * Shaped like the search control next to it rather than like anything new:
+ * two round icon buttons in a row should be the same object with different
+ * contents. What differs is that this one is allowed to demand attention
+ * when there is something to see, and is silent when there is not.
+ */
+.notif-bell {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.notif-bell:hover {
+  background: rgba(0, 229, 255, 0.15);
+  color: var(--pulse-cyan);
+  border-color: rgba(0, 229, 255, 0.35);
+}
+
+/* Lit only when there is something unread. The bell is the one control in
+   this bar permitted to be brighter than its neighbours, and it should spend
+   that permission on the moments it is earned. */
+.notif-bell.has-unread {
+  color: var(--pulse-cyan);
+  border-color: rgba(0, 229, 255, 0.3);
+}
+
+.notif-bell-count {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--pulse-cyan);
+  color: #04141a;
+  font-size: 9.5px;
+  font-weight: 800;
+  line-height: 1;
+  /* Sits over the bar's own background rather than the button's, so it reads
+     as attached to the bell rather than inside it. */
+  box-shadow: 0 0 0 2px var(--bg-primary, #080b11);
+}
+
 .mobile-search-overlay {
   position: fixed;
   inset: 0;

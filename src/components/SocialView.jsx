@@ -8,25 +8,32 @@ import DiscoverPanel from './social/DiscoverPanel'
 import NotificationsPanel from './social/NotificationsPanel'
 import ProfilePage from './social/ProfilePage'
 import { useSiweAuth } from '../context/SiweAuthContext'
-import { useNotifications } from '../context/NotificationsContext'
 import { useRoomUnread } from '../hooks/useRoomUnread'
 import { useGroups } from '../hooks/useGroups'
 import { DEFAULT_ROOM, findRoom, isGroupRoom, roomToken, tokenRoomLabel } from '../config/rooms'
 import '../styles/social.css'
 
 /**
- * The social section: five things, one row of tabs.
+ * The social section: three places to go, and two surfaces that are about you.
  *
- * They were scattered before this - the feed and the rooms shared a sidebar,
- * your own profile was behind a menu item in the header, and there was no way
- * at all to find somebody you did not already know about. Each was reachable
- * and none was visible, which for a section people are meant to explore is the
- * same as missing.
+ * It was five tabs, which was two too many and the wrong two. Your own
+ * profile and your own inbox are not places to browse - they are things you
+ * go to on purpose, from the chrome, the way every social product has settled
+ * on. Leaving them in the row made the row an account screen with a feed
+ * attached.
  *
- * A row across the top rather than more of the sidebar, because these are four
- * different places rather than four channels of one. The sidebar still exists
- * inside Chat Rooms, where it is a list of rooms and reads as one.
+ * So the tabs are the three that are about the site: the feed, the rooms, and
+ * finding people. Your profile is in the account menu. The unread count is a
+ * bell beside it, visible from the screener rather than only once you are
+ * already here - which was the whole problem with it being a badge on a
+ * sub-tab.
+ *
+ * Both of those surfaces still exist and still have URLs, at /me and
+ * /notifications. They render here without a tab selected, which is honest:
+ * you are in the section, on something that is not one of the three.
  */
+/** The three the row offers. Ordered outward: everything, then the rooms,
+ *  then the people you have not met. */
 const TABS = [
   {
     id: 'feed',
@@ -35,14 +42,8 @@ const TABS = [
     lede: 'Everything posted on PulseDex, newest first. Posts stay on your profile.',
   },
   {
-    id: 'profile',
-    name: 'My Profile',
-    icon: UserRound,
-    lede: 'Your page, as everybody else sees it.',
-  },
-  {
     id: 'rooms',
-    name: 'Chat Rooms',
+    name: 'Rooms',
     icon: MessagesSquare,
     lede: null, // The room's own blurb goes here instead.
   },
@@ -52,21 +53,27 @@ const TABS = [
     icon: Compass,
     lede: 'Find people worth following.',
   },
-  /*
-   * Last in the row and first in importance.
-   *
-   * Last because it is the one tab that is about the reader rather than about
-   * the site, and a row that opens on "your stuff" reads as an account screen
-   * rather than a place to look around. It carries the unread count, which is
-   * the only thing in this strip that changes on its own.
-   */
-  {
-    id: 'notifications',
+]
+
+/**
+ * The two that are not in the row.
+ *
+ * Reached from the chrome - the account menu and the bell - and by their own
+ * URLs. They need a title and a sentence like anything else, so they are
+ * described here rather than special-cased in the header.
+ */
+const SURFACES = {
+  profile: {
+    name: 'My Profile',
+    icon: UserRound,
+    lede: 'Your page, as everybody else sees it.',
+  },
+  notifications: {
     name: 'Notifications',
     icon: Bell,
     lede: 'Mentions, replies, follows and reactions.',
   },
-]
+}
 
 export default function SocialView({ route, onNavigate, onOpenProfile, onOpenToken }) {
   const { account, isSignedIn, signIn, isBusy } = useSiweAuth()
@@ -89,7 +96,6 @@ export default function SocialView({ route, onNavigate, onOpenProfile, onOpenTok
   const setTab = useCallback((id) => onNavigate?.({ tab: id }), [onNavigate])
   const setRoom = useCallback((slug) => onNavigate?.({ tab: 'rooms', room: slug }), [onNavigate])
 
-  const { unread } = useNotifications()
 
   /*
    * Only counted while the rooms tab is open. Polling for badges nobody can
@@ -99,7 +105,14 @@ export default function SocialView({ route, onNavigate, onOpenProfile, onOpenTok
   const rooms = useRoomUnread({ activeRoom: tab === 'rooms' ? room : null })
   const { groups, refresh: refreshGroups } = useGroups({ enabled: tab === 'rooms' })
 
-  const active = TABS.find((t) => t.id === tab) || TABS[0]
+  /*
+   * What is on screen, whether or not it is one of the three.
+   *
+   * `TABS` first, then the two that are reached from the chrome, then the
+   * feed - which is where the section opens and what an unrecognised route
+   * falls back to.
+   */
+  const active = TABS.find((t) => t.id === tab) || SURFACES[tab] || TABS[0]
   /*
    * What to call the room at the top of the page.
    *
@@ -155,8 +168,14 @@ export default function SocialView({ route, onNavigate, onOpenProfile, onOpenTok
         </p>
       </header>
 
-      {/* The same tab strip the profile page uses, so the two read as one
-          product rather than as two designs that happen to sit together. */}
+      {/*
+        The same tab strip the profile page uses, so the two read as one
+        product rather than as two designs that happen to sit together.
+
+        Drawn on /me and /notifications too, with nothing selected. Hiding it
+        there would be tidier and would leave somebody on their own inbox with
+        no way back into the section except the browser's Back button.
+      */}
       <nav className="xp-tabs social-tabs" role="tablist" aria-label="Social sections">
         {TABS.map((entry) => (
           <button
@@ -169,14 +188,6 @@ export default function SocialView({ route, onNavigate, onOpenProfile, onOpenTok
           >
             <entry.icon size={13} className="social-tab-icon" />
             <span>{entry.name}</span>
-            {/* Only on the tab it belongs to, and only when it is not zero:
-                a badge showing "0" is a badge that has stopped meaning
-                anything. */}
-            {entry.id === 'notifications' && unread > 0 && (
-              <span className="xp-tab-badge" aria-label={`${unread} unread`}>
-                {unread > 99 ? '99+' : unread}
-              </span>
-            )}
           </button>
         ))}
       </nav>
