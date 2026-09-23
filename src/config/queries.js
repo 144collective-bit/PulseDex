@@ -106,12 +106,21 @@ export const POST_FIELDS =
  * `profiles!notifications_actor_fkey` is named because `notifications` reaches
  * `profiles` twice - through `recipient` and through `actor` - so an
  * unqualified embed is the "more than one relationship was found" error this
- * project has shipped before. `posts` is reached once and needs no hint.
+ * project has shipped before. `posts` and `messages` are each reached once
+ * and need no hint.
+ *
+ * `messages ( room )` is what lets a reaction open the message it is about.
+ * A message is addressed as `/r/<room>#m<id>`, and the id alone does not say
+ * which room - so without this the inbox knows what happened and cannot show
+ * it, which is the one thing an inbox is for. The body is deliberately not
+ * read: the excerpt on a reaction row would be your own words quoted back at
+ * you, and the notification is about somebody else's reaction to them.
  */
 export const NOTIFICATION_FIELDS = `
   id, kind, created_at, read_at, post_id, message_id,
   profiles!notifications_actor_fkey ( address, handle, avatar_id, avatar_url ),
-  posts ( id, body, parent_id )
+  posts ( id, body, parent_id ),
+  messages ( id, room )
 `
 
 /**

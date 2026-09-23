@@ -1,5 +1,14 @@
 import { useCallback, useState } from 'react'
-import { Bell, ChartCandlestick, Compass, LogIn, MessagesSquare, Rss, UserRound } from 'lucide-react'
+import {
+  Bell,
+  ChartCandlestick,
+  Compass,
+  LogIn,
+  MessageSquare,
+  MessagesSquare,
+  Rss,
+  UserRound,
+} from 'lucide-react'
 import RoomList from './social/RoomList'
 import NewGroup from './social/NewGroup'
 import RoomPanel from './social/RoomPanel'
@@ -7,6 +16,8 @@ import PublicFeed from './social/PublicFeed'
 import DiscoverPanel from './social/DiscoverPanel'
 import NotificationsPanel from './social/NotificationsPanel'
 import ProfilePage from './social/ProfilePage'
+import PostPage from './social/PostPage'
+import ShareButton from './social/ShareButton'
 import { useSiweAuth } from '../context/SiweAuthContext'
 import { useRoomUnread } from '../hooks/useRoomUnread'
 import { useGroups } from '../hooks/useGroups'
@@ -72,6 +83,16 @@ const SURFACES = {
     name: 'Notifications',
     icon: Bell,
     lede: 'Mentions, replies, follows and reactions.',
+  },
+  /*
+   * One post, at /p/<id>. Here with the other two because it is the same
+   * kind of surface: reached from a link rather than from the row, so no tab
+   * is selected while it is open.
+   */
+  post: {
+    name: 'Post',
+    icon: MessageSquare,
+    lede: 'A post and its replies.',
   },
 }
 
@@ -175,6 +196,18 @@ export default function SocialView({ route, onNavigate, onOpenProfile, onOpenTok
             the sidebar can read what is being said about a token and has no
             way to see the token. One link closes the loop.
           */}
+          {/*
+            A link to this room. Beside the lede rather than in the sidebar,
+            because it is about the room being read and not about the list.
+          */}
+          {tab === 'rooms' && (
+            <ShareButton
+              where={{ tab: 'rooms', room }}
+              label="Copy a link to this room"
+              className="social-head-link"
+            />
+          )}
+
           {tab === 'rooms' && activeToken && onOpenToken && (
             <button
               type="button"
@@ -225,7 +258,18 @@ export default function SocialView({ route, onNavigate, onOpenProfile, onOpenTok
         />
       )}
 
-      {tab === 'notifications' && <NotificationsPanel onOpenProfile={onOpenProfile} />}
+      {tab === 'notifications' && (
+        <NotificationsPanel onOpenProfile={onOpenProfile} onOpen={onNavigate} />
+      )}
+
+      {tab === 'post' && route?.post && (
+        /*
+         * Keyed by the id so following a link from one post to another
+         * refetches rather than showing the previous post's replies under
+         * the new one's body.
+         */
+        <PostPage key={route.post} id={route.post} onOpenProfile={onOpenProfile} />
+      )}
 
       {tab === 'profile' &&
         (isSignedIn && account ? (

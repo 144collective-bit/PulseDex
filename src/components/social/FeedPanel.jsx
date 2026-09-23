@@ -6,9 +6,8 @@ import PostThread from './PostThread'
 import { useFeed, FEED_STATUS } from '../../hooks/useFeed'
 import { useIsModerator } from '../../hooks/useIsModerator'
 import { useSiweAuth } from '../../context/SiweAuthContext'
-import { deletePost, reportPost, fetchReplyCounts } from '../../services/posts'
-import { blockAddress } from '../../services/profile'
-import { formatAddress } from '../../utils/formatters'
+import { fetchReplyCounts } from '../../services/posts'
+import { usePostActions } from '../../hooks/usePostActions'
 
 /**
  * A list of posts, with the box to add one.
@@ -28,8 +27,10 @@ export default function FeedPanel({ author = null, authors = null, replies = fal
   const isModerator = useIsModerator()
   const { posts, status, error, add, remove, hasMore, loadingOlder, loadOlder } = useFeed({ author, authors, replies })
 
-  const [actionError, setActionError] = useState(null)
-  const [reported, setReported] = useState(() => new Set())
+  /* Removing, reporting and blocking, shared with the single-post page so
+     the two cannot drift. See src/hooks/usePostActions.js. */
+  const { actionError, reported, noteAlreadyReported, onRemove, onReport, onBlock } =
+    usePostActions({ onRemoved: remove })
 
   // Which post's conversation is open, or null. One at a time: several open
   // threads turn a feed into a wall with no shape to it.
@@ -66,71 +67,8 @@ export default function FeedPanel({ author = null, authors = null, replies = fal
   }, [idsKey, replies])
   const ownProfile = Boolean(author) && author.toLowerCase() === mine
 
-  const onRemove = useCallback(
-    async (id) => {
-      /*
-       * Confirmed, unlike removing a chat message. A message can be reposted
-       * in seconds; a post is the thing somebody wrote at length and meant to
-       * keep, and the removal is soft in the database but final from here -
-       * there is no undo control in this interface.
-       */
-      if (!window.confirm('Delete this post? This cannot be undone from here.')) return
-
-      setActionError(null)
-      /*
-       * Taken off the screen before the request answers. The realtime feed
-       * will say the same thing a moment later and the merge ignores the
-       * repeat; if the request fails, the post comes back on the next load,
-       * which is the right way round - seeing a removal you have to redo
-       * beats believing something is gone when it is still on everybody
-       * else's screen.
-       */
-      remove(id)
-      try {
-        await deletePost(id)
-      } catch (err) {
-        setActionError(err.message)
-      }
-    },
-    [remove],
-  )
-
-  const onReport = useCallback(async (post) => {
-    const reason = window.prompt(
-      'What is wrong with this post? A moderator will read it. (Optional)',
-    )
-    // Cancel is null; an empty string is somebody pressing OK without typing,
-    // which is a report with no reason rather than no report.
-    if (reason === null) return
-
-    setActionError(null)
-    try {
-      await reportPost({ id: post.id, reason })
-      // Remembered so the same post cannot be reported twice from one screen.
-      // The endpoint refuses the duplicate anyway; this is so the reader gets
-      // an answer rather than a silent no-op.
-      setReported((prev) => new Set(prev).add(post.id))
-    } catch (err) {
-      setActionError(err.message)
-    }
-  }, [])
-
   const toggleThread = useCallback((post) => {
     setOpenThread((current) => (current === post.id ? null : post.id))
-  }, [])
-
-  const onBlock = useCallback(async (address) => {
-    const ok = window.confirm(
-      `Block ${formatAddress(address)} from posting? Their existing posts stay.`,
-    )
-    if (!ok) return
-
-    setActionError(null)
-    try {
-      await blockAddress({ address })
-    } catch (err) {
-      setActionError(err.message)
-    }
   }, [])
 
   if (status === FEED_STATUS.unconfigured) {
@@ -211,12 +149,6 @@ export default function FeedPanel({ author = null, authors = null, replies = fal
       )}
     </div>
   )
-}
-
-/** Once a post has been reported from this screen, the button says so rather
- *  than filing a second report the endpoint would refuse. */
-function noteAlreadyReported() {
-  window.alert('You have already reported this post. A moderator will look at it.')
 }
 
 /** The three states that are not a feed, said the same way the chat says them. */

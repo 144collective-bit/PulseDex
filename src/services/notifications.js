@@ -64,6 +64,15 @@ function toNotification(row) {
     readAt: row.read_at || null,
     postId: row.post_id || null,
     messageId: row.message_id || null,
+    /*
+     * Which room the message is in, for building `/r/<room>#m<id>`. Null on
+     * every other kind, and null too when the embed came back empty - a
+     * notification whose message has been removed cascades away, but a
+     * deployment whose migration has not run answers without the join rather
+     * than failing, and a row that cannot be opened is better than an inbox
+     * that will not load.
+     */
+    messageRoom: row.messages?.room || null,
     actor: {
       address: row.profiles?.address || null,
       handle: row.profiles?.handle || null,

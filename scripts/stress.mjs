@@ -320,6 +320,24 @@ async function wire(page, { fixture = 'healthy', signedIn = true, apiStatus = 20
               message_id: null,
               profiles: { address: ADDRESS, handle: null, avatar_id: null, avatar_url: null },
               posts: null,
+              messages: null,
+            },
+            /*
+             * A reaction, which is the one kind addressed by room and id
+             * together. The nasty fixture drops the room, which is what a
+             * deployment whose query predates the embed sends - that row must
+             * stay as text rather than become a link to nowhere.
+             */
+            {
+              id: 3,
+              kind: 'reaction',
+              created_at: '2026-09-20T08:00:00Z',
+              read_at: '2026-09-20T08:30:00Z',
+              post_id: null,
+              message_id: 5,
+              profiles: { address: ADDRESS, handle: 'degen', avatar_id: null, avatar_url: null },
+              posts: null,
+              messages: fixture === 'nasty' ? null : { id: 5, room: 'lounge' },
             },
           ]
     route.fulfill({
@@ -1030,6 +1048,9 @@ const SURFACES = [
 const CHROME_SURFACES = [
   ['/notifications', 'Notifications'],
   ['/me', 'My Profile'],
+  // One post, at /p/<id>. Reached from a notification and from a shared
+  // link, so it is the same kind of surface as those two: no tab selected.
+  ['/p/7', 'Post'],
 ]
 
 for (const [path, expected] of CHROME_SURFACES) {
@@ -1393,6 +1414,205 @@ await run('notifications / empty inbox', {
  * so it has to survive the phone layout, and it has to work from the tab
  * somebody is actually on - which on a screener is not the social one.
  */
+/*
+ * A notification that opens what it is about.
+ *
+ * The thing an inbox is for, and the last of it to be built: until the
+ * surfaces had URLs, "somebody mentioned you" could only open that person's
+ * profile - which answers who and not what.
+ *
+ * The row that matters most here is the one that is NOT a link. A reaction is
+ * addressed by room and id together, and a deployment whose query predates the
+ * room embed sends the id alone; that row has to stay as text, because a
+ * button that does nothing reads as the site being broken rather than as the
+ * thing being gone.
+ */
+await run('notifications / a mention opens its post', {
+  steps: async (page) => {
+    await bell(page)
+    const open = page.locator('.notif-row').first().locator('.notif-open').first()
+    if (!(await open.count())) throw new Error('the mention is not a link')
+    await open.click()
+    await page.waitForTimeout(1600)
+
+    const where = new URL(page.url()).pathname
+    if (where !== '/p/7') throw new Error(`a mention opened ${where}`)
+  },
+  expectText: 'Post',
+})
+
+await run('notifications / a reaction opens its message, in its room', {
+  steps: async (page) => {
+    await bell(page)
+    const row = page.locator('.notif-row').nth(2)
+    const open = row.locator('.notif-open').first()
+    if (!(await open.count())) throw new Error('the reaction is not a link')
+    await open.click()
+    await page.waitForTimeout(1800)
+
+    const url = new URL(page.url())
+    if (url.pathname !== '/r/lounge') throw new Error(`a reaction opened ${url.pathname}`)
+    if (url.hash !== '#m5') throw new Error(`without naming the message: ${url.hash || '(none)'}`)
+  },
+})
+
+await run('notifications / a row with nowhere to go is not a button', {
+  fixture: 'nasty',
+  steps: async (page) => {
+    await bell(page)
+    // The nasty fixture's reaction carries no room, so it cannot be located.
+    const row = page.locator('.notif-row').nth(2)
+    if (!(await row.count())) throw new Error('the reaction row is missing')
+    if (await row.locator('.notif-open').count()) {
+      throw new Error('a row with nothing to open was drawn as a link')
+    }
+    // It still has to say what happened.
+    const said = await row.innerText()
+    if (!/reacted/i.test(said)) throw new Error(`it says "${said.trim()}"`)
+  },
+})
+
+/*
+ * A post that is not there.
+ *
+ * A shared link outlives what it points at, so this is the ordinary case
+ * rather than the odd one. Removed and never-existed are answered the same
+ * way on purpose: telling a stranger which would say that something was
+ * deleted, and who deleted a post is not a fact this page owes anybody.
+ */
+await run('direct / a post that is gone', {
+  fixture: 'empty',
+  path: '/p/7',
+  expectText: 'not here',
+})
+
+await run('direct / a post id that is not one', {
+  // bigserial starts at one, so a zero in a link is a broken link. It lands
+  // on the feed rather than on the home page or a blank surface.
+  path: '/p/0',
+  steps: async (page) => {
+    const where = new URL(page.url()).pathname
+    if (where !== '/feed') throw new Error(`/p/0 settled on ${where}`)
+  },
+})
+
+await run('direct / a post on a phone', {
+  viewport: PHONE,
+  path: '/p/7',
+})
+
+/*
+ * Handing over a link.
+ *
+ * What three batches of URL work were for. Until this control existed only
+ * somebody who thought to read the address bar could take a link, which on a
+ * phone - where most of this is read - means almost nobody.
+ */
+await run('share / a room, a message and a post', {
+  steps: async (page) => {
+    await socialTab('Rooms')(page)
+
+    const room = page.locator('.social-head .share-button')
+    if ((await room.count()) !== 1) throw new Error('the room offers no link')
+
+    const rows = await page.locator('.chat-row').count()
+    const onRows = await page.locator('.chat-row .share-button').count()
+    if (rows > 0 && onRows !== rows) {
+      throw new Error(`${onRows} of ${rows} messages offer a link`)
+    }
+
+    // Pressing it must answer, whether or not this browser allows the copy.
+    await room.click()
+    await page.waitForTimeout(400)
+    const copied = await room.evaluate((el) => el.classList.contains('is-copied'))
+    const title = (await room.getAttribute('title')) || ''
+    if (!copied && !title.includes('/r/')) {
+      throw new Error(`pressing it said nothing: title="${title}"`)
+    }
+  },
+})
+
+await run('share / a post offers one too', {
+  path: '/p/7',
+  steps: async (page) => {
+    if (!(await page.locator('.feed-post .share-button').count())) {
+      throw new Error('a post offers no link')
+    }
+  },
+})
+
+/*
+ * Picking somebody to mention.
+ *
+ * The only way to name an account whose handle contains a space, which is why
+ * `post_mentions` stores addresses rather than parsing text. Offered in the
+ * post composer and deliberately not in the chat one, where a mention
+ * notifies nobody.
+ */
+await run('mentions / the composer offers names', {
+  steps: async (page) => {
+    await tab('Social')(page)
+    const box = page.locator('.feed-input').first()
+    if (!(await box.count())) throw new Error('no composer')
+
+    await box.click()
+    await box.type('hey @deg')
+    await page.waitForTimeout(900)
+
+    const list = page.locator('.mention-options')
+    if (!(await list.count())) throw new Error('typing a name offered nobody')
+
+    const handles = await page.locator('.mention-handle').allInnerTexts()
+    if (!handles.some((h) => h.toLowerCase().includes('deg'))) {
+      throw new Error(`offered ${handles.join('|')}`)
+    }
+
+    // Every option names the address as well. A handle is chosen, and being
+    // mistaken for somebody trusted is worth money on a site like this.
+    if ((await page.locator('.mention-address').count()) !== handles.length) {
+      throw new Error('a name was offered without its address')
+    }
+
+    await page.locator('.mention-option').first().click()
+    await page.waitForTimeout(500)
+
+    const value = await box.inputValue()
+    if (!value.startsWith('hey @')) throw new Error(`picking produced "${value}"`)
+    if (value.includes('\n')) throw new Error('picking added a paragraph')
+    if (await list.count()) throw new Error('the list stayed open after a pick')
+  },
+})
+
+await run('mentions / an email address is not one', {
+  steps: async (page) => {
+    await tab('Social')(page)
+    const box = page.locator('.feed-input').first()
+    await box.click()
+    await box.type('mail me at someone@example')
+    await page.waitForTimeout(900)
+    if (await page.locator('.mention-options').count()) {
+      throw new Error('an email address opened a picker')
+    }
+  },
+})
+
+await run('mentions / the chat composer offers none', {
+  steps: async (page) => {
+    await socialTab('Rooms')(page)
+    const box = page.locator('.chat-composer textarea, .chat-composer input').first()
+    if (!(await box.count())) return
+
+    await box.click()
+    await box.type('hey @deg')
+    await page.waitForTimeout(900)
+    /* A chat message records no mentions and notifies nobody, so a list here
+       would invite naming somebody who would never be told. */
+    if (await page.locator('.mention-options').count()) {
+      throw new Error('the chat composer offered a mention list')
+    }
+  },
+})
+
 await run('notifications / phone', {
   viewport: PHONE,
   steps: bell,

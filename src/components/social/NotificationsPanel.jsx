@@ -3,6 +3,7 @@ import { AtSign, MessageSquare, UserPlus, Smile, Loader2, BellOff } from 'lucide
 import ChatAvatar from './ChatAvatar'
 import { useNotifications } from '../../context/NotificationsContext'
 import { formatAddress } from '../../utils/formatters'
+import { notificationTarget } from '../../utils/notificationTarget'
 
 /**
  * What happened while you were away.
@@ -21,7 +22,7 @@ const KINDS = {
   reaction: { icon: Smile, says: 'reacted to your message', tone: 'is-reaction' },
 }
 
-export default function NotificationsPanel({ onOpenProfile }) {
+export default function NotificationsPanel({ onOpenProfile, onOpen }) {
   const { items, unread, loading, error, refresh, markAllRead, live } = useNotifications()
 
   /*
@@ -89,6 +90,22 @@ export default function NotificationsPanel({ onOpenProfile }) {
           const Icon = meta.icon
           const name = item.actor.handle || formatAddress(item.actor.address)
 
+          /*
+           * Where this row goes, in src/utils/notificationTarget.js.
+           *
+           * Null for a row with nothing to open - a reaction whose room the
+           * query did not return, a mention whose post is gone. Those stay
+           * as text: a button that does nothing reads as the site being
+           * broken rather than as the thing being gone.
+           */
+          const target = notificationTarget(item)
+
+          const open = () => {
+            if (!target) return
+            if (target.kind === 'profile') return onOpenProfile?.(target.where)
+            onOpen?.(target.where)
+          }
+
           return (
             <li key={item.id} className={`notif-row ${item.readAt ? '' : 'is-unread'}`}>
               <span className={`notif-icon ${meta.tone}`}>
@@ -118,13 +135,41 @@ export default function NotificationsPanel({ onOpenProfile }) {
                   >
                     {name}
                   </button>{' '}
-                  <span className="notif-says">{meta.says}</span>
+                  {/*
+                    The words are the link to the subject, and the name beside
+                    them stays the link to the person. Two destinations in one
+                    row, which is what the row is about: somebody did
+                    something to something.
+
+                    Not the whole row, on purpose - a row that is one big
+                    button cannot hold the two smaller ones, and the profile
+                    is worth reaching from here.
+                  */}
+                  {target ? (
+                    <button
+                      type="button"
+                      className="notif-says notif-open"
+                      onClick={open}
+                      aria-label={`${name} ${meta.says} - open it`}
+                    >
+                      {meta.says}
+                    </button>
+                  ) : (
+                    <span className="notif-says">{meta.says}</span>
+                  )}
                 </p>
 
                 {/* The post it is about, when there is one. Text, never
                     markup - the same rule as everywhere a stranger's words
                     are drawn. */}
-                {item.excerpt && <p className="notif-excerpt">{item.excerpt}</p>}
+                {item.excerpt &&
+                  (target ? (
+                    <button type="button" className="notif-excerpt notif-open" onClick={open}>
+                      {item.excerpt}
+                    </button>
+                  ) : (
+                    <p className="notif-excerpt">{item.excerpt}</p>
+                  ))}
               </div>
 
               <time className="notif-when" dateTime={item.createdAt || undefined}>

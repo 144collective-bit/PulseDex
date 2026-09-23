@@ -15,39 +15,42 @@ const TOKEN_ROOM = 'token-0xa1077a294dde1b09bb078844df40758a5d0f9a27'
 
 describe('readSocialPath', () => {
   it('reads each surface', () => {
-    expect(readSocialPath('/feed')).toEqual({ tab: 'feed', room: null, message: null })
-    expect(readSocialPath('/me')).toEqual({ tab: 'profile', room: null, message: null })
-    expect(readSocialPath('/discover')).toEqual({ tab: 'discover', room: null, message: null })
+    expect(readSocialPath('/feed')).toEqual({ tab: 'feed', room: null, message: null, post: null })
+    expect(readSocialPath('/me')).toEqual({ tab: 'profile', room: null, message: null, post: null })
+    expect(readSocialPath('/discover')).toEqual({ tab: 'discover', room: null, message: null, post: null })
     expect(readSocialPath('/notifications')).toEqual({
       tab: 'notifications',
       room: null,
       message: null,
+      post: null,
     })
   })
 
   it('tolerates a trailing slash', () => {
-    expect(readSocialPath('/feed/')).toEqual({ tab: 'feed', room: null, message: null })
-    expect(readSocialPath('/r/lounge/')).toEqual({ tab: 'rooms', room: 'lounge', message: null })
+    expect(readSocialPath('/feed/')).toEqual({ tab: 'feed', room: null, message: null, post: null })
+    expect(readSocialPath('/r/lounge/')).toEqual({ tab: 'rooms', room: 'lounge', message: null, post: null })
   })
 
   it('reads all three kinds of room from one path shape', () => {
-    expect(readSocialPath('/r/lounge')).toEqual({ tab: 'rooms', room: 'lounge', message: null })
+    expect(readSocialPath('/r/lounge')).toEqual({ tab: 'rooms', room: 'lounge', message: null, post: null })
     expect(readSocialPath('/r/group-whales')).toEqual({
       tab: 'rooms',
       room: 'group-whales',
       message: null,
+      post: null,
     })
     expect(readSocialPath(`/r/${TOKEN_ROOM}`)).toEqual({
       tab: 'rooms',
       room: TOKEN_ROOM,
       message: null,
+      post: null,
     })
   })
 
   it('keeps the rooms surface when the slug is not a room', () => {
     // `/r/nonsense` is still a request for the rooms surface. Answering it
     // with the home page would be answering a different question.
-    const rooms = { tab: 'rooms', room: null, message: null }
+    const rooms = { tab: 'rooms', room: null, message: null, post: null }
     expect(readSocialPath('/r/nonsense')).toEqual(rooms)
     expect(readSocialPath('/r/group--bad')).toEqual(rooms)
     expect(readSocialPath('/r/token-0xdeadbeef')).toEqual(rooms)
@@ -59,7 +62,12 @@ describe('readSocialPath', () => {
     // A malformed percent sequence throws inside decodeURIComponent, and a
     // bad link is not a reason to take the page down.
     expect(() => readSocialPath('/r/%E0%A4%A')).not.toThrow()
-    expect(readSocialPath('/r/%E0%A4%A')).toEqual({ tab: 'rooms', room: null, message: null })
+    expect(readSocialPath('/r/%E0%A4%A')).toEqual({
+      tab: 'rooms',
+      room: null,
+      message: null,
+      post: null,
+    })
   })
 
   it('leaves the other two routers alone', () => {
@@ -114,14 +122,15 @@ describe('socialPath', () => {
      * the page disagree, and the correction the hook makes would loop.
      */
     for (const where of [
-      { tab: 'feed', room: null, message: null },
-      { tab: 'profile', room: null, message: null },
-      { tab: 'discover', room: null, message: null },
-      { tab: 'notifications', room: null, message: null },
-      { tab: 'rooms', room: 'lounge', message: null },
-      { tab: 'rooms', room: 'group-whales', message: null },
-      { tab: 'rooms', room: TOKEN_ROOM, message: null },
-      { tab: 'rooms', room: 'lounge', message: 1234 },
+      { tab: 'feed', room: null, message: null, post: null },
+      { tab: 'profile', room: null, message: null, post: null },
+      { tab: 'discover', room: null, message: null, post: null },
+      { tab: 'notifications', room: null, message: null, post: null },
+      { tab: 'rooms', room: 'lounge', message: null, post: null },
+      { tab: 'rooms', room: 'group-whales', message: null, post: null },
+      { tab: 'rooms', room: TOKEN_ROOM, message: null, post: null },
+      { tab: 'rooms', room: 'lounge', message: 1234, post: null },
+      { tab: 'post', room: null, message: null, post: 1234 },
     ]) {
       // The builder puts the message in the fragment, so reading it back
       // needs both halves - which is exactly how the hook calls it.
@@ -135,7 +144,12 @@ describe('socialPath', () => {
     // Not an identity, and deliberately: the point of the correction is that
     // a bad slug settles on a good one and then stays there.
     const once = socialPath({ tab: 'rooms', room: null })
-    expect(readSocialPath(once)).toEqual({ tab: 'rooms', room: DEFAULT_ROOM, message: null })
+    expect(readSocialPath(once)).toEqual({
+      tab: 'rooms',
+      room: DEFAULT_ROOM,
+      message: null,
+      post: null,
+    })
     expect(socialPath(readSocialPath(once))).toBe(once)
   })
 })
@@ -163,13 +177,14 @@ describe('a message in a room', () => {
       tab: 'rooms',
       room: 'lounge',
       message: 1234,
+      post: null,
     })
   })
 
   it('builds the fragment only when there is one', () => {
     expect(socialPath({ tab: 'rooms', room: 'lounge', message: 1234 })).toBe('/r/lounge#m1234')
     expect(socialPath({ tab: 'rooms', room: 'lounge' })).toBe('/r/lounge')
-    expect(socialPath({ tab: 'rooms', room: 'lounge', message: null })).toBe('/r/lounge')
+    expect(socialPath({ tab: 'rooms', room: 'lounge', message: null, post: null })).toBe('/r/lounge')
   })
 
   it('treats a leading zero as the same message', () => {
@@ -203,6 +218,85 @@ describe('a message in a room', () => {
       tab: 'rooms',
       room: null,
       message: 9,
+      post: null,
     })
+  })
+})
+
+/*
+ * One post, on its own page.
+ *
+ * The opposite choice from `#m<id>` a few tests up, and the reason is what
+ * each surface is for: a link to a message is a link to its room, which is
+ * still worth landing on once the message has scrolled away, while a post is
+ * the thing itself. A feed is paginated and ordered by time, so a fragment on
+ * it would stop finding anything the moment the post is a day old - which is
+ * when most links get clicked.
+ */
+describe('one post', () => {
+  it('reads an id out of the path', () => {
+    expect(readSocialPath('/p/1234')).toEqual({
+      tab: 'post',
+      room: null,
+      message: null,
+      post: 1234,
+    })
+  })
+
+  it('tolerates a trailing slash, like every other surface', () => {
+    expect(readSocialPath('/p/7')?.post).toBe(7)
+    expect(readSocialPath('/p/7/')?.post).toBe(7)
+  })
+
+  it('builds the path back', () => {
+    expect(socialPath({ tab: 'post', post: 1234 })).toBe('/p/1234')
+  })
+
+  it('is the feed when there is no post to show', () => {
+    // `/p/undefined` is not a link anybody should be handed, and the round
+    // trip above would not survive it.
+    for (const post of [null, undefined, 0, -3, 1.5, NaN, '12']) {
+      expect(socialPath({ tab: 'post', post })).toBe('/feed')
+    }
+  })
+
+  it('refuses what is not an id', () => {
+    // Not a post path at all, so these fall through to the other routers -
+    // `/p/0x1234` in particular must not be read as post zero.
+    for (const path of ['/p', '/p/', '/p/abc', '/p/0x12', '/p/12a', '/p/1/2', '/p/-4']) {
+      const seen = readSocialPath(path)
+      expect(seen?.tab).not.toBe('post')
+    }
+  })
+
+  it('answers an id nobody could have with the feed, not with nothing', () => {
+    // Nineteen digits: the pattern accepts it, because a bigserial has that
+    // many, and Number cannot hold it exactly. Still a request for something
+    // social, so the hook corrects the address bar rather than dropping the
+    // reader on the home page.
+    const huge = readSocialPath('/p/9999999999999999999')
+    expect(huge).toEqual({ tab: 'feed', room: null, message: null, post: null })
+  })
+
+  it('and something longer than any id is not this surface at all', () => {
+    // Twenty digits is past what the column can hold, so it is not a
+    // malformed post link - it is not a post link.
+    expect(readSocialPath('/p/99999999999999999999')).toBeNull()
+  })
+
+  it('ignores a fragment, which means nothing here', () => {
+    // `#m<id>` addresses a message inside a room. A post has no inside.
+    expect(readSocialPath('/p/12', '#m5')).toEqual({
+      tab: 'post',
+      room: null,
+      message: null,
+      post: 12,
+    })
+  })
+
+  it('post zero is not a post', () => {
+    // bigserial starts at one, so a zero in a link is a broken link rather
+    // than a row.
+    expect(readSocialPath('/p/0')).toEqual({ tab: 'feed', room: null, message: null, post: null })
   })
 })

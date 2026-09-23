@@ -33,6 +33,25 @@ const PATHS = {
 const ROOM_PATH = /^\/r(?:\/([^/]*))?\/?$/
 
 /**
+ * One post: `/p/1234`.
+ *
+ * A path rather than a fragment on the feed, which is the opposite of the
+ * choice made for a message just below - and the difference is what the
+ * surface is for. `/r/lounge#m12` is a link to a room, plus where to look
+ * inside it; the room is the thing, and a message that has scrolled away
+ * still leaves you somewhere worth being.
+ *
+ * A post is the thing itself. The feed is paginated and ordered by time, so
+ * `/feed#p12` would land somebody on "a feed, without the post you were
+ * sent" as soon as the post is a day old - which is most of the time a link
+ * gets clicked. So a post is fetched by its id and drawn on its own.
+ *
+ * Digits only, and at most nineteen of them: `posts.id` is a bigserial, and a
+ * path that is not a number cannot be one.
+ */
+const POST_PATH = /^\/p\/(\d{1,19})\/?$/
+
+/**
  * One message inside a room: `#m1234`.
  *
  * A fragment rather than a path segment, and that is the whole reason it
@@ -62,9 +81,15 @@ const MESSAGE_HASH = /^#m(\d{1,19})$/
  * ignored everywhere else rather than carried around as a field that is
  * always null.
  *
+ * Every surface answers with the same four keys, whichever it is. The
+ * alternative - a room route without a `post`, a post route without a `room` -
+ * reads tidier and puts `route.post` at the mercy of which surface produced
+ * it, which is how `undefined` reaches a component that checked for `null`.
+ *
  * @param {unknown} pathname
  * @param {unknown} [hash] `window.location.hash`
- * @returns {{ tab: string, room: string|null, message: number|null } | null}
+ * @returns {{ tab: string, room: string|null, message: number|null,
+ *   post: number|null } | null}
  */
 export function readSocialPath(pathname, hash) {
   if (typeof pathname !== 'string') return null
@@ -73,7 +98,26 @@ export function readSocialPath(pathname, hash) {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname
 
   const tab = PATHS[path]
-  if (tab) return { tab, room: null, message: null }
+  if (tab) return { tab, room: null, message: null, post: null }
+
+  /*
+   * One post, before the rooms - the two patterns cannot both match, and
+   * checking the narrower one first says which is narrower.
+   */
+  const onePost = POST_PATH.exec(path)
+  if (onePost) {
+    const id = Number(onePost[1])
+    /*
+     * An id too large to be a Number is not a post anybody has. Answered as
+     * the feed rather than as null: `/p/99999999999999999999` is still a
+     * request for something social, and the hook corrects the address bar
+     * rather than dropping the reader on the home page.
+     */
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      return { tab: 'feed', room: null, message: null, post: null }
+    }
+    return { tab: 'post', room: null, message: null, post: id }
+  }
 
   const match = ROOM_PATH.exec(pathname)
   if (!match) return null
@@ -88,7 +132,7 @@ export function readSocialPath(pathname, hash) {
   const at = Number.isSafeInteger(message) && message > 0 ? message : null
 
   const raw = match[1]
-  if (!raw) return { tab: 'rooms', room: null, message: at }
+  if (!raw) return { tab: 'rooms', room: null, message: at, post: null }
 
   let slug
   try {
@@ -97,7 +141,7 @@ export function readSocialPath(pathname, hash) {
     // is a path that means no room rather than an exception to propagate.
     slug = decodeURIComponent(raw)
   } catch {
-    return { tab: 'rooms', room: null, message: at }
+    return { tab: 'rooms', room: null, message: at, post: null }
   }
 
   /*
@@ -107,7 +151,7 @@ export function readSocialPath(pathname, hash) {
    * question for the database, and a link to one that has gone should land on
    * the rooms surface rather than on a blank page.
    */
-  return { tab: 'rooms', room: isRoom(slug) ? slug : null, message: at }
+  return { tab: 'rooms', room: isRoom(slug) ? slug : null, message: at, post: null }
 }
 
 /**
@@ -118,11 +162,21 @@ export function readSocialPath(pathname, hash) {
  * where the address bar says it is against where it actually is, and correct
  * the difference.
  *
- * @param {{ tab?: string, room?: string|null, message?: number|null }} where
+ * @param {{ tab?: string, room?: string|null, message?: number|null,
+ *   post?: number|null }} where
  * @returns {string} always a path; an unknown tab is the feed, which is where
  *   the section opens
  */
-export function socialPath({ tab, room, message } = {}) {
+export function socialPath({ tab, room, message, post } = {}) {
+  /*
+   * A post surface with no post is the feed, not `/p/undefined`. The round
+   * trip below depends on this: a built path has to read back as the thing
+   * that built it, and there is no such post to read back.
+   */
+  if (tab === 'post') {
+    return Number.isSafeInteger(post) && post > 0 ? `/p/${post}` : '/feed'
+  }
+
   if (tab === 'rooms') {
     // The default room is spelled out rather than left implicit at `/r`. A
     // link somebody copies should say which room they were in.

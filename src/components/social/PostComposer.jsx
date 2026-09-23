@@ -1,8 +1,11 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { PenLine, Loader2 } from 'lucide-react'
 import { useSiweAuth } from '../../context/SiweAuthContext'
 import { createPost } from '../../services/posts'
 import { postLength, MAX_POST_LENGTH } from '../../utils/post'
+import { useMentionPicker } from '../../hooks/useMentionPicker'
+import ChatAvatar from './ChatAvatar'
+import { formatAddress } from '../../utils/formatters'
 
 /** Show the counter once it is worth watching, not from the first letter. */
 const COUNTER_APPEARS_AT = MAX_POST_LENGTH - 300
@@ -24,6 +27,17 @@ export default function PostComposer({ onPosted, parentId = null }) {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState(null)
 
+  const input = useRef(null)
+
+  /*
+   * Naming somebody, by picking them rather than by typing their name.
+   *
+   * The only way to mention an account whose handle contains a space - see
+   * src/hooks/useMentionPicker.js. Not offered in the chat composer, where a
+   * mention notifies nobody.
+   */
+  const mention = useMentionPicker({ value: draft, onChange: setDraft, inputRef: input })
+
   const length = postLength(draft)
   const overLimit = length > MAX_POST_LENGTH
   const canSend = length > 0 && !overLimit && !sending
@@ -36,7 +50,7 @@ export default function PostComposer({ onPosted, parentId = null }) {
     setError(null)
 
     try {
-      const post = await createPost(draft, parentId)
+      const post = await createPost(draft, parentId, mention.mentions)
 
       /*
        * Cleared only after the post succeeds. Clearing optimistically reads
@@ -46,6 +60,9 @@ export default function PostComposer({ onPosted, parentId = null }) {
        * where the lost text is one line.
        */
       setDraft('')
+      // Nobody picked, for the next post. Otherwise an address picked here
+      // rides along with whatever is written next.
+      mention.reset()
       if (post) onPosted(post)
     } catch (err) {
       setError(err.message)
@@ -71,11 +88,32 @@ export default function PostComposer({ onPosted, parentId = null }) {
   return (
     <form className="feed-composer" onSubmit={send}>
       <textarea
+        ref={input}
         className="feed-input"
         value={draft}
-        onChange={(e) => setDraft(e.target.value)}
+        onChange={(e) => {
+          setDraft(e.target.value)
+          mention.refresh()
+        }}
+        /* Moving the caret into a half-typed name should offer it, not only
+           typing one. `selectionchange` on the document would be the thorough
+           way and fires for every selection on the page. */
+        onKeyUp={mention.refresh}
+        onClick={mention.refresh}
+        onKeyDown={(e) => {
+          // The list owns the arrows and Enter while it is open. Without
+          // this, Enter would pick a name and add a paragraph.
+          mention.onKeyDown(e)
+        }}
+        /* Closed on the way out, but not before a click on the list has
+           landed - `mousedown` on an option runs first and picks. */
+        onBlur={() => setTimeout(() => mention.open && mention.reset(), 150)}
         placeholder={parentId ? 'Post your reply' : "What's happening on PulseChain?"}
         rows={parentId ? 2 : 3}
+        role="combobox"
+        aria-expanded={mention.open}
+        aria-autocomplete="list"
+        aria-controls="mention-options"
         /*
          * Twice the limit, so paste is not silently truncated at exactly the
          * boundary. What the counter says and what the server enforces is the
@@ -84,6 +122,48 @@ export default function PostComposer({ onPosted, parentId = null }) {
         maxLength={MAX_POST_LENGTH * 2}
         aria-label="Your post"
       />
+
+      {/*
+        Who you might mean.
+
+        Under the box rather than floating over the text. A popover following
+        the caret is what a desktop editor does and needs measuring the
+        textarea's contents to place; this is a composer three lines tall, and
+        a list under it is never in the way of what is being written.
+      */}
+      {mention.open && (
+        <ul className="mention-options" id="mention-options" role="listbox">
+          {mention.options.map((person, i) => (
+            <li key={person.address} role="presentation">
+              <button
+                type="button"
+                role="option"
+                aria-selected={i === mention.active}
+                className={`mention-option ${i === mention.active ? 'is-active' : ''}`}
+                /* mousedown, not click: the textarea blurs first on a click
+                   and the list would be gone before the press landed. */
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  mention.pick(person)
+                }}
+                onMouseEnter={() => mention.setActive(i)}
+              >
+                <ChatAvatar
+                  address={person.address}
+                  avatarId={person.avatarId}
+                  avatarUrl={person.avatarUrl}
+                  size={20}
+                />
+                <span className="mention-handle font-mono">{person.handle}</span>
+                {/* The address beside the name, always. A handle is chosen,
+                    and on a site about what to buy, being mistaken for
+                    somebody trusted is worth money. */}
+                <span className="mention-address font-mono">{formatAddress(person.address)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <div className="feed-composer-foot">
         {error ? (

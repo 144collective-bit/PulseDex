@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Trash2, Ban, Pencil, Check, X, Reply } from 'lucide-react'
+import ShareButton from './ShareButton'
 import ChatAvatar from './ChatAvatar'
 import DevBadge from './DevBadge'
 import MessageReactions from './MessageReactions'
@@ -245,8 +246,24 @@ export default function ChatMessageRow({
             <p className="chat-text">{message.body}</p>
           )}
 
-          {!editing && (canReply || canRemove || canEdit || canBlock) && (
+          {/*
+            Always drawn now, because sharing needs no permission - which is
+            why this condition lost its list of them. Everything else here is
+            something only some readers may do.
+          */}
+          {!editing && (
             <div className="chat-tools">
+              {/*
+                A link to this one message: `/r/<room>#m<id>`. The room comes
+                from the message rather than from the panel, so a row rendered
+                anywhere - a search result, a token page's chat tab - hands
+                over a link that lands in the right place.
+              */}
+              <ShareButton
+                where={{ tab: 'rooms', room: message.room, message: message.id }}
+                label="Copy a link to this message"
+              />
+
               {canReply && (
                 <button
                   type="button"

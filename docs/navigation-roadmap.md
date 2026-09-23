@@ -197,14 +197,88 @@ same one as the stale preview in Batch 2 - **a harness that stops early
 reports less than one that keeps going, and nobody reads the run that never
 finished.**
 
-### Batch 4 - what URLs unlock
+### Batch 4 - what URLs unlock  <- done
 
-These are already written down in `social-roadmap.md` as unfinished, and they
-are unfinished because they all needed linkable surfaces:
+These were already written down in `social-roadmap.md` as unfinished, and they
+were unfinished because they all needed linkable surfaces:
 
-- Notifications open their subject.
-- A share affordance on a room and on a message.
-- Mention autocomplete in the composer.
+- [x] Notifications open their subject.
+- [x] A share affordance on a room, a message and a post.
+- [x] Mention autocomplete in the composer.
+
+**A post got a URL, which was not in the plan and had to be.** A mention or a
+reply points at a post, and posts had no address of their own - a thread
+opened inline in the feed. So "open its subject" was unbuildable for two of
+the four kinds until `/p/<id>` existed. It is a path rather than a fragment on
+the feed, which is the opposite of the choice made for a message in Batch 3,
+and the difference is what each surface is for: `/r/lounge#m12` is a link to a
+room plus where to look inside it, and the room is still worth landing on once
+the message has scrolled away. A post is the thing itself, and `/feed#p12`
+would find nothing the moment the post is a day old - which is when most links
+get clicked.
+
+**Gone and never-existed are answered the same way.** Telling a stranger which
+one it is would say that something was deleted, and who deleted a post is not
+a fact that page owes anybody.
+
+**A notification with nowhere to go stays as text.** A reaction is addressed by
+room and id together, and the id alone is not a location - which is what a
+deployment whose query predates the room embed sends. Drawing that row as a
+button would read as the site being broken rather than as the thing being
+gone. `src/utils/notificationTarget.js` decides, and the rule is checked by
+`postId` rather than by kind, so a mention that somehow carries a message does
+not open a room the reader was never mentioned in.
+
+**The share control copies rather than calling `navigator.share`.** The native
+sheet looks better on a phone, is absent on most desktops, needs a gesture it
+sometimes rejects anyway, and gives no answer when somebody dismisses it - so
+the control would silently do nothing on exactly the machines where it is
+hardest to work around. One behaviour everywhere beats a better one that is
+sometimes missing. Both copy paths can still be refused, so the failure is
+said out loud and the link is offered to be copied by hand.
+
+**A message carries its own room into the link.** Taken from the message
+rather than from the panel around it, so a row rendered in a search result or
+on a token page's chat tab hands over a link that lands in the right place.
+
+**Mention autocomplete is in the post composer and deliberately not the chat
+one.** A chat message records no mentions and notifies nobody - see
+`api/_routes/chat/messages.js`, which calls none of the notify helpers - so
+the same list there would invite naming a person who would never be told.
+Better no affordance than one that quietly does nothing.
+
+**The query allows spaces, which is the whole reason the picker exists.**
+`post_mentions` stores addresses because a handle here may contain one, so
+"@Pulse Trader" cannot be parsed out of a post by any rule. A picker that
+stopped at the first space could never offer the accounts it is the only way
+to reach. The endpoint has accepted picked addresses since the table existed;
+nothing was sending any.
+
+**A name picked and then deleted notifies nobody.** `keepPicked` filters the
+list against what the draft still says at send time. Without it, picking a
+name and removing it puts a notification in somebody's inbox with no trace of
+it anywhere they can see - which done deliberately is a way to message
+somebody unaccountably.
+
+**Escape had to be remembered, not just handled.** The first version closed
+the list on Escape and the very next `keyup` reopened it: the draft still held
+the same half-typed name, so re-reading it found the same query. A dismissal
+that undoes itself within one keystroke is not a dismissal. The `@` that was
+dismissed is now remembered until the caret moves to a different one.
+
+**Moderation moved into `usePostActions` when a post got a second surface.**
+Removing, reporting and blocking are the last things in this app that should
+exist twice - the copy nobody is looking at is the one that stops confirming
+before it deletes. Extracting it also exposed how thin the safety net is:
+lint and 1005 unit tests both passed a version of `FeedPanel` with a leftover
+handler referencing three deleted imports, which would have thrown the moment
+anybody pressed Block. Only a browser catches that.
+
+### Batch 5 - the backlog this leaves
+
+- No way to delete a room or edit a gate once it exists.
+- The screener has no "being talked about" signal, although the rooms now know.
+- Three routers still share one address bar. Unify them before a fourth.
 
 ## Working on this
 
