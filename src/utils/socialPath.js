@@ -3,15 +3,15 @@ import { DEFAULT_ROOM, isRoom } from '../config/rooms'
 /**
  * Turning a path into which social surface it means, and back.
  *
- * The third of these parsers, after profilePath.js and the one inside
- * useTokenRoute, and the reason there is a third rather than a router is
- * written down in docs/navigation-roadmap.md: the shell drives its tabs from
- * state, and replacing that wholesale to link five surfaces would be
- * rewriting the thing the decision exists to protect.
+ * One of three per-surface parsers, alongside profilePath.js and the token
+ * pattern in route.js. They used to belong to three separate hooks, each
+ * reading and pushing the address bar on its own; src/utils/route.js now
+ * decides which of them a path belongs to, and each of them decides what its
+ * paths mean.
  *
- * Pulled out of the hook for the same reason the profile one was. This is
- * what decides where a URL somebody typed lands, which is worth checking
- * directly rather than through a hook and a render.
+ * Kept out of the hook because this is what decides where a URL somebody
+ * typed lands, which is worth checking directly rather than through a hook
+ * and a render.
  */
 
 /**

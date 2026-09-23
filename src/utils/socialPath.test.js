@@ -71,7 +71,7 @@ describe('readSocialPath', () => {
   })
 
   it('leaves the other two routers alone', () => {
-    // These paths belong to useProfileRoute and useTokenRoute. Claiming one
+    // These paths belong to the profile and token surfaces. Claiming one
     // here would put the social section over a profile page.
     for (const path of [
       '/',

@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Loader2, AlertTriangle, ChevronUp, Users, PenLine, Search, X, Lock, CornerUpLeft } from 'lucide-react'
+import {
+  Loader2,
+  AlertTriangle,
+  ChevronUp,
+  Users,
+  PenLine,
+  Search,
+  X,
+  Lock,
+  CornerUpLeft,
+  History,
+} from 'lucide-react'
 import ChatMessageRow from './ChatMessageRow'
 import ChatComposer from './ChatComposer'
 import ChatProfileCard from './ChatProfileCard'
@@ -14,8 +25,9 @@ import { useChatIdentity } from '../../hooks/useChatIdentity'
 import { useUserProfile } from '../../context/UserProfileContext'
 import { typingLine, countAfter } from '../../utils/chatPresence'
 import { searchTerm } from '../../utils/chatSearch'
-import { roomToken } from '../../config/rooms'
+import { isGroupRoom, roomToken } from '../../config/rooms'
 import { fromBaseUnits, roomGate } from '../../utils/gate'
+import { fetchLatestGateChange } from '../../services/rooms'
 import { useTokenClaim } from '../../hooks/useTokenClaim'
 import { formatAddress } from '../../utils/formatters'
 
@@ -69,6 +81,18 @@ export default function RoomPanel({
    * anything.
    */
   const gate = describeGate(gatedOn)
+
+  /*
+   * When the rule last changed, and to what.
+   *
+   * A notice rather than a message in the room, and that is not a shortcut. A
+   * message needs an author - `messages.address` is not null and references
+   * `profiles` - so posting one would mean inventing a system account with a
+   * profile, an address and the standing to be impersonated. A notice at the
+   * top says the same thing, stays put rather than scrolling away from the
+   * people it is for, and needs none of that.
+   */
+  const gateChange = useGateChange(room)
 
   const { claim } = useTokenClaim(roomToken(room))
   const devAddress = claim?.address || null
@@ -565,6 +589,21 @@ export default function RoomPanel({
         </p>
       )}
 
+      {/*
+        The rule changed, and who changed it.
+        
+        Drawn for everybody, not only for people it locked out: somebody who
+        still qualifies is entitled to know the room they are in now has a
+        requirement, and somebody who no longer does needs a reason rather
+        than a composer that stops working.
+      */}
+      {gateChange && (
+        <p className="chat-change font-mono" role="status">
+          <History size={11} />
+          {gateChange.text}
+        </p>
+      )}
+
       <ChatComposer
         room={room}
         onPosted={add}
@@ -603,6 +642,60 @@ function Notice({ icon: Icon, spinning = false, children }) {
  * this costs nothing. Falls back to base units rather than to silence - a
  * rule that cannot state itself is a rule nobody can satisfy on purpose.
  */
+/**
+ * The most recent change to a room's rule, as a sentence.
+ *
+ * Fetched here rather than passed in, unlike the gate itself: the sidebar's
+ * room row does not carry it, and a change is read once per room open rather
+ * than on every render of a list. Null when nothing has ever changed, which
+ * is every room until somebody edits one.
+ *
+ * Silent on failure. A room whose notice cannot be read is a room without a
+ * notice, not a room that will not load - the rule itself is still stated
+ * above by `gate`, which comes from the room row.
+ */
+function useGateChange(room) {
+  const [change, setChange] = useState(null)
+
+  useEffect(() => {
+    if (!isGroupRoom(room)) {
+      setChange(null)
+      return undefined
+    }
+
+    let alive = true
+    fetchLatestGateChange(room)
+      .then((found) => {
+        if (!alive) return
+        setChange(found ? { ...found, text: describeChange(found) } : null)
+      })
+      .catch(() => alive && setChange(null))
+
+    return () => {
+      alive = false
+    }
+  }, [room])
+
+  return change
+}
+
+/** What the change says, in the units a person recognises. */
+function describeChange(change) {
+  const when = new Date(change.changedAt)
+  const on = Number.isFinite(when.getTime())
+    ? when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    : 'recently'
+
+  const by = change.changedBy ? ` by ${formatAddress(change.changedBy)}` : ''
+
+  if (!change.gate) return `Opened to everybody on ${on}${by}.`
+
+  const rule = describeGate(change.gate)
+  return rule
+    ? `Holding requirement changed to ${rule} on ${on}${by}.`
+    : `Holding requirement changed on ${on}${by}.`
+}
+
 function describeGate(room) {
   const gate = roomGate(room)
   if (!gate) return null

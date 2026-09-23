@@ -18,6 +18,7 @@ import NotificationsPanel from './social/NotificationsPanel'
 import ProfilePage from './social/ProfilePage'
 import PostPage from './social/PostPage'
 import ShareButton from './social/ShareButton'
+import RoomAdmin from './social/RoomAdmin'
 import { useSiweAuth } from '../context/SiweAuthContext'
 import { useRoomUnread } from '../hooks/useRoomUnread'
 import { useGroups } from '../hooks/useGroups'
@@ -147,6 +148,28 @@ export default function SocialView({ route, onNavigate, onOpenProfile, onOpenTok
   const { groups, refresh: refreshGroups } = useGroups({ enabled: tab === 'rooms' })
 
   /*
+   * A group was edited or taken down.
+   *
+   * The list is refetched either way, and a room that has gone takes the
+   * reader to the default room with it - leaving them looking at a room that
+   * is no longer in the sidebar, unable to post, with nothing saying why, is
+   * the worse of the two.
+   *
+   * Below `refreshGroups`, and that is not cosmetic: it is in this callback's
+   * dependency array, which is evaluated as the component renders rather than
+   * when the callback runs. The same mistake in RoomPanel.jsx once threw
+   * "Cannot access before initialization" on every room open, past lint, the
+   * suite and the build.
+   */
+  const onGroupChanged = useCallback(
+    (group) => {
+      refreshGroups()
+      if (!group) onNavigate?.({ tab: 'rooms', room: DEFAULT_ROOM })
+    },
+    [onNavigate, refreshGroups],
+  )
+
+  /*
    * What is on screen, whether or not it is one of the three.
    *
    * `TABS` first, then the two that are reached from the chrome, then the
@@ -206,6 +229,15 @@ export default function SocialView({ route, onNavigate, onOpenProfile, onOpenTok
               label="Copy a link to this room"
               className="social-head-link"
             />
+          )}
+
+          {/*
+            Changing what a group requires, or taking it down. Moderators
+            only, and only for a group - the fixed five arrive in a commit and
+            a token room belongs to whoever is talking about that token.
+          */}
+          {tab === 'rooms' && activeGroup && (
+            <RoomAdmin room={activeGroup} onChanged={onGroupChanged} />
           )}
 
           {tab === 'rooms' && activeToken && onOpenToken && (

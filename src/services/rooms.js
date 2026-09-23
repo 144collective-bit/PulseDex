@@ -44,6 +44,9 @@ export async function fetchActiveTokenRooms({ limit = 8 } = {}) {
   if (error) throw dbError(error, 'load the token rooms')
 
   return (data || [])
+    // Archived rooms, for the same reason as in fetchGroups below: the policy
+    // hides them once 0018 has run, and this hides them before it has.
+    .filter((row) => !row.archived_at)
     .map(toRoom)
     // A row whose slug does not parse back to an address cannot be linked
     // anywhere, so it is dropped rather than drawn as a dead entry. The check
@@ -99,7 +102,21 @@ export async function fetchGroups({ limit = 12 } = {}) {
     .limit(limit)
 
   if (error) throw dbError(error, 'load the groups')
-  return (data || []).map(toRoom).filter((room) => room.name)
+  /*
+   * Archived rooms dropped here as well as by the policy.
+   *
+   * 0018 narrows the anon read policy to live rooms, so in production these
+   * never arrive. This filter is for the deployment where that migration has
+   * not been run yet - which is every deployment between a release and
+   * somebody opening the SQL editor - and a room nobody can post in sitting
+   * in everybody's sidebar is exactly the failure archiving exists to
+   * prevent. Two cheap checks beat one that is right only after a manual
+   * step.
+   */
+  return (data || [])
+    .filter((row) => !row.archived_at)
+    .map(toRoom)
+    .filter((room) => room.name)
 }
 
 /** Create a group. Moderators only; the endpoint answers 404 to anybody else,
@@ -115,6 +132,101 @@ export async function createGroup({ name, blurb, gateToken, minBalance }) {
   const payload = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(payload.error || 'That group could not be created.')
   return payload.group
+}
+
+/**
+ * Change what a group requires, or what it says about itself.
+ *
+ * The gate is replaced wholesale rather than patched: a gate is a token and
+ * an amount together, and sending one without the other would be a way to
+ * leave a room gated on an amount in the wrong scale. Omitting `gateToken`
+ * removes the gate and opens the room.
+ *
+ * Moderators only; the endpoint answers 404 to anybody else, so this offers
+ * no way to discover that the route exists.
+ */
+export async function editGroup({ slug, blurb, gateToken, minBalance }) {
+  const res = await fetch('/api/rooms/groups', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ slug, blurb, gateToken, minBalance }),
+  })
+
+  const payload = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(payload.error || 'That change could not be saved.')
+  return payload.group
+}
+
+/**
+ * Take a group down.
+ *
+ * Archived rather than deleted - the conversation stays readable and the room
+ * leaves the sidebar. See 0018_room_admin.sql for why a real delete is the
+ * wrong shape: `messages.room` is a foreign key, so deleting a room either
+ * destroys the evidence that justified taking it down or is refused outright.
+ */
+export async function archiveGroup(slug) {
+  const res = await fetch('/api/rooms/groups', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ slug }),
+  })
+
+  const payload = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(payload.error || 'That room could not be taken down.')
+  return true
+}
+
+/**
+ * When a room's rule last changed, and to what.
+ *
+ * Read over the anon key like the rooms themselves, because the rule is
+ * public - a room has always said what it requires before somebody types.
+ * When it changes, the people it changed for are exactly the people who need
+ * telling, and most of them are not signed in to a moderator account.
+ *
+ * Only the most recent, because that is what a notice in a room is: "this
+ * changed", not a changelog. The whole history is in the table for anybody
+ * who needs it.
+ *
+ * Failures come back as null. A room whose notice cannot be read is a room
+ * without a notice, not a room that will not load.
+ *
+ * @param {string} slug
+ * @returns {Promise<{changedAt: string, changedBy: string|null, gate: object|null}|null>}
+ */
+export async function fetchLatestGateChange(slug) {
+  if (!hasSupabase || typeof slug !== 'string' || !slug) return null
+
+  const { data, error } = await supabase
+    .from('room_gate_changes')
+    .select('changed_at, changed_by, gate_token, min_balance, gate_decimals, gate_symbol')
+    .eq('room', slug)
+    .order('changed_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error || !data) return null
+
+  return {
+    changedAt: data.changed_at,
+    changedBy: data.changed_by || null,
+    /*
+     * The gate as it became, in the shape `roomGate` already reads - so the
+     * notice and the room's own rule line are rendered by one function. Null
+     * when the change was to remove the gate.
+     */
+    gate: data.gate_token
+      ? {
+          gate_token: data.gate_token,
+          min_balance: data.min_balance,
+          gate_decimals: data.gate_decimals,
+          gate_symbol: data.gate_symbol,
+        }
+      : null,
+  }
 }
 
 /** Flatten a room row into what a component renders from. */

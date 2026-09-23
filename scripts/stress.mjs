@@ -47,6 +47,40 @@ const PHONE = { width: 390, height: 844 }
  * that predates it. Code that only ever sees the happy fixture crashes on the
  * first of these and the page it was on goes blank.
  */
+/*
+ * Two pairs on the screener.
+ *
+ * `TOKEN_ROOM` is about ADDRESS and carries 41 messages, so the first of
+ * these is a token being talked about and the second is not. Shaped like what
+ * dexscreener returns, because the app reads it straight - a fixture in a
+ * tidier shape would test a mapping nobody wrote.
+ */
+const QUIET_TOKEN = '0x9999999999999999999999999999999999999999'
+const PAIRS = [
+  {
+    pairAddress: '0xaaa1000000000000000000000000000000000001',
+    chainId: 'pulsechain',
+    dexId: 'pulsex',
+    baseToken: { address: ADDRESS, symbol: 'STRESS', name: 'Stress Token' },
+    quoteToken: { address: '0xa1077a294dde1b09bb078844df40758a5d0f9a27', symbol: 'WPLS' },
+    priceUsd: '0.000123',
+    priceChange: { h24: 12.5 },
+    volume: { h24: 125000 },
+    liquidity: { usd: 90000 },
+  },
+  {
+    pairAddress: '0xaaa1000000000000000000000000000000000002',
+    chainId: 'pulsechain',
+    dexId: 'pulsex',
+    baseToken: { address: QUIET_TOKEN, symbol: 'QUIET', name: 'Nobody Talks' },
+    quoteToken: { address: '0xa1077a294dde1b09bb078844df40758a5d0f9a27', symbol: 'WPLS' },
+    priceUsd: '1.25',
+    priceChange: { h24: -3.2 },
+    volume: { h24: 4000 },
+    liquidity: { usd: 20000 },
+  },
+]
+
 const HUGE = 'A'.repeat(40_000)
 const NASTY_PROFILE = {
   address: ADDRESS,
@@ -114,6 +148,29 @@ const TOKEN_ROOM = {
   blurb: null,
   message_count: 41,
   last_message_at: '2026-01-01T00:00:00Z',
+}
+/*
+ * A group that has been taken down.
+ *
+ * Archived rather than deleted - 0018 narrowed the anon read policy to live
+ * rooms, so in production this row never reaches the browser at all. It is
+ * fixtured here anyway, because the fixture answers every select the same way
+ * and the sidebar must not draw it even when handed it.
+ */
+const ARCHIVED_GROUP = {
+  slug: 'group-gone',
+  kind: 'group',
+  token_address: null,
+  name: 'Gone',
+  blurb: 'Taken down',
+  message_count: 12,
+  last_message_at: '2026-02-01T00:00:00Z',
+  gate_token: null,
+  min_balance: null,
+  gate_decimals: null,
+  gate_symbol: null,
+  archived_at: '2026-03-01T00:00:00Z',
+  archived_by: ADDRESS,
 }
 const NASTY_ROOM = {
   slug: 'token-not-an-address',
@@ -207,6 +264,23 @@ const FIXTURES = {
       return [{ ...NASTY_MESSAGE, body: 'gm', created_at: '2026-01-01T00:00:00Z', profiles: { handle: 'degen', avatar_id: null, avatar_url: null }, message_reactions: [] }]
     if (table === 'rooms') return [TOKEN_ROOM, OPEN_GROUP, GATED_GROUP]
     if (table === 'token_claims') return [TOKEN_CLAIM]
+    /*
+     * The last change to a room's rule, which the room draws a notice from.
+     * A notice rather than a message, because `messages.address` is not null
+     * and references `profiles` - so posting one would mean inventing a
+     * system account with an address and the standing to be impersonated.
+     */
+    if (table === 'room_gate_changes')
+      return [
+        {
+          changed_at: '2026-03-01T00:00:00Z',
+          changed_by: ADDRESS,
+          gate_token: ADDRESS,
+          min_balance: '1000000000000000000000',
+          gate_decimals: 18,
+          gate_symbol: 'PLSX',
+        },
+      ]
     return []
   },
   /** Nulls everywhere a column is nullable, and a body nobody would type. */
@@ -214,10 +288,24 @@ const FIXTURES = {
     if (table === 'profiles') return [NASTY_PROFILE]
     if (table === 'posts') return [NASTY_POST]
     if (table === 'messages') return [NASTY_MESSAGE, NASTY_REPLY]
-    if (table === 'rooms') return [NASTY_ROOM, TOKEN_ROOM, BROKEN_GATE, ZERO_GATE]
+    if (table === 'rooms')
+      return [NASTY_ROOM, TOKEN_ROOM, BROKEN_GATE, ZERO_GATE, ARCHIVED_GROUP]
     // A revoked claim and one with nothing in it. Neither may draw a badge.
     if (table === 'token_claims')
       return [REVOKED_CLAIM, { token_address: null, address: null, claimed_at: null, revoked_at: null }]
+    // A change row with every nullable column null, which is what removing a
+    // gate looks like - and one whose date is unreadable.
+    if (table === 'room_gate_changes')
+      return [
+        {
+          changed_at: null,
+          changed_by: null,
+          gate_token: null,
+          min_balance: null,
+          gate_decimals: null,
+          gate_symbol: null,
+        },
+      ]
     return []
   },
   /** Nothing at all - the state every one of these tables starts in. */
@@ -251,6 +339,28 @@ async function wire(page, { fixture = 'healthy', signedIn = true, apiStatus = 20
       })
     )
   }
+
+  /*
+   * The pair list the screener draws.
+   *
+   * Every outbound request is aborted by the catch-all above, so without this
+   * the screener renders an empty list and every scenario about a row on it
+   * passes by having nothing to check. That was true until Batch 5 and was a
+   * gap rather than a decision: the screener is this app's main surface and
+   * had no data-driven coverage at all.
+   *
+   * One pair is about the token the fixtures put a room on, so the "being
+   * talked about" badge has something to attach to; the other is a token
+   * nobody is discussing, which is what proves the badge is a signal rather
+   * than decoration.
+   */
+  await page.route('**/api.dexscreener.com/**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ pairs: PAIRS }),
+    })
+  )
 
   await page.route('**/rest/v1/**', (route) => {
     const table = new URL(route.request().url()).pathname.split('/rest/v1/')[1]?.split('?')[0] || ''
@@ -1128,11 +1238,12 @@ await run('direct / a room that is not a room', {
 /*
  * Leaving the section has to take the URL with it.
  *
- * Three routers share one address bar - this one, useTokenRoute and
- * useProfileRoute - and none of them can assume it is where they last left
- * it. The first version of this shipped with the section mounted over the
- * home page because `closeToken` had already pushed `/` and the check here
- * concluded there was nothing to do.
+ * This once shipped with the section mounted over the home page: three hooks
+ * shared one address bar, `closeToken` had already pushed `/`, and the check
+ * here concluded there was nothing to do. There is one route now - see
+ * src/utils/route.js - so leaving is arriving somewhere else rather than
+ * three surfaces each shutting themselves. The scenario stays because the
+ * symptom is what matters, whatever is underneath it.
  */
 /*
  * The bell.
@@ -1508,6 +1619,152 @@ await run('direct / a post on a phone', {
  * somebody who thought to read the address bar could take a link, which on a
  * phone - where most of this is read - means almost nobody.
  */
+/*
+ * A room whose rule changed says so.
+ *
+ * The other half of being able to change a gate. Somebody who could post
+ * yesterday and cannot today is owed a reason, and a composer that silently
+ * stops working is not one. Drawn for everybody in the room rather than only
+ * for the people it locked out - somebody who still qualifies is entitled to
+ * know the room now has a requirement.
+ */
+await run('rooms / a changed rule is said out loud', {
+  steps: async (page) => {
+    await socialTab('Rooms')(page)
+    const group = page.locator('.room-item', { hasText: 'Whales' }).first()
+    if (!(await group.count())) throw new Error('the gated group is not listed')
+    await group.click()
+    await page.waitForTimeout(1800)
+
+    const said = await page.locator('main').innerText()
+    if (!/changed/i.test(said)) throw new Error('the room says nothing about the change')
+  },
+})
+
+await run('rooms / a change with nothing in it is not drawn as a rule', {
+  fixture: 'nasty',
+  steps: async (page) => {
+    await socialTab('Rooms')(page)
+    const group = page.locator('.room-item', { hasText: 'Trenches' }).first()
+    if (await group.count()) {
+      await group.click()
+      await page.waitForTimeout(1600)
+    }
+    /* The nasty row has every column null, which means the gate was removed.
+       It must read as opening the room, never as a requirement of nothing -
+       "holders of null" is the shape of bug that gates a room against
+       everybody. */
+    const said = await page.locator('main').innerText()
+    if (/null|undefined|NaN/i.test(said)) throw new Error(`the room says "${said.slice(0, 120)}"`)
+  },
+})
+
+/*
+ * A room that has been taken down.
+ *
+ * In production the anon read policy hides it, so this never reaches the
+ * browser. Checked anyway, because a fixture that answers every select the
+ * same way is exactly the deployment where the policy has not been run - and
+ * a room nobody can post in sitting in everybody's sidebar is the failure
+ * archiving exists to prevent.
+ */
+await run('rooms / an archived group is not listed', {
+  fixture: 'nasty',
+  steps: async (page) => {
+    await socialTab('Rooms')(page)
+    const names = (await page.locator('.room-name').allInnerTexts()).map((n) => n.trim())
+    if (names.includes('Gone')) throw new Error(`the sidebar lists it: ${names.join('|')}`)
+  },
+})
+
+/*
+ * Managing a room is a moderator's, and the control is not the permission.
+ *
+ * ADMIN_ADDRESSES is not set in this harness, so nobody here is a moderator -
+ * which makes this the check that matters: the controls must be absent for an
+ * ordinary account. The endpoint refuses them again regardless; a button that
+ * is not drawn is not a permission, it is a request somebody can send without
+ * it.
+ */
+await run('rooms / an ordinary account cannot manage a room', {
+  steps: async (page) => {
+    await socialTab('Rooms')(page)
+    const group = page.locator('.room-item', { hasText: 'Trenches' }).first()
+    if (await group.count()) {
+      await group.click()
+      await page.waitForTimeout(1400)
+    }
+    const said = await page.locator('main').innerText()
+    if (/Take down/i.test(said)) throw new Error('an ordinary account is offered a way to take a room down')
+    if (await page.locator('.room-admin').count()) throw new Error('the manage form is on screen')
+  },
+})
+
+/*
+ * The screener says which tokens anybody is talking about.
+ *
+ * The last thing closing the loop between the two halves of this app. The
+ * token page has had a Chat tab since token rooms existed; until now the
+ * screener could not say which of a hundred rows was being discussed,
+ * although `rooms` has carried the count since 0014 for exactly this.
+ */
+await run('screener / a token being talked about says so', {
+  steps: async (page) => {
+    await tab('Screener')(page)
+    await page.waitForTimeout(1800)
+
+    const badges = page.locator('.sidebar-talk')
+    if (!(await badges.count())) throw new Error('no row says anything is being discussed')
+
+    // Never a zero. A badge on every row is a column of zeroes, and one that
+    // is always there has stopped being a signal.
+    for (const text of await badges.allInnerTexts()) {
+      const said = text.trim()
+      if (!said || said === '0') throw new Error(`a row is badged "${said}"`)
+    }
+
+    /*
+     * And only the row it is about. Two pairs are fixtured and only one has a
+     * room, so a badge on both would mean the lookup is matching everything -
+     * which is the failure that looks like the feature working.
+     */
+    const rows = await page.locator('.sidebar-pair-item').count()
+    if (rows < 2) throw new Error(`only ${rows} rows to tell apart`)
+    if ((await badges.count()) >= rows) {
+      throw new Error(`every one of ${rows} rows is badged`)
+    }
+  },
+})
+
+await run('screener / the badge opens the room, not the chart', {
+  steps: async (page) => {
+    await tab('Screener')(page)
+    await page.waitForTimeout(1800)
+
+    const badge = page.locator('.sidebar-talk').first()
+    if (!(await badge.count())) throw new Error('nothing to press')
+    await badge.click()
+    await page.waitForTimeout(1800)
+
+    const where = new URL(page.url()).pathname
+    if (!where.startsWith('/r/token-')) throw new Error(`the badge opened ${where}`)
+    if (!(await page.locator('.social-tabs').count())) {
+      throw new Error('it did not land in the social section')
+    }
+  },
+})
+
+await run('screener / no badges when nothing is being said', {
+  fixture: 'empty',
+  steps: async (page) => {
+    await tab('Screener')(page)
+    await page.waitForTimeout(1600)
+    if (await page.locator('.sidebar-talk').count()) {
+      throw new Error('a badge was drawn for a room with nothing in it')
+    }
+  },
+})
+
 await run('share / a room, a message and a post', {
   steps: async (page) => {
     await socialTab('Rooms')(page)

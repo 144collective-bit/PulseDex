@@ -2994,3 +2994,59 @@ button.notif-excerpt {
   font-size: 10.5px;
   color: var(--text-muted);
 }
+
+/* ── Managing a room ── */
+
+/*
+ * The gate-change notice, beside the rule it changed.
+ *
+ * Its own class rather than a modifier on `.chat-gate`, and that is not
+ * tidiness: the rule and the news that the rule changed are two different
+ * statements about a room, and anything selecting one of them - including the
+ * stress harness, which caught this - must not pick up the other.
+ *
+ * Shaped like the rule so they read as one block about the room rather than
+ * as a warning stuck on top of it. What changed is news, not an alarm.
+ */
+.chat-change {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 6px;
+  padding: 5px 8px;
+  border: 1px dashed var(--ch-hairline);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-label, 11px);
+  color: var(--text-muted);
+}
+
+.room-admin {
+  margin: 8px 0 0;
+}
+
+/*
+ * Apart from Save and Cancel, and last. A destructive control should not sit
+ * where the eye lands on its way to the one people mean to press.
+ */
+.room-admin-remove {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 99, 99, 0.35);
+  border-radius: var(--radius-sm, 6px);
+  background: none;
+  color: #ff8080;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.room-admin-remove:hover:not(:disabled) {
+  background: rgba(255, 99, 99, 0.12);
+}
+
+.room-admin-remove:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

@@ -13,11 +13,14 @@ import {
   Sparkles,
   ArrowUpRight,
   ArrowDownRight,
+  MessagesSquare,
 } from 'lucide-react'
 import TokenLogo from './TokenLogo'
 import { getCorePulseRank, deduplicatePairs, CORE_PULSE_CONTRACTS } from '../services/dexscreener'
 import { formatCryptoPrice, formatUsd } from '../utils/formatters'
 import { useWatchlistPairs } from '../hooks/useWatchlistPairs'
+import { useTalkedAbout } from '../hooks/useTalkedAbout'
+import { talkLabel } from '../utils/talkedAbout'
 
 export default function SidebarPairs({
   pairs = [],
@@ -27,7 +30,20 @@ export default function SidebarPairs({
   onToggleWatchlist,
   isCollapsed,
   onToggleCollapse,
+  /* Open the room about a token. Absent on a deployment with the social
+     section switched off, in which case no badge is drawn at all. */
+  onOpenRoom,
 }) {
+  /*
+   * Which of these tokens anybody is actually talking about.
+   *
+   * One query for the whole list, not one per row - which is what the
+   * denormalised count on `rooms` was put there for. Only while the list is
+   * expanded: a collapsed sidebar draws no badges and should not be polling
+   * for them.
+   */
+  const talk = useTalkedAbout({ enabled: Boolean(onOpenRoom) && !isCollapsed })
+
   const [tab, setTab] = useState('hot') // 'hot' | 'gainers' | 'losers' | 'volume' | 'watchlist'
   const [search, setSearch] = useState('')
   const [dexFilter, setDexFilter] = useState('all') // 'all' | 'pulsex' | '9mm' | '9inch'
@@ -316,6 +332,7 @@ export default function SidebarPairs({
             const isPos = change >= 0
             const isStarred = watchlist.includes(p.pairAddress?.toLowerCase())
             const core = isCoreAsset(p)
+            const said = talkLabel(talk.get(baseAddr.toLowerCase()))
             const dexBadgeClass = getDexBadgeClass(p.dexId)
 
             return (
@@ -369,6 +386,34 @@ export default function SidebarPairs({
                       <span className="sidebar-liq-meta text-muted">
                         Liq: {formatLiq(p.liquidity?.usd)}
                       </span>
+
+                      {/*
+                        Being talked about, which until now the screener had
+                        no way to say although the rooms knew. Drawn only
+                        where there is something: a badge on every row is a
+                        column of zeroes, and one that is always there stops
+                        being a signal.
+
+                        A button inside a clickable row, so the press has to
+                        be stopped from also selecting the pair - opening the
+                        chart and the room at once would be two navigations
+                        from one click.
+                      */}
+                      {said && onOpenRoom && (
+                        <button
+                          type="button"
+                          className="sidebar-talk font-mono"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onOpenRoom(baseAddr)
+                          }}
+                          aria-label={`${said} messages about ${base}`}
+                          title={`${said} messages about ${base} - open the room`}
+                        >
+                          <MessagesSquare size={9} />
+                          {said}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

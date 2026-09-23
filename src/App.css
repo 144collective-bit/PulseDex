@@ -15181,3 +15181,34 @@ a.wallet-option-item {
   background: rgba(0, 229, 255, 0.18);
   border-color: rgba(0, 229, 255, 0.5);
 }
+
+/*
+ * Being talked about, on a screener row.
+ *
+ * Small, and only where there is something. A badge on every row is a column
+ * of zeroes, and one that is always there stops being a signal - the whole
+ * point is that it marks the few rows anybody is discussing out of the
+ * hundred on screen.
+ *
+ * A button inside a row that is itself clickable, so it carries its own hit
+ * area and its own hover. The press is stopped from bubbling in the handler:
+ * opening the chart and the room from one click would be two navigations.
+ */
+.sidebar-talk {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  border-radius: 999px;
+  background: rgba(0, 229, 255, 0.1);
+  color: var(--pulse-cyan);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.sidebar-talk:hover {
+  background: rgba(0, 229, 255, 0.22);
+}

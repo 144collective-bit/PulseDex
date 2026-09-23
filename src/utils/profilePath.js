@@ -1,10 +1,11 @@
 /**
  * Turning /u/... into who it means, and back.
  *
- * Pulled out of useProfileRoute so the parsing can be checked without a
- * browser. It is the one piece of this that decides what a URL anybody can
- * type resolves to, which is worth being able to test directly rather than
- * through a hook and a render.
+ * Kept out of the route hook so the parsing can be checked without a browser.
+ * It is the one piece of this that decides what a URL anybody can type
+ * resolves to, which is worth being able to test directly rather than through
+ * a hook and a render. src/utils/route.js decides that a path is a profile;
+ * this decides who it means.
  */
 
 /*

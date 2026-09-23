@@ -274,11 +274,78 @@ lint and 1005 unit tests both passed a version of `FeedPanel` with a leftover
 handler referencing three deleted imports, which would have thrown the moment
 anybody pressed Block. Only a browser catches that.
 
-### Batch 5 - the backlog this leaves
+### Batch 5 - the backlog this leaves  <- done
 
-- No way to delete a room or edit a gate once it exists.
-- The screener has no "being talked about" signal, although the rooms now know.
-- Three routers still share one address bar. Unify them before a fourth.
+- [x] No way to delete a room or edit a gate once it exists.
+- [x] The screener has no "being talked about" signal, although the rooms now
+      know.
+- [x] Three routers still share one address bar. Unify them before a fourth.
+
+**One address bar, one piece of state.** `useTokenRoute`, `useProfileRoute`
+and `useSocialRoute` are gone; `src/hooks/useRoute.js` replaces all three and
+`src/utils/route.js` decides which surface a path belongs to. Each of the old
+hooks was right on its own and the set was not, because none could assume the
+URL was where it last left it - that is what three writers to one variable
+produce, not a mistake anybody made twice.
+
+What it actually buys: there is no `closeToken`, `closeProfile` or
+`closeSocial` any more. Going to a token leaves a profile because there is one
+route and it is now a token. `selectTab` was three calls plus a fourth line
+for every surface somebody added; it is one navigation. The per-surface
+parsers stayed where they were - splitting it the other way would have put
+four unrelated regexes in one function and made every surface's rules
+everybody else's business.
+
+**Archived, never deleted.** `messages.room` is a foreign key to `rooms`, so a
+real delete either cascades - taking every message with it - or is refused. A
+room is taken down because of what is in it or because it was a mistake, and
+in the first case the conversation is the evidence: deleting it destroys the
+record of the thing that justified the deletion. The room leaves the sidebar
+because 0018 narrows the anon read policy to live rooms; the messages stay
+readable, so a link somebody was sent still works.
+
+**A gate change is refused if it cannot be recorded.** Everywhere else here a
+failed audit row is swallowed so it cannot cost somebody their post - the
+opposite call, and right there, because the post is the valuable thing. Here
+the audit *is* the valuable thing: it answers "why can I no longer post in a
+room I was posting in yesterday", and a gate change nobody can account for is
+worse than one that did not happen.
+
+**The notice is a banner, not a message.** `messages.address` is not null and
+references `profiles`, so posting a system message would mean inventing a
+system account with an address, a profile and the standing to be
+impersonated. A banner says the same thing, stays put rather than scrolling
+away from the people it is for, and needs none of that. It is drawn for
+everybody in the room: somebody who still qualifies is entitled to know the
+room now has a requirement.
+
+**The gate is replaced wholesale, never patched field by field.** A gate is a
+token and an amount together, and an endpoint that let one change without the
+other would be a way to leave a room gated on an amount in the wrong scale.
+Sending no token opens the room, which is recorded like any other change -
+opening a room is as much a change to who may speak in it as closing one.
+
+**The screener signal is what `message_count` was denormalised for.** 0014
+wrote it down at the time: "'Which token is being talked about' is a question
+the screener wants to ask about a hundred tokens at once while it draws a
+list. As a count over `messages` that is a hundred aggregates; as a column it
+is one read of a small table." The badge is only on rows with something to
+say - a badge on every row is a column of zeroes - and pressing it opens the
+room rather than the chart, which is the loop finally closing in both
+directions.
+
+**Two bugs the safety net did not catch, again.** A leftover handler in
+`FeedPanel` referencing deleted imports in Batch 4, and this time a
+`useCallback` dependency array naming a `const` declared sixteen lines below
+it - a `ReferenceError` on every render of the social section. Lint passed
+both. The unit suite passed both. Only a browser catches this class, which is
+the whole argument for `scripts/stress.mjs` existing.
+
+**And one I caused myself:** rebuilding `dist` while the matrix was running,
+which 404'd the assets under the runner mid-scenario. A red result from a
+build swapped underneath is as worthless as the green one against a stale
+preview in Batch 2, and for the same reason. Do not touch the build while a
+run is in flight.
 
 ## Working on this
 

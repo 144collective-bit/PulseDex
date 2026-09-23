@@ -154,6 +154,22 @@ export const PUBLIC_PROFILE_FIELDS =
 export const ROOM_FIELDS =
   'slug, kind, token_address, name, blurb, message_count, last_message_at, ' +
   /*
+   * Whether the room has been taken down.
+   *
+   * Read although 0018's policy already hides archived rooms from the anon
+   * key, because the browser filters on it too - see fetchGroups. Two cheap
+   * checks beat one that is right only after somebody has run a migration by
+   * hand.
+   *
+   * This is what makes 0018_room_admin.sql required rather than optional: a
+   * select naming a column that does not exist fails outright, and every room
+   * read goes through this string. api/_routes/health.js runs it against the
+   * real database and names it, which is what turns "the rooms will not load"
+   * into "this column is missing" - the mechanism that was missing when the
+   * reply foreign key went astray.
+   */
+  'archived_at, ' +
+  /*
    * The gate, read by the browser although nothing in the browser enforces
    * it. A client-side balance check is decoration - the endpoint checks on
    * every write - but a room that refuses a message without having said it
