@@ -178,7 +178,34 @@ export default async function handler(req, res) {
  * discover anyway, and without it a red smoke test says only that something is
  * wrong. The message is what makes it a diagnosis.
  */
+/**
+ * Run one select and say whether the database accepted it.
+ *
+ * Not `head: true`, and that is the whole point of this function's shape. A
+ * HEAD request gets a status and no body, so PostgREST's explanation of what
+ * it disliked never arrives and supabase-js builds an error whose message is
+ * the empty string. The result is a health check that reports a failure and
+ * refuses to name it - which is exactly what happened the first time one of
+ * these went red against a real database, and cost a deploy cycle to work
+ * out. One row is a cheap price for an error that says something.
+ *
+ * `code`, `details` and `hint` come along for the same reason. PostgREST puts
+ * the useful part in different fields depending on what went wrong: a missing
+ * column is in `message`, an ambiguous embed is in `details`, and `hint`
+ * often names the exact constraint to use.
+ */
 async function query(db, name, table, select) {
-  const { error } = await db.from(table).select(select, { head: true, count: 'exact' }).limit(1)
-  return error ? { name, ok: false, error: error.message } : { name, ok: true }
+  const { error } = await db.from(table).select(select).limit(1)
+  if (!error) return { name, ok: true }
+
+  return {
+    name,
+    ok: false,
+    // Never an empty string. A check that has failed always says something,
+    // even if all it can say is that the error arrived empty.
+    error: error.message || error.details || error.hint || 'no message',
+    ...(error.code ? { code: error.code } : {}),
+    ...(error.details ? { details: error.details } : {}),
+    ...(error.hint ? { hint: error.hint } : {}),
+  }
 }
