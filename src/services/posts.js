@@ -99,8 +99,16 @@ export async function fetchPostPage({
   return { posts: rows.map(toPost), hasMore: hasMoreBefore(rows, limit) }
 }
 
-/** One post with its author attached, by id. */
-async function fetchPost(id) {
+/**
+ * One post with its author attached, by id.
+ *
+ * Exported for the single-post page at `/p/<id>`, which is the surface a
+ * notification and a shared link both land on. Null for a post that does not
+ * exist or has been removed, and the caller says so - those are the same
+ * answer to whoever followed the link, and distinguishing them would tell a
+ * stranger that something was deleted rather than never there.
+ */
+export async function fetchPost(id) {
   const { data, error } = await supabase
     .from('posts')
     .select(POST_FIELDS)
@@ -176,14 +184,23 @@ export function subscribeToPosts({ author = null, onPost, onRemoved }) {
  * cookie, and the name and picture from the profile that cookie identifies. A
  * body that could name its own author would let anyone post as anyone.
  */
-export async function createPost(body, parentId = null) {
+export async function createPost(body, parentId = null, mentions = []) {
   const res = await fetch('/api/posts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'same-origin',
-    // `parentId` makes it a reply. Sent as null rather than omitted when there
-    // is none, so the endpoint reads one shape either way.
-    body: JSON.stringify({ body, parentId }),
+    /*
+     * `parentId` makes it a reply. Sent as null rather than omitted when there
+     * is none, so the endpoint reads one shape either way.
+     *
+     * `mentions` are addresses picked from the composer's list, which is the
+     * only way to name an account whose handle contains a space - the server
+     * cannot find those in the text. It has accepted them since the table
+     * existed and nothing was sending any. They are a request, not a fact:
+     * api/_lib/notify.js checks every one against `profiles` before it counts,
+     * so a fabricated list creates nothing.
+     */
+    body: JSON.stringify({ body, parentId, mentions }),
   })
 
   const payload = await res.json().catch(() => ({}))

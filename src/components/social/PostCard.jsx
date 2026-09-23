@@ -2,6 +2,7 @@ import { Trash2, Flag, Ban, MessageCircle } from 'lucide-react'
 import ChatAvatar from './ChatAvatar'
 import { formatAddress, formatTimeAgo } from '../../utils/formatters'
 import PostBody from './PostBody'
+import ShareButton from './ShareButton'
 
 /**
  * One post.
@@ -87,6 +88,18 @@ export default function PostCard({
         <PostBody post={post} onOpenProfile={onOpenProfile} />
 
         <div className="feed-post-tools">
+          {/*
+            A link to this post, at `/p/<id>`. First among the controls that
+            are not moderation, because it is the only one here that is about
+            spreading the post rather than policing it - and on a site nobody
+            has heard of, being shareable is the thing that matters most.
+          */}
+          <ShareButton
+            where={{ tab: 'post', post: post.id }}
+            label="Copy a link to this post"
+            className="feed-tool"
+          />
+
           {/*
             First, and the only one of these that is an invitation rather than
             a moderation control. It carries the count, so a post with a

@@ -1,5 +1,5 @@
 import { serviceClient, anonClient } from '../_lib/supabase.js'
-import { MESSAGE_FIELDS, NOTIFICATION_FIELDS, POST_FIELDS, PUBLIC_PROFILE_FIELDS } from '../../src/config/queries.js'
+import { MESSAGE_FIELDS, NOTIFICATION_FIELDS, POST_FIELDS, PUBLIC_PROFILE_FIELDS, ROOM_FIELDS, CLAIM_FIELDS } from '../../src/config/queries.js'
 
 /**
  * Does this deployment actually work?
@@ -89,6 +89,28 @@ export default async function handler(req, res) {
     // Added by 0010. A deployment whose migration has not been run reports
     // this as failing instead of presenting as a feed that will not load.
     checks.push(await query(reader, 'mentions-table', 'post_mentions', 'address'))
+    /*
+     * Added by 0011. Both halves: the table, and the function that counts
+     * against it. A function is the one thing here that can be absent while
+     * every table it touches is present - `create or replace` on a deployment
+     * whose migration has not been run leaves the app asking PostgREST for an
+     * RPC that does not exist, which presents as a sidebar with no badges and
+     * no reason why.
+     */
+    checks.push(await query(reader, 'room-reads-table', 'room_reads', 'room'))
+    /*
+     * The room list, which as of 0014 lives in the database rather than only
+     * in src/config/rooms.js. Anon-readable, because both the sidebar's token
+     * rooms and the token page read it straight from the browser.
+     */
+    checks.push(await query(reader, 'rooms-select', 'rooms', ROOM_FIELDS))
+    /*
+     * Dev claims. Anon-readable by policy, but only the live ones - so this
+     * passing proves the table and the select, not that the policy is right.
+     * What it does catch is the shape drifting, which is how the badge would
+     * silently stop being drawn.
+     */
+    checks.push(await query(reader, 'claims-select', 'token_claims', CLAIM_FIELDS))
   }
 
   /*
@@ -101,7 +123,31 @@ export default async function handler(req, res) {
    * without it - and reporting that as a failure would make every preview red
    * and teach everybody to ignore the colour.
    */
+  if (reader) {
+    // The unread-count function, called the way the endpoint calls it. An
+    // address nobody holds returns no rows, which is a pass: the question is
+    // whether the function exists and its body still parses.
+    const probe = await reader.rpc('unread_counts', { reader: '0x' + '0'.repeat(40) })
+    checks.push(
+      probe.error
+        ? { name: 'unread-counts-fn', ok: false, error: probe.error.message }
+        : { name: 'unread-counts-fn', ok: true }
+    )
+  }
+
   if (db) {
+    /*
+     * `note_room_message` is deliberately not probed here, unlike
+     * `unread_counts` above.
+     *
+     * That one is a read and calling it costs nothing. This one writes - it
+     * creates a room and bumps its count - and this endpoint is polled. A
+     * probe would add a message to the Lounge's tally every time anybody
+     * checked whether the site was up, which is a health check quietly
+     * corrupting the thing it is reporting on. The `rooms` select above
+     * proves the table and its shape; the function is exercised by posting.
+     */
+
     checks.push(await query(db, 'blocked-table', 'blocked', 'address'))
     checks.push(await query(db, 'reports-table', 'post_reports', 'id'))
     /*
@@ -132,7 +178,34 @@ export default async function handler(req, res) {
  * discover anyway, and without it a red smoke test says only that something is
  * wrong. The message is what makes it a diagnosis.
  */
+/**
+ * Run one select and say whether the database accepted it.
+ *
+ * Not `head: true`, and that is the whole point of this function's shape. A
+ * HEAD request gets a status and no body, so PostgREST's explanation of what
+ * it disliked never arrives and supabase-js builds an error whose message is
+ * the empty string. The result is a health check that reports a failure and
+ * refuses to name it - which is exactly what happened the first time one of
+ * these went red against a real database, and cost a deploy cycle to work
+ * out. One row is a cheap price for an error that says something.
+ *
+ * `code`, `details` and `hint` come along for the same reason. PostgREST puts
+ * the useful part in different fields depending on what went wrong: a missing
+ * column is in `message`, an ambiguous embed is in `details`, and `hint`
+ * often names the exact constraint to use.
+ */
 async function query(db, name, table, select) {
-  const { error } = await db.from(table).select(select, { head: true, count: 'exact' }).limit(1)
-  return error ? { name, ok: false, error: error.message } : { name, ok: true }
+  const { error } = await db.from(table).select(select).limit(1)
+  if (!error) return { name, ok: true }
+
+  return {
+    name,
+    ok: false,
+    // Never an empty string. A check that has failed always says something,
+    // even if all it can say is that the error arrived empty.
+    error: error.message || error.details || error.hint || 'no message',
+    ...(error.code ? { code: error.code } : {}),
+    ...(error.details ? { details: error.details } : {}),
+    ...(error.hint ? { hint: error.hint } : {}),
+  }
 }

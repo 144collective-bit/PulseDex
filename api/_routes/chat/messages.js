@@ -3,7 +3,9 @@ import { isSameOrigin, rateLimit } from '../../_lib/guard.js'
 import { serviceClient } from '../../_lib/supabase.js'
 import { normaliseMessage, REJECTED } from '../../../src/utils/chatMessage.js'
 import { parseAdminAddresses, isAdminAddress } from '../../../src/utils/chatAdmin.js'
-import { isRoom } from '../../../src/config/rooms.js'
+import { isGroupRoom, isRoom, roomToken } from '../../../src/config/rooms.js'
+import { GATE, fromBaseUnits, gateDecision, roomGate } from '../../../src/utils/gate.js'
+import { cachedBalance, readBalance } from '../../_lib/tokenBalance.js'
 import {
   exceededLimit,
   retryAfterSeconds,
@@ -127,13 +129,22 @@ async function post(req, res) {
   }
 
   /*
-   * The room is checked against the list, not merely against the slug shape.
+   * The room is one of the five, or it names a token.
    *
    * It arrives in a request body, and a body is whatever the sender decided to
-   * send. A slug that only satisfies the database's shape constraint would
-   * create a room that exists in the data and nowhere in the app: absent from
-   * the sidebar, unreachable by navigation, and so unmoderatable through the
-   * interface built to moderate it.
+   * send. `isRoom` used to mean "on the list", which made this the check that
+   * stopped a message landing in a room that existed in the data and nowhere
+   * in the app - absent from the sidebar, unreachable by navigation, and so
+   * unmoderatable through the interface built to moderate it.
+   *
+   * It means something weaker now, and the weakening is the feature: a token
+   * room has no list to be on, so for those this is a check that the slug is
+   * `token-` followed by a real address. That is enough to keep the guarantee
+   * that mattered - every room this creates is one the app can navigate to,
+   * because the address in its name is the page it belongs to. What it no
+   * longer does is bound how many rooms exist. `rooms.created_by` records who
+   * made each one, and the rate limit above is what stops somebody making
+   * thousands.
    *
    * Refused rather than redirected into the default. A post is a write, and
    * quietly filing somebody's message somewhere other than where they aimed it
@@ -200,9 +211,95 @@ async function post(req, res) {
     return res.status(503).json({ error: 'Chat is unavailable right now.' })
   }
 
+  /*
+   * What this answers, checked rather than trusted.
+   *
+   * A body can name any id it likes, so the reply is only recorded when the
+   * message exists and is in this room. Without the room check a reply could
+   * be pinned to a conversation in another one - the quote would render
+   * happily and point somewhere the reader cannot go.
+   *
+   * An id that does not survive that is dropped rather than refused. Somebody
+   * answering a message that was hard-deleted while they typed should have
+   * their message posted, not rejected.
+   */
+  let replyTo = null
+  const wanted = Number(req.body?.replyTo)
+  if (Number.isInteger(wanted) && wanted > 0) {
+    const parent = await db
+      .from('messages')
+      .select('id, room')
+      .eq('id', wanted)
+      .maybeSingle()
+    if (parent.data && parent.data.room === room) replyTo = parent.data.id
+  }
+
+  /*
+   * The room exists, because this message is about to make it exist.
+   *
+   * Before the insert rather than after, because `messages.room` has a
+   * foreign key to `rooms` as of 0014 and the insert below is refused
+   * outright if the row is not there yet. That is the ordinary path for a
+   * token room: nobody creates one, somebody says something about a token and
+   * the room is where it lands.
+   *
+   * The same call records that the room was posted in, which is what orders a
+   * list of token rooms - there is no hand-written order for a set that grows
+   * one entry per address anybody opens.
+   *
+   * A failure here is fatal to the post, unlike the notification writes
+   * further down: without the row the insert cannot succeed, so carrying on
+   * would only reach a worse error message.
+   */
+  /*
+   * What kind of room this is, and whether it lets this person write.
+   *
+   * One read, before the room is touched, answering two questions that both
+   * have to be settled before a message is inserted.
+   *
+   * A group must already exist. `isRoom` above only checked the slug's shape,
+   * which for a group proves nothing - a group is made by a moderator, and
+   * without this check a well-formed slug would be enough to conjure one by
+   * posting into it.
+   *
+   * A gated room needs a balance. The gate is on the room row, so it arrives
+   * in the same read.
+   */
+  const existing = await db
+    .from('rooms')
+    .select('slug, kind, gate_token, min_balance, gate_symbol, gate_decimals')
+    .eq('slug', room)
+    .maybeSingle()
+
+  if (existing.error) {
+    console.error('chat: reading the room failed:', existing.error.message)
+    return res.status(503).json({ error: 'Chat is unavailable right now.' })
+  }
+
+  if (isGroupRoom(room) && existing.data?.kind !== 'group') {
+    // Deliberately the same sentence `isRoom` failing would produce. A group
+    // that does not exist and a slug that is malformed are the same fact to
+    // whoever is asking, and distinguishing them turns this into a way to
+    // enumerate which groups exist.
+    return res.status(400).json({ error: 'That room does not exist.' })
+  }
+
+  const gate = roomGate(existing.data)
+  if (gate) {
+    const refusal = await checkGate({ gate, address, room: existing.data })
+    if (refusal) return res.status(refusal.status).json({ error: refusal.error })
+  }
+
+  const noted = await db.rpc('note_room_message', { room_slug: room, author: address })
+
+  if (noted.error) {
+    console.error('chat: recording the room failed:', noted.error.message)
+    return res.status(503).json({ error: 'Chat is unavailable right now.' })
+  }
+
   const inserted = await db
     .from('messages')
-    .insert({ address, room, body: message.body })
+    .insert({ address, room, body: message.body, reply_to: replyTo })
     /*
      * The author's profile comes back with the row, so the message the poster
      * sees immediately carries their own name and picture. Without the join
@@ -279,6 +376,112 @@ async function edit(req, res) {
   return res.status(200).json({ message: updated.data[0] })
 }
 
+/**
+ * May this address write in this gated room?
+ *
+ * Returns null to allow, or `{status, error}` to refuse. The check is on the
+ * write rather than on entry, which is the decision this whole feature rests
+ * on: a check when somebody joins is a snapshot that stops being true the
+ * moment they sell, and a room gated that way is a room where the gate is a
+ * formality after the first day.
+ *
+ * The cost is that posting now depends on a node answering, and the interesting
+ * case is when it does not. `gateDecision` holds that rule and the reasoning
+ * for it; this function is only the part that turns an answer into a sentence.
+ *
+ * Reading, reacting and searching are all unaffected. A gate is about who may
+ * write - a holders-only room nobody else can read is a different feature,
+ * and a more exclusionary one than anybody has asked for.
+ */
+async function checkGate({ gate, address, room }) {
+  const fresh = await readBalance(gate.token, address)
+  const decision = gateDecision({
+    fresh,
+    cached: cachedBalance(gate.token, address),
+    min: gate.min,
+  })
+
+  if (decision.state === GATE.allowed || decision.state === GATE.stale) return null
+
+  /*
+   * Says how much is needed, using what the chain said when the gate was
+   * set. Not how much they hold: that is their business, they can see it in
+   * their own wallet, and an endpoint that reports balances back is one more
+   * way to check an address without asking a node yourself.
+   */
+  const needed = describeGate(room)
+
+  if (decision.state === GATE.unknown) {
+    return {
+      status: 503,
+      error: `Your balance could not be checked right now. This room needs ${needed}.`,
+    }
+  }
+
+  return { status: 403, error: `This room is for holders. You need ${needed} to post here.` }
+}
+
+/** The gate in words, from what was stored when it was set. */
+function describeGate(room) {
+  const amount = fromBaseUnits(room?.min_balance, room?.gate_decimals)
+  const symbol = room?.gate_symbol || 'tokens'
+  // Falls back to the raw base units rather than to nothing. A refusal that
+  // cannot say how much is needed is a refusal nobody can act on.
+  return amount ? `${amount} ${symbol}` : `${room?.min_balance} base units of ${room?.gate_token}`
+}
+
+/**
+ * Does this account run the room this message is in?
+ *
+ * Two ways to, and they are the same shape: somebody who claimed the token a
+ * token room is about, and somebody who created a group. Both are moderation
+ * confined to one room, which is the only kind of moderation this site hands
+ * out to anybody who is not a site moderator.
+ *
+ * The room is read from the message rather than taken from the request, so
+ * the question answered is "is this message in a room this person runs" -
+ * which cannot be widened by asking differently.
+ *
+ * Answers false for anything unexpected - a message that is gone, a room that
+ * is neither kind, a query that failed. False means the ordinary rule applies
+ * and the caller may only remove their own, which is the safe direction.
+ */
+async function runsThisRoom(db, address, messageId) {
+  const found = await db.from('messages').select('room').eq('id', messageId).maybeSingle()
+  const room = found.data?.room
+  if (!room) return false
+
+  const token = roomToken(room)
+  if (token) {
+    const claim = await db
+      .from('token_claims')
+      .select('address')
+      .eq('token_address', token)
+      .is('revoked_at', null)
+      .maybeSingle()
+
+    return claim.data?.address === address
+  }
+
+  if (isGroupRoom(room)) {
+    /*
+     * The creator, and only while the row still says so. Not cached anywhere
+     * and not derived from the slug: a group's name says nothing about who
+     * made it, which is exactly why groups are created deliberately.
+     */
+    const group = await db
+      .from('rooms')
+      .select('created_by')
+      .eq('slug', room)
+      .eq('kind', 'group')
+      .maybeSingle()
+
+    return Boolean(group.data?.created_by) && group.data.created_by === address
+  }
+
+  return false
+}
+
 async function remove(req, res) {
   const address = await signedInAddress(req)
   if (!address) return res.status(401).json({ error: 'Sign in first.' })
@@ -309,13 +512,31 @@ async function remove(req, res) {
   const admins = parseAdminAddresses(process.env.ADMIN_ADDRESSES)
   const moderator = isAdminAddress(address, admins)
 
+  /*
+   * Three ways now, the third being narrow on purpose.
+   *
+   * Somebody who runs a room may remove messages in it, and nowhere else -
+   * the claimant of a token room, or the creator of a group. It is the one
+   * power either carries, and the reason it carries it: a dev whose room
+   * fills with impersonators posting a fake contract address should not have
+   * to find a site moderator at two in the morning, and neither should
+   * somebody whose group is being spammed.
+   *
+   * The scope is checked against the message's own room rather than against
+   * anything the request said, so the question answered is "is this message
+   * in a room whose token this person has claimed" - which cannot be widened
+   * by asking differently. Note what it is not: no blocking, which silences
+   * an account everywhere, and no reach outside the one room.
+   */
+  const dev = moderator ? false : await runsThisRoom(db, address, id)
+
   let update = db
     .from('messages')
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', id)
     .is('deleted_at', null)
 
-  if (!moderator) update = update.eq('address', address)
+  if (!moderator && !dev) update = update.eq('address', address)
 
   const removed = await update.select('id')
 
@@ -330,6 +551,12 @@ async function remove(req, res) {
    * A moderator gets success either way - they wanted it gone and it is. For
    * anybody else the two cases answer 404 together, so this does not become a
    * way of asking whether a given id exists and who wrote it.
+   *
+   * A token room's claimant is deliberately on the "anybody else" side of
+   * that line. They may remove anything in their room, so a 404 here means
+   * the message was already gone - which is true, and is not an oracle,
+   * because the only ids it answers about are ones in a room they can read
+   * in full anyway.
    */
   if (!removed.data.length && !moderator) return res.status(404).json({ error: 'Not found.' })
 

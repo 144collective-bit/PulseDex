@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Loader2, Search, Users } from 'lucide-react'
 import PersonCard from './PersonCard'
 import { searchProfiles, fetchActiveProfiles } from '../../services/discover'
@@ -17,8 +17,17 @@ import { useFollowSet } from '../../hooks/useFollowSet'
  * arrived first, and putting it on the discovery page is how that becomes
  * permanent.
  */
-export default function DiscoverPanel({ onOpenProfile }) {
-  const [term, setTerm] = useState('')
+export default function DiscoverPanel({ onOpenProfile, initialTerm = null, onUsedInitialTerm }) {
+  /*
+   * A term handed over from somewhere else - today, from a room filter that
+   * matched no rooms, where somebody had plainly typed a person's name.
+   *
+   * Seeded into state rather than kept as a prop, because the moment it is on
+   * screen it belongs to whoever is typing. A controlled value that a parent
+   * could change underneath them is how a search box starts fighting the
+   * person using it.
+   */
+  const [term, setTerm] = useState(() => (typeof initialTerm === 'string' ? initialTerm : ''))
   const [results, setResults] = useState(null)
   const [active, setActive] = useState([])
   const [status, setStatus] = useState('loading')
@@ -77,6 +86,31 @@ export default function DiscoverPanel({ onOpenProfile }) {
     },
     [term],
   )
+
+  /*
+   * Run the handed-over search once, on arrival.
+   *
+   * Without this the box is filled in and nothing has happened, which reads
+   * as a search that found nobody - the exact wrong answer to "looking for a
+   * person?". The parent is told it has been used so the term is not handed
+   * over again the next time this panel mounts.
+   */
+  const handedOver = useRef(false)
+  useEffect(() => {
+    if (handedOver.current || !initialTerm?.trim()) return
+    handedOver.current = true
+
+    let alive = true
+    searchProfiles(initialTerm)
+      .then((people) => alive && setResults(people))
+      .catch((err) => alive && setError(err.message))
+
+    onUsedInitialTerm?.()
+
+    return () => {
+      alive = false
+    }
+  }, [initialTerm, onUsedInitialTerm])
 
   return (
     <div className="discover">

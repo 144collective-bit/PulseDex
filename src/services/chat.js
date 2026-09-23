@@ -1,6 +1,7 @@
 import { supabase, hasSupabase } from '../config/supabase'
 import { PAGE_SIZE, hasMoreBefore } from '../utils/chatPaging'
 import { MESSAGE_FIELDS } from '../config/queries'
+import { containsPattern } from '../utils/likePattern'
 import { dbError } from '../utils/dbError'
 
 /**
@@ -34,6 +35,26 @@ function toMessage(row) {
     // what you said after somebody answered it.
     editedAt: row.edited_at || null,
     reactions: Array.isArray(row.message_reactions) ? row.message_reactions : [],
+    /*
+     * What this message is answering, or null.
+     *
+     * `replyTo` survives even when `reply` does not: the id is on the row
+     * itself, the quoted message is a join that comes back null once the
+     * original has been hard-deleted. Keeping both lets the quote line say
+     * "message removed" rather than silently dropping the fact that this was
+     * a reply at all.
+     */
+    replyTo: row.reply_to || null,
+    reply: row.reply
+      ? {
+          id: row.reply.id,
+          address: row.reply.address,
+          handle: row.reply.profiles?.handle || null,
+          // Removed messages keep their row; the text is not shown.
+          body: row.reply.deleted_at ? null : row.reply.body,
+          removed: Boolean(row.reply.deleted_at),
+        }
+      : null,
   }
 }
 
@@ -94,6 +115,69 @@ export async function fetchMessagePage({ room, before = null, limit = PAGE_SIZE 
 
   const rows = data || []
   return { messages: rows.map(toMessage).reverse(), hasMore: hasMoreBefore(rows, limit) }
+}
+
+/** How many matches come back. Enough to find what was said, few enough that
+ *  the answer is "search harder" rather than "scroll through this too". */
+export const SEARCH_LIMIT = 30
+
+/**
+ * Messages in one room containing a phrase, newest first.
+ *
+ * Scoped to the room rather than searching the whole chat, and that is a
+ * decision rather than a limitation. Search across every room would answer
+ * "has anyone ever said this", which is a different and much more exposing
+ * question - it turns a conversation somebody had in a quiet corner into a
+ * thing that surfaces from anywhere. Within a room, search finds what was
+ * said in a conversation the reader is already in.
+ *
+ * Removed messages are excluded. They are excluded from the room too, and a
+ * search that could still turn them up would make removal a formality.
+ *
+ * `containsPattern` rather than an interpolated string: `%` and `_` are
+ * wildcards, and PostgREST rewrites `*` into `%` before Postgres sees the
+ * query, so a raw term is a way to match every message in the room.
+ *
+ * The term reaches PostgREST unquoted, the way supabase-js sends it, so a
+ * character PostgREST reserves could in principle come back as a 400 rather
+ * than as no results. That path ends in `dbError` and a sentence under the
+ * box rather than a broken page, and it has not been reproduced against the
+ * real thing - worth checking the day somebody reports a search that fails
+ * on a bracket.
+ *
+ * Asks for the same columns a page of the room does, reactions included,
+ * which fetches a little more than a result list draws. Worth it: that select
+ * string is the one api/_routes/health.js runs against the real database, and
+ * a second one written just for search would be a second thing that can be
+ * wrong in production with nothing checking it.
+ *
+ * @param {{room: string, term: string, limit?: number}} params
+ */
+export async function searchMessages({ room, term, limit = SEARCH_LIMIT }) {
+  if (!hasSupabase) return []
+
+  const pattern = containsPattern(term)
+  // Null for an empty box. Searching for nothing should return nothing, not
+  // the most recent thirty messages dressed up as results.
+  if (!pattern) return []
+
+  const { data, error } = await supabase
+    .from('messages')
+    .select(MESSAGE_FIELDS)
+    .eq('room', room)
+    .is('deleted_at', null)
+    .ilike('body', pattern)
+    /*
+     * Newest first, and left that way rather than reversed like a page of
+     * history. A page is read downward because it is a conversation; results
+     * are a list, and the most recent thing somebody said about a token is
+     * what they came looking for.
+     */
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (error) throw dbError(error, 'search this room')
+  return (data || []).map(toMessage)
 }
 
 /** One message with its author attached, by id. */
@@ -215,14 +299,14 @@ export function subscribeToMessages({ room, onMessage, onRemoved, onReaction }) 
  * post as anyone; one that could name its own handle would let a stale tab
  * rename the account.
  */
-export async function postMessage({ room, body }) {
+export async function postMessage({ room, body, replyTo = null }) {
   const res = await fetch('/api/chat/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     // Sends the session cookie on a same-origin request, which is the only
     // kind this endpoint accepts.
     credentials: 'same-origin',
-    body: JSON.stringify({ room, body }),
+    body: JSON.stringify({ room, body, replyTo }),
   })
 
   const payload = await res.json().catch(() => ({}))
@@ -311,14 +395,48 @@ export async function removeMessage(id) {
  * @param {{ room: string, onCount: (count: number) => void }} handlers
  * @returns {() => void} unsubscribe
  */
-export function subscribeToPresence({ room, onCount }) {
-  if (!hasSupabase) return () => {}
+export function subscribeToPresence({ room, onState, name = null }) {
+  if (!hasSupabase) return { stop: () => {}, setTyping: () => {} }
+
+  /*
+   * This tab's own presence key, kept rather than generated inline.
+   *
+   * It is how the tab recognises itself in the state it is reading back -
+   * without it there is no way to exclude yourself, and the first thing you
+   * would see on typing is a notice saying that you are typing.
+   */
+  const meKey = crypto.randomUUID()
 
   const channel = supabase.channel(`chat-presence-${room}-${crypto.randomUUID()}`, {
-    config: { presence: { key: crypto.randomUUID() } },
+    config: { presence: { key: meKey } },
   })
 
-  const report = () => onCount(Object.keys(channel.presenceState()).length)
+  // What this tab is currently saying about itself. Held so a typing update
+  // does not have to re-send the fields that have not changed.
+  let mine = { at: Date.now(), typing: false, name }
+  let joined = false
+
+  const report = () => {
+    const state = channel.presenceState()
+
+    /*
+     * Who is typing, by name, and never this tab.
+     *
+     * Names here rather than "somebody is typing", which was the cautious
+     * option. The room otherwise reports only a count, so this does reveal
+     * more than it did - but only about a person who is a keystroke away
+     * from sending a message with their name on it. It tells nobody
+     * anything they were not about to be told.
+     */
+    const typing = Object.entries(state)
+      .filter(([key]) => key !== meKey)
+      .flatMap(([, entries]) => entries)
+      .filter((entry) => entry?.typing)
+      .map((entry) => entry.name)
+      .filter(Boolean)
+
+    onState({ count: Object.keys(state).length, typing })
+  }
 
   channel
     .on('presence', { event: 'sync' }, report)
@@ -328,10 +446,25 @@ export function subscribeToPresence({ room, onCount }) {
       // Tracked only once the channel is actually joined; calling track before
       // that is dropped, and the tab would be counted by nobody including
       // itself.
-      if (status === 'SUBSCRIBED') channel.track({ at: Date.now() })
+      if (status === 'SUBSCRIBED') {
+        joined = true
+        channel.track(mine)
+      }
     })
 
-  return () => {
-    supabase.removeChannel(channel)
+  return {
+    stop: () => supabase.removeChannel(channel),
+    /**
+     * Say whether this tab is typing.
+     *
+     * Ignored when the value has not changed, because the composer calls it
+     * on every keystroke and re-tracking identical state is a websocket
+     * message per character typed.
+     */
+    setTyping: (typing) => {
+      if (!joined || mine.typing === typing) return
+      mine = { ...mine, typing, at: Date.now() }
+      channel.track(mine)
+    },
   }
 }

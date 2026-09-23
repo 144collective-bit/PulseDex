@@ -42,8 +42,23 @@ export const POST_AUTHOR = 'profiles!posts_address_fkey ( handle, avatar_id, ava
  * Reactions come with the page rather than in a request per message: fifty
  * messages would otherwise be fifty round trips before anything is drawn.
  */
+/**
+ * The message this one is answering, quoted above it.
+ *
+ * Two foreign key hints in one embed, and both are load-bearing. The outer
+ * one picks `messages.reply_to` out of the several ways `messages` reaches
+ * itself and `profiles`; the inner one is the same `messages_address_fkey`
+ * problem one level down, because the quoted message reaches `profiles`
+ * exactly as its parent does.
+ *
+ * `deleted_at` rides along so the quote can say a message was removed rather
+ * than showing its text to somebody it was taken away from.
+ */
+export const MESSAGE_REPLY =
+  'reply:messages!messages_reply_to_fkey ( id, address, body, deleted_at, profiles!messages_address_fkey ( handle ) )'
+
 export const MESSAGE_FIELDS =
-  `id, address, room, body, created_at, edited_at, ${MESSAGE_AUTHOR}, message_reactions ( emoji, address )`
+  `id, address, room, body, created_at, edited_at, reply_to, ${MESSAGE_AUTHOR}, ${MESSAGE_REPLY}, message_reactions ( emoji, address )`
 
 /**
  * A message as an endpoint returns it after writing one.
@@ -52,7 +67,8 @@ export const MESSAGE_FIELDS =
  * none that the writer does not already know about - and with them the insert
  * would join a table it has no reason to touch.
  */
-export const MESSAGE_WRITE_FIELDS = `id, address, room, body, created_at, edited_at, ${MESSAGE_AUTHOR}`
+export const MESSAGE_WRITE_FIELDS =
+  `id, address, room, body, created_at, edited_at, reply_to, ${MESSAGE_AUTHOR}, ${MESSAGE_REPLY}`
 
 /**
  * Who a post names.
@@ -90,12 +106,21 @@ export const POST_FIELDS =
  * `profiles!notifications_actor_fkey` is named because `notifications` reaches
  * `profiles` twice - through `recipient` and through `actor` - so an
  * unqualified embed is the "more than one relationship was found" error this
- * project has shipped before. `posts` is reached once and needs no hint.
+ * project has shipped before. `posts` and `messages` are each reached once
+ * and need no hint.
+ *
+ * `messages ( room )` is what lets a reaction open the message it is about.
+ * A message is addressed as `/r/<room>#m<id>`, and the id alone does not say
+ * which room - so without this the inbox knows what happened and cannot show
+ * it, which is the one thing an inbox is for. The body is deliberately not
+ * read: the excerpt on a reaction row would be your own words quoted back at
+ * you, and the notification is about somebody else's reaction to them.
  */
 export const NOTIFICATION_FIELDS = `
   id, kind, created_at, read_at, post_id, message_id,
   profiles!notifications_actor_fkey ( address, handle, avatar_id, avatar_url ),
-  posts ( id, body, parent_id )
+  posts ( id, body, parent_id ),
+  messages ( id, room )
 `
 
 /**
@@ -113,3 +138,54 @@ export const NOTIFICATION_FIELDS = `
  */
 export const PUBLIC_PROFILE_FIELDS =
   'address, handle, avatar_id, avatar_url, banner_url, bio, links, created_at'
+
+/**
+ * A room as the app reads one.
+ *
+ * `name` and `blurb` are null for a token room and written by a person for
+ * the five, so anything drawing this has to cope with both - the list falls
+ * back to the token's address, and the token page uses the symbol it is
+ * already showing.
+ *
+ * `message_count` and `last_message_at` are maintained by the endpoint that
+ * writes messages rather than counted here. They can lag a removal by one,
+ * which is fine for what they do: order a list and show that a room is alive.
+ */
+export const ROOM_FIELDS =
+  'slug, kind, token_address, name, blurb, message_count, last_message_at, ' +
+  /*
+   * Whether the room has been taken down.
+   *
+   * Read although 0018's policy already hides archived rooms from the anon
+   * key, because the browser filters on it too - see fetchGroups. Two cheap
+   * checks beat one that is right only after somebody has run a migration by
+   * hand.
+   *
+   * This is what makes 0018_room_admin.sql required rather than optional: a
+   * select naming a column that does not exist fails outright, and every room
+   * read goes through this string. api/_routes/health.js runs it against the
+   * real database and names it, which is what turns "the rooms will not load"
+   * into "this column is missing" - the mechanism that was missing when the
+   * reply foreign key went astray.
+   */
+  'archived_at, ' +
+  /*
+   * The gate, read by the browser although nothing in the browser enforces
+   * it. A client-side balance check is decoration - the endpoint checks on
+   * every write - but a room that refuses a message without having said it
+   * was going to is worse than one that says so up front.
+   */
+  'gate_token, min_balance, gate_decimals, gate_symbol'
+
+/**
+ * A dev claim as the browser reads one.
+ *
+ * `revoked_at` is selected although the policy only returns rows where it is
+ * null, so the service can state the same condition in its query. Saying it
+ * twice costs nothing and means a policy loosened later does not silently
+ * start drawing badges for claims a moderator has taken away.
+ *
+ * `revoked_reason` is deliberately absent. It is a moderator's note about a
+ * person, and the anon key is readable by everybody.
+ */
+export const CLAIM_FIELDS = 'token_address, address, claimed_at, revoked_at'

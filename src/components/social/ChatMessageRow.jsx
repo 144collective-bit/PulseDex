@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { Trash2, Ban, Pencil, Check, X } from 'lucide-react'
+import { Trash2, Ban, Pencil, Check, X, Reply } from 'lucide-react'
+import ShareButton from './ShareButton'
 import ChatAvatar from './ChatAvatar'
+import DevBadge from './DevBadge'
 import MessageReactions from './MessageReactions'
 import { tallyReactions } from '../../services/chat'
 import { messageLength, MAX_MESSAGE_LENGTH } from '../../utils/chatMessage'
@@ -35,6 +37,25 @@ export default function ChatMessageRow({
   onOpenProfile,
   onEdit,
   onReact,
+  onReply,
+  onJumpTo,
+  canJump = false,
+  highlighted = false,
+  /*
+   * Two different facts about the same claim, and they must not be one prop.
+   *
+   * `authorIsDev` is about whoever wrote this message and decides whether the
+   * badge is drawn. `viewerIsRoomDev` is about whoever is reading and decides
+   * whether they may remove it. Folded into one, the badge's own value would
+   * have granted everybody the power to delete the dev's messages - which is
+   * precisely backwards.
+   *
+   * Both are passed down rather than looked up per row: a room is one token,
+   * so it is one question, and asking it per message would be fifty identical
+   * queries.
+   */
+  authorIsDev = false,
+  viewerIsRoomDev = false,
 }) {
   const posted = Date.parse(message.createdAt)
 
@@ -57,10 +78,25 @@ export default function ChatMessageRow({
    * is not a permission - it is a button somebody else can send the request
    * without.
    */
-  const canRemove = isOwn || isModerator
+  /*
+   * Removal widens for a token room's claimant; blocking does not.
+   *
+   * The split is the whole shape of what a claim buys. Removing a message is
+   * visible, reversible by reposting, and confined to the one room somebody
+   * proved a connection to. Blocking silences an account across the entire
+   * site, and nobody gets that for having sent a transaction.
+   */
+  const canRemove = isOwn || isModerator || viewerIsRoomDev
   const canEdit = isOwn
   const canBlock = isModerator && !isOwn
   const canReact = Boolean(account)
+  /*
+   * Replying is everybody's, which is why it is checked separately from the
+   * three above rather than folded in with them. Those are permissions over
+   * somebody else's message; this is the ordinary thing a reader does, and
+   * the only requirement is being signed in enough to post at all.
+   */
+  const canReply = Boolean(account)
 
   const length = messageLength(draft)
   const canSave = length > 0 && length <= MAX_MESSAGE_LENGTH && draft !== message.body
@@ -72,7 +108,13 @@ export default function ChatMessageRow({
   }
 
   return (
-    <article className={`chat-row ${isOwn ? 'own' : ''}`}>
+    <article
+      className={`chat-row ${isOwn ? 'own' : ''} ${highlighted ? 'highlighted' : ''}`}
+      /* How the panel finds a message to scroll to when a quote is clicked.
+         An attribute rather than an `id`, because these ids are database keys
+         and a bare number is not a valid one on an element. */
+      data-message-id={message.id}
+    >
       <button
         type="button"
         className="chat-avatar-button"
@@ -105,6 +147,11 @@ export default function ChatMessageRow({
             </span>
           )}
 
+          {/* Only in the room about the token they claimed. The same account
+              in the Lounge is just an account - the claim is about one token,
+              so the badge belongs where that token is the subject. */}
+          {authorIsDev && <DevBadge />}
+
           <time
             className="chat-time"
             dateTime={message.createdAt}
@@ -130,6 +177,20 @@ export default function ChatMessageRow({
         </header>
 
         <div className="chat-bubble">
+          {/*
+            What this message is answering, above it.
+
+            Drawn from the join rather than from text quoted into the body, so
+            it follows the original: an edit changes it, a removal blanks it,
+            and it can be clicked. `canJump` comes from the panel, which is the
+            only thing that knows whether the original is on screen - a quote
+            of something 400 messages back must not look like a button that
+            does nothing.
+          */}
+          {!editing && message.reply && (
+            <QuotedMessage reply={message.reply} canJump={canJump} onJumpTo={onJumpTo} />
+          )}
+
           {editing ? (
             <div className="chat-edit">
               <textarea
@@ -185,8 +246,36 @@ export default function ChatMessageRow({
             <p className="chat-text">{message.body}</p>
           )}
 
-          {!editing && (canRemove || canEdit || canBlock) && (
+          {/*
+            Always drawn now, because sharing needs no permission - which is
+            why this condition lost its list of them. Everything else here is
+            something only some readers may do.
+          */}
+          {!editing && (
             <div className="chat-tools">
+              {/*
+                A link to this one message: `/r/<room>#m<id>`. The room comes
+                from the message rather than from the panel, so a row rendered
+                anywhere - a search result, a token page's chat tab - hands
+                over a link that lands in the right place.
+              */}
+              <ShareButton
+                where={{ tab: 'rooms', room: message.room, message: message.id }}
+                label="Copy a link to this message"
+              />
+
+              {canReply && (
+                <button
+                  type="button"
+                  className="chat-tool"
+                  onClick={() => onReply(message)}
+                  aria-label={`Reply to ${message.handle || formatAddress(message.address)}`}
+                  title="Reply"
+                >
+                  <Reply size={12} />
+                </button>
+              )}
+
               {canEdit && (
                 <button
                   type="button"
@@ -241,5 +330,46 @@ export default function ChatMessageRow({
         />
       </div>
     </article>
+  )
+}
+
+/**
+ * The one-line quote above a reply.
+ *
+ * A button when the original is loaded and a plain block when it is not,
+ * rather than a button that is disabled: a disabled control says "not now",
+ * and the truth here is that there is nowhere to go, which is a different
+ * thing and does not want a hover state promising otherwise.
+ *
+ * Clamped to one line. The point is to say which remark is being answered,
+ * not to reproduce it - a three-line quote above a one-line reply inverts the
+ * room, and whoever wants the whole thing can click through to it.
+ */
+function QuotedMessage({ reply, canJump, onJumpTo }) {
+  const who = reply.handle || formatAddress(reply.address)
+
+  const inner = (
+    <>
+      <Reply size={11} className="chat-quote-icon" />
+      <span className="chat-quote-author">{who}</span>
+      {/* Removed messages keep their row and lose their text, so the quote
+          says what happened instead of going blank and looking broken. */}
+      <span className={`chat-quote-body ${reply.removed ? 'removed' : ''}`}>
+        {reply.removed ? 'message removed' : reply.body}
+      </span>
+    </>
+  )
+
+  if (!canJump) return <div className="chat-quote">{inner}</div>
+
+  return (
+    <button
+      type="button"
+      className="chat-quote is-link"
+      onClick={() => onJumpTo(reply.id)}
+      title={`Go to the message from ${who}`}
+    >
+      {inner}
+    </button>
   )
 }

@@ -9,11 +9,14 @@ import health from './_routes/health.js'
 import chatBlock from './_routes/chat/block.js'
 import chatMessages from './_routes/chat/messages.js'
 import chatReactions from './_routes/chat/reactions.js'
+import chatReads from './_routes/chat/reads.js'
 import posts from './_routes/posts.js'
 import postsReport from './_routes/posts/report.js'
 import profile from './_routes/profile.js'
 import profileAvatar from './_routes/profile/avatar.js'
 import profileBanner from './_routes/profile/banner.js'
+import roomGroups from './_routes/rooms/groups.js'
+import tokenClaim from './_routes/token/claim.js'
 
 /**
  * Every API route, behind one serverless function.
@@ -66,12 +69,15 @@ const ROUTES = {
   'chat/block': chatBlock,
   'chat/messages': chatMessages,
   'chat/reactions': chatReactions,
+  'chat/reads': chatReads,
   notifications,
   posts,
   'posts/report': postsReport,
   profile,
   'profile/avatar': profileAvatar,
   'profile/banner': profileBanner,
+  'rooms/groups': roomGroups,
+  'token/claim': tokenClaim,
 }
 
 /**

@@ -76,11 +76,16 @@ Done, in `0010_notifications.sql` and the code around it:
 
 Still to do:
 
-- [ ] An autocomplete in the composers, which is what makes a handle
+- [x] An autocomplete in the composer, which is what makes a handle
       containing a space mentionable at all — the schema and the endpoint
-      already take picked addresses, so this is a client change
-- [ ] The badge in the main navigation, not only on the social tab strip
-- [ ] A notification should open the thing it is about, not just the profile
+      already took picked addresses, so this was a client change. In the post
+      composer only: a chat message records no mentions and notifies nobody,
+      so the same list there would invite naming somebody who would never be
+      told.
+- [x] The badge in the main navigation, not only on the social tab strip
+- [x] A notification opens the thing it is about, not just the profile — which
+      needed a URL for a post first, at `/p/<id>`, because a thread had only
+      ever opened inline in the feed
 
 **What the plan got wrong.** It assumed mentions could be parsed out of a post
 at render time. They cannot: a handle here may contain spaces, so
@@ -126,13 +131,11 @@ Today a profile is a banner, a bio and a list of posts. What it needs:
 - An edit window, with `edited_at` already in the schema and shown
 - A real thread view rather than a flat reply list
 
-### Batch 4 — chat that feels alive
+### Batch 4 — chat
 
-- Typing indicators and presence (presence already exists, unused)
-- Unread markers per room, and jump-to-latest
-- Reply-to-message inside a room
-- Message search
-- A room list that shows where the activity is
+Moved out to **`docs/chat-roadmap.md`**, which outgrew a bullet list the
+moment rooms stopped being five fixed strings. It covers unread state and
+threads, a room per token, the dev claim, groups, and holders-only rooms.
 
 ### Batch 5 — safety that scales past one person
 

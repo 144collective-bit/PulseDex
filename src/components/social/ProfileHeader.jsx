@@ -1,4 +1,5 @@
 import { AlertTriangle, CalendarDays, ExternalLink, ImageOff, Loader2, UserCheck, UserPlus } from 'lucide-react'
+import ClaimedTokens from './ClaimedTokens'
 import ChatAvatar from './ChatAvatar'
 import { useFollow } from '../../hooks/useFollow'
 import { isSafeAvatarSrc } from '../../utils/avatarImage'
@@ -33,6 +34,10 @@ export default function ProfileHeader({
   onRemovePicture,
   tab,
   onTab,
+  /* Opens a claimed token's page. Optional: the header renders inside the
+     social section too, which has no route to one, and a claim there is a
+     line of text rather than a link. */
+  onOpenToken,
 }) {
   const { counts, following, canFollow, busy, error, toggle } = useFollow(address)
 
@@ -124,6 +129,14 @@ export default function ProfileHeader({
         <p className="xp-address font-mono">{address}</p>
 
         {profile?.bio && <p className="xp-bio">{profile.bio}</p>}
+
+        {/*
+          What this account has claimed. Under the bio rather than beside the
+          name: a badge next to somebody's display name is read as a property
+          of the person, and this is a property of some tokens they sent
+          transactions for.
+        */}
+        <ClaimedTokens address={address} onOpenToken={onOpenToken} />
 
         <div className="xp-meta font-mono">
           {profile?.createdAt && (

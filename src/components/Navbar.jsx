@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAccount, useDisconnect } from 'wagmi'
 import AccountButton from './AccountButton'
+import NotificationBell from './NotificationBell'
 import {
   Home,
   Search,
@@ -29,6 +30,9 @@ export default function Navbar({
   watchlistCount = 0,
   onOpenWalletModal,
   onOpenPublicProfile,
+  /* Opens the inbox. The bell is in the chrome, so the thing it opens has to
+     be reachable from here rather than from inside the social section. */
+  onOpenNotifications,
 }) {
   const { address, isConnected } = useAccount()
   const { disconnect } = useDisconnect()
@@ -187,7 +191,10 @@ export default function Navbar({
                 onClick={() => setActiveTab('social')}
               >
                 <MessagesSquare size={16} />
-                <span>Chat</span>
+                {/* Not "Chat". The section holds a feed, an inbox, a way to
+                    find people and the rooms; naming it after one of the four
+                    is why nobody looking for their notifications found them. */}
+                <span>Social</span>
               </button>
             )}
             {FEATURES.markets && (
@@ -285,6 +292,11 @@ export default function Navbar({
           >
             <Search size={16} />
           </button>
+
+          {/* The unread count, on every tab rather than inside the section
+              it belongs to - see NotificationBell for why that move was the
+              whole point of it. */}
+          <NotificationBell onOpen={onOpenNotifications} />
 
           {/* One account control. Signed out it reads "Sign in"; signed in it
               becomes the identity and the way into the profile. The $DEX buy

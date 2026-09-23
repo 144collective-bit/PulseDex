@@ -10,7 +10,7 @@ import { useTokenDetail } from '../hooks/usePumpTires'
  * phase two, when tokens get claimable profiles, this is the page that grows
  * rather than a second implementation.
  */
-export default function TokenPage({ address, plsPrice, onBack }) {
+export default function TokenPage({ address, plsPrice, onBack, onOpenProfile }) {
   const { data: token, isLoading, isError } = useTokenDetail(address)
 
   return (
@@ -71,6 +71,7 @@ export default function TokenPage({ address, plsPrice, onBack }) {
           token={token}
           plsPrice={plsPrice}
           onClose={onBack}
+          onOpenProfile={onOpenProfile}
           variant="page"
         />
       )}

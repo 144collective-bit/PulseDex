@@ -20,14 +20,29 @@ import {
 } from 'lucide-react'
 import TrenchTokenLogo from './TrenchTokenLogo'
 import TokenInsights from './TokenInsights'
+import TokenRoom from './social/TokenRoom'
 import {
   useTokenCandles,
   useTokenTransactions,
   useTokenDetail,
 } from '../hooks/usePumpTires'
+import { useTokenRoom } from '../hooks/useTokenRoom'
 import { plsToUsd, ipfsImageUrl } from '../services/pumptires'
 import { CANDLE_INTERVALS, TOKENS_FOR_SALE } from '../config/pumptires'
 import '../styles/trades.css'
+/*
+ * The stylesheet for this component's own markup - every `tm-` class below,
+ * and the chat tab's box.
+ *
+ * Imported here rather than only by TrenchesView, which is where it was.
+ * Vite attaches a stylesheet to whichever chunk imports it, and this
+ * component has two entry points: the board's modal, inside the Trenches
+ * chunk, and /token/<address>, which is its own lazy route and loaded none of
+ * it. Reached directly, the whole token page came up unstyled - the same
+ * failure the public profile page had, from the same cause. Importing it
+ * where it is used puts it in both chunks.
+ */
+import '../styles/trenches.css'
 import {
   formatUsd,
   formatCryptoPrice,
@@ -107,6 +122,11 @@ export default function TrenchTokenModal({
   plsPrice,
   onClose,
   onOpenFullPage,
+  /* Threaded through to the chat tab, so "view full profile" on somebody in
+     the room goes somewhere. Optional: the board's modal has no route to a
+     profile from where it sits, and the card simply does not offer the link
+     when there is nowhere to send it. */
+  onOpenProfile,
   // 'modal' floats over the board; 'page' is the same body rendered inline at
   // /token/<address>. Only the chrome differs.
   variant = 'modal',
@@ -127,6 +147,9 @@ export default function TrenchTokenModal({
   const { data: candles, isLoading: candlesLoading } = useTokenCandles(address, candleInterval)
   const { data: txnData } = useTokenTransactions(address, 60)
   const { data: detail } = useTokenDetail(address)
+  /* Only for the count beside the Chat tab. The conversation itself is read
+     by the panel, from `messages`, and needs no row in `rooms` to exist. */
+  const room = useTokenRoom(address)
 
   const allTrades = txnData?.transactions || []
   const trades = whaleOnly
@@ -651,6 +674,20 @@ export default function TrenchTokenModal({
             >
               HOLDERS{holders.length ? ` (${holders.length})` : ''}
             </button>
+            {/*
+              The conversation about this token, where the people who have a
+              question about it already are. A question asked under the chart
+              is asked of somebody looking at the same chart; the same
+              question in a general room is asked of whoever happens to be
+              reading.
+            */}
+            <button
+              type="button"
+              className={`tm-tab ${tab === 'chat' ? 'active' : ''}`}
+              onClick={() => setTab('chat')}
+            >
+              CHAT{room?.messageCount ? ` (${formatCompactCount(room.messageCount)})` : ''}
+            </button>
             {tab === 'trades' && (
               <button
                 type="button"
@@ -689,7 +726,9 @@ export default function TrenchTokenModal({
             </div>
           )}
 
-          <div className="tm-table-scroll">
+          {tab === 'chat' && <TokenRoom address={live.address} onOpenProfile={onOpenProfile} />}
+
+          <div className={`tm-table-scroll ${tab === 'chat' ? 'is-hidden' : ''}`}>
             {tab === 'trades' &&
               trades.map((t) => (
                 <div

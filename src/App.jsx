@@ -9,8 +9,9 @@ import { getPulsePair, getTopPulsePairs } from './services/dexscreener'
 import { TrendingUp, Zap, Layers, Flame } from 'lucide-react'
 
 import HomeView from './components/HomeView'
-import { useTokenRoute } from './hooks/useTokenRoute'
-import { useProfileRoute } from './hooks/useProfileRoute'
+import { useRoute } from './hooks/useRoute'
+import { routeTab } from './utils/route'
+import { tokenRoom } from './config/rooms'
 import { usePlsPrice } from './hooks/usePumpTires'
 import Navbar from './components/Navbar'
 import MobileBottomNav from './components/MobileBottomNav'
@@ -157,13 +158,48 @@ function MainApp() {
   const { isProfileModalOpen } = useUserProfile()
   const [activeTab, setActiveTab] = useState('home')
 
-  // /token/<address> renders the full token page over the tab shell.
-  const { tokenAddress, openToken, closeToken } = useTokenRoute()
+  /*
+   * The address bar, as one piece of state.
+   *
+   * This was three hooks - one per surface - each reading and pushing
+   * `window.location` on its own. Each was right and the set was not: none
+   * could assume the URL was where it last left it, and the shell had to
+   * remember which surfaces to shut every time it opened another. See
+   * src/utils/route.js.
+   */
+  const { route, go, home } = useRoute()
 
-  // /u/@handle and /u/0x... do the same for somebody's profile. The second
-  // route to earn an exception from this app's state-based navigation, and for
-  // the same reason as the first: it is a page people paste to each other.
-  const { profileRoute, openProfile, closeProfile } = useProfileRoute()
+  const tokenAddress = route?.kind === 'token' ? route.address : null
+  const profileRoute = route?.kind === 'profile' ? route : null
+  const socialRoute = route?.kind === 'social' ? route : null
+
+  /* The four ways the rest of the app asks to go somewhere. Thin, because
+     the routing decision is `go` and these only say where. */
+  const openToken = useCallback((address) => {
+    if (!address) return
+    go({ kind: 'token', address })
+    window.scrollTo({ top: 0 })
+  }, [go])
+
+  const openProfile = useCallback(({ address, handle } = {}) => {
+    if (!address && !handle) return
+    go({ kind: 'profile', address: address || null, handle: handle || null })
+    window.scrollTo({ top: 0 })
+  }, [go])
+
+  const openSocial = useCallback((where) => go({ kind: 'social', ...where }), [go])
+
+  /** The room about a token, from the screener. */
+  const openTokenRoom = useCallback(
+    (address) => {
+      const slug = tokenRoom(address)
+      if (!slug) return
+      go({ kind: 'social', tab: 'rooms', room: slug })
+      setActiveTab('social')
+      window.scrollTo({ top: 0 })
+    },
+    [go],
+  )
 
   // Curve prices are PLS-denominated, so the token page needs the live rate.
   const { data: plsPrice } = usePlsPrice()
@@ -186,13 +222,46 @@ function MainApp() {
     if (account) openProfile({ address: account })
   }, [account, openProfile])
 
+  /*
+   * Which tab is showing.
+   *
+   * The URL wins where it says anything. A path like /r/lounge is a request
+   * for the social section, and deriving the tab from it rather than keeping
+   * a second copy in state is what stops the two disagreeing - which is how
+   * a cold load lands on Home with the address bar insisting it is in a room.
+   */
+  const shownTab = routeTab(route, activeTab)
+
+  /*
+   * Changing tab is one navigation now.
+   *
+   * It used to be three calls - close the token, close the profile, then
+   * either open or close the social route - and every new surface added a
+   * fourth line somebody had to remember. There is one route, so going to
+   * the social tab leaves a token page by arriving, and going anywhere else
+   * goes home.
+   */
   const selectTab = (tab) => {
-    closeToken()
-    // Same reasoning for the profile page: it gates the content area too, so
-    // leaving it mounted would give a nav that changes state and shows nothing.
-    closeProfile()
+    if (tab === 'social') openSocial({ tab: 'feed' })
+    else home()
+
     setActiveTab(tab)
   }
+
+  /**
+   * Open one surface of the social section from the chrome.
+   *
+   * The bell in the navbar is on every tab, so pressing it from the screener
+   * has to do everything `selectTab` does - close a token, close a profile -
+   * and then land on a specific surface rather than on the feed.
+   */
+  const openSocialAt = useCallback(
+    (where) => {
+      openSocial(where)
+      setActiveTab('social')
+    },
+    [openSocial],
+  )
   const [currentPair, setCurrentPair] = useState(null)
   const [topPairs, setTopPairs] = useState([])
   const [isLoadingTopPairs, setIsLoadingTopPairs] = useState(true)
@@ -297,8 +366,9 @@ function MainApp() {
     <div className="app-shell">
       {/* Top Navbar */}
       <Navbar
-        activeTab={activeTab}
+        activeTab={shownTab}
         setActiveTab={selectTab}
+        onOpenNotifications={() => openSocialAt({ tab: 'notifications' })}
         onOpenPublicProfile={openMyProfile}
         onSelectPair={handleSelectPair}
         watchlistCount={watchlist.length}
@@ -317,7 +387,7 @@ function MainApp() {
             rather than unmounting the app and leaving a white screen. Keyed on
             the current view, so moving to another tab clears a failure instead
             of leaving the message in place for every tab. */}
-        <RouteErrorBoundary resetKey={`${activeTab}|${tokenAddress || ''}|${profileRoute?.address || profileRoute?.handle || ''}`}>
+        <RouteErrorBoundary resetKey={`${shownTab}|${tokenAddress || ''}|${profileRoute?.address || profileRoute?.handle || ''}`}>
         <Suspense fallback={<TabLoading />}>
         {/* A direct /token/<address> link takes over the content area; the tab
             shell stays mounted underneath so Back returns to it instantly. */}
@@ -325,17 +395,21 @@ function MainApp() {
           <ProfilePage
             route={profileRoute}
             onOpenProfile={openProfile}
-            onClose={closeProfile}
+            onOpenToken={openToken}
+            onClose={home}
           />
         ) : tokenAddress ? (
           <TokenPage
             address={tokenAddress}
             plsPrice={plsPrice}
-            onBack={closeToken}
+            onBack={home}
+            /* So the chat tab on a token page can open somebody's profile.
+               The board's modal gets no such route and does not offer it. */
+            onOpenProfile={openProfile}
           />
         ) : (
         <>
-        {activeTab === 'screener' && (
+        {shownTab === 'screener' && (
           <div className="screener-view-wrapper">
             {/* Mobile Screener Segment Control (Full-Width Responsive Menu) */}
             <div className="mobile-screener-switcher font-mono">
@@ -380,6 +454,14 @@ function MainApp() {
                   onToggleWatchlist={handleToggleWatchlist}
                   isCollapsed={isSidebarCollapsed}
                   onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+                  /*
+                   * The other direction of the loop. The token page has had a
+                   * Chat tab since token rooms existed; this is the screener
+                   * saying which of a hundred rows anybody is discussing, and
+                   * offering to open it. Absent when the social section is
+                   * off, in which case no badge is drawn either.
+                   */
+                  onOpenRoom={FEATURES.social ? openTokenRoom : undefined}
                 />
               </div>
 
@@ -431,19 +513,26 @@ function MainApp() {
           </div>
         )}
 
-        {activeTab === 'home' && (
+        {shownTab === 'home' && (
           <HomeView onSelectPairForChart={handleSelectPair} />
         )}
 
-        {activeTab === 'trenches' && (
+        {shownTab === 'trenches' && (
           <TrenchesView onSelectPairForChart={handleSelectPair} onOpenTokenPage={openToken} />
         )}
 
-        {FEATURES.social && activeTab === 'social' && (
-          <SocialView onOpenProfile={openProfile} />
+        {FEATURES.social && shownTab === 'social' && (
+          <SocialView
+            /* Which surface, and which room, come from the URL. The section
+               holds no tab state of its own any more - see useRoute. */
+            route={socialRoute}
+            onNavigate={openSocial}
+            onOpenProfile={openProfile}
+            onOpenToken={openToken}
+          />
         )}
 
-        {FEATURES.markets && activeTab === 'markets' && (
+        {FEATURES.markets && shownTab === 'markets' && (
           <MarketOverview
             pairs={topPairs}
             isLoading={isLoadingTopPairs}
@@ -455,7 +544,7 @@ function MainApp() {
 
         {/* Watchlist now lives inside the portfolio section rather than in
             its own nav slot - both are ways of tracking assets you care about. */}
-        {(activeTab === 'portfolio' || activeTab === 'watchlist') && (
+        {(shownTab === 'portfolio' || shownTab === 'watchlist') && (
           <PortfolioSection
             watchlist={watchlist}
             pairs={topPairs}
@@ -464,7 +553,7 @@ function MainApp() {
           />
         )}
 
-        {FEATURES.profile && activeTab === 'profile' && (
+        {FEATURES.profile && shownTab === 'profile' && (
           <ProfileView onOpenPublicProfile={openMyProfile} />
         )}
 
@@ -476,7 +565,7 @@ function MainApp() {
 
       {/* Mobile Native Bottom Navigation */}
       <MobileBottomNav
-        activeTab={activeTab}
+        activeTab={shownTab}
         setActiveTab={selectTab}
         watchlistCount={watchlist.length}
       />

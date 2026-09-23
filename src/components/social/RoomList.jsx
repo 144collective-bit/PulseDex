@@ -1,4 +1,9 @@
-import { ROOMS } from '../../config/rooms'
+import { useState } from 'react'
+import { Lock, Search, Users, X } from 'lucide-react'
+import { ROOMS, isTokenRoom, tokenRoomLabel } from '../../config/rooms'
+import { useTokenRooms } from '../../hooks/useTokenRooms'
+import { roomGate } from '../../utils/gate'
+import { filterRooms } from '../../utils/roomFilter'
 
 /**
  * The rooms, down the left.
@@ -16,12 +21,125 @@ import { ROOMS } from '../../config/rooms'
  * has moved to a tab of its own, which is where it belonged: a room is a
  * place to talk, the feed is everything anybody published, and listing them
  * together made the feed read as a sixth subject.
+ *
+ * Two groups now, and the split is real rather than decorative. The five were
+ * written by a person, are the same five on every deployment, and are always
+ * here. A token room exists because somebody said something about a token,
+ * there is one for every address anybody cares to open, and the list below
+ * is the handful with something happening in them - so the second group
+ * changes under the reader while the first never does. Presenting them as one
+ * list would mean a room appearing and disappearing among the fixtures.
  */
-export default function RoomList({ current, onSelect }) {
+export default function RoomList({
+  current,
+  onSelect,
+  unread = {},
+  groups = [],
+  /* Sends somebody to Discover with what they typed. People are found there,
+     not here - see the note on the empty state below. */
+  onFindPeople,
+}) {
+  const tokenRooms = useTokenRooms()
+
+  /*
+   * What is being looked for.
+   *
+   * Three stacked lists read fine at five rooms and stop reading at the first
+   * busy week, because a token room exists for every address anybody opens.
+   * A filter is the cheapest thing that keeps the column usable as it grows,
+   * and it does not change what the list is - the sections stay, because the
+   * five are permanent and the rest are not.
+   */
+  const [term, setTerm] = useState('')
+  const searching = term.trim().length > 0
+
+  /*
+   * The room being read, when it is a token room nobody else is talking in.
+   *
+   * Without this, opening a quiet token room from a chart and then coming to
+   * the sidebar shows no room selected at all - the list holds the busiest
+   * eight and this one is not among them. Prepended rather than sorted in, so
+   * where the reader is stays where they can see it.
+   */
+  const listed = tokenRooms.some((room) => room.slug === current)
+  const withCurrent =
+    !listed && isTokenRoom(current)
+      ? [{ slug: current, address: null, messageCount: 0 }, ...tokenRooms]
+      : tokenRooms
+
+  /*
+   * Every section narrowed by one rule, in src/utils/roomFilter.js.
+   *
+   * Filtered together rather than per section so that a term matching a group
+   * and a token room shows both, and so "nothing matched" is one answer about
+   * the whole column rather than three empty lists stacked up.
+   */
+  const found = filterRooms({ fixed: ROOMS, groups, tokens: withCurrent }, term)
+  const shown = found.tokens
+
   return (
     <nav className="room-list" aria-label="Chat rooms">
+      {/*
+        The filter, above everything.
+
+        Always present rather than appearing past some number of rooms: a
+        control that arrives when a list gets long is a control nobody knows
+        is there until the day they need it most.
+      */}
+      <div className="room-filter">
+        <Search size={12} className="room-filter-icon" />
+        <input
+          type="search"
+          className="room-filter-input"
+          value={term}
+          onChange={(e) => setTerm(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setTerm('')
+          }}
+          placeholder="Find a room"
+          aria-label="Find a room"
+        />
+        {searching && (
+          <button
+            type="button"
+            className="chat-tool"
+            onClick={() => setTerm('')}
+            aria-label="Clear the filter"
+            title="Clear"
+          >
+            <X size={11} />
+          </button>
+        )}
+      </div>
+
+      {/*
+        Nothing matched.
+
+        The hand-off to Discover is the point of this block. Somebody typing a
+        person's name into a room filter has made a reasonable mistake, and
+        telling them only that no rooms matched leaves them believing the site
+        cannot find people at all. Discover already searches people properly;
+        duplicating that query here would be two implementations of it, which
+        is how two searches start disagreeing.
+      */}
+      {searching && found.matches === 0 && (
+        <p className="room-empty">
+          <span>No rooms match “{term.trim()}”.</span>
+          {onFindPeople && (
+            <button
+              type="button"
+              className="room-empty-link font-mono"
+              onClick={() => onFindPeople(term.trim())}
+            >
+              <Users size={11} />
+              Looking for a person?
+            </button>
+          )}
+        </p>
+      )}
+
       <ul role="tablist" aria-orientation="vertical">
-        {ROOMS.map((room) => {
+        {found.fixed.map((room) => {
           const active = room.slug === current
           return (
             <li key={room.slug}>
@@ -36,11 +154,107 @@ export default function RoomList({ current, onSelect }) {
                 title={room.blurb}
               >
                 <span className="room-name font-mono">{room.name}</span>
+                {/*
+                  Only where there is something, and never on the room being
+                  read. A badge showing "0" is a badge that has stopped
+                  meaning anything, and one on the room in front of you is
+                  counting what you are looking at.
+                */}
+                {!active && unread[room.slug] > 0 && (
+                  <span
+                    className="room-unread"
+                    aria-label={`${unread[room.slug]} unread`}
+                  >
+                    {unread[room.slug] > 99 ? '99+' : unread[room.slug]}
+                  </span>
+                )}
               </button>
             </li>
           )
         })}
       </ul>
+
+      {found.groups.length > 0 && (
+        <>
+          <h2 className="room-group font-mono">Groups</h2>
+          <ul role="tablist" aria-orientation="vertical">
+            {found.groups.map((group) => {
+              const active = group.slug === current
+              const gate = roomGate(group)
+              return (
+                <li key={group.slug}>
+                  <button
+                    type="button"
+                    role="tab"
+                    id={`room-tab-${group.slug}`}
+                    aria-selected={active}
+                    aria-controls="room-panel"
+                    className={`room-item ${active ? 'active' : ''}`}
+                    onClick={() => onSelect(group.slug)}
+                    title={group.blurb || undefined}
+                  >
+                    <span className="room-name font-mono">{group.name}</span>
+
+                    {/*
+                      A padlock on a gated group, and nothing more specific.
+                      What the gate actually is belongs where somebody is
+                      about to type, not in a navigation column - and a
+                      sidebar listing minimum holdings reads as a price list.
+                    */}
+                    {gate && (
+                      <Lock size={11} className="room-lock" aria-label="Holders only" />
+                    )}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </>
+      )}
+
+      {shown.length > 0 && (
+        <>
+          <h2 className="room-group font-mono">Tokens</h2>
+          <ul role="tablist" aria-orientation="vertical">
+            {shown.map((room) => {
+              const active = room.slug === current
+              return (
+                <li key={room.slug}>
+                  <button
+                    type="button"
+                    role="tab"
+                    id={`room-tab-${room.slug}`}
+                    aria-selected={active}
+                    aria-controls="room-panel"
+                    className={`room-item is-token ${active ? 'active' : ''}`}
+                    onClick={() => onSelect(room.slug)}
+                  >
+                    {/*
+                      The address, shortened, because a token room has no
+                      name. One could be taken from whoever posted first,
+                      which would put a stranger's text - "OFFICIAL", "DO NOT
+                      BUY" - on a room about somebody else's token, in a
+                      sidebar everybody sees.
+                    */}
+                    <span className="room-name font-mono">{tokenRoomLabel(room.slug)}</span>
+
+                    {/*
+                      How much has been said, rather than how much is unread.
+                      These rooms carry no unread badge: the badges are for
+                      the five somebody watches, and a count on every token
+                      anybody has ever mentioned is a column of numbers about
+                      conversations the reader never joined.
+                    */}
+                    {room.messageCount > 0 && (
+                      <span className="room-count font-mono">{room.messageCount}</span>
+                    )}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </>
+      )}
     </nav>
   )
 }
