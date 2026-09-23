@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { Bell, ChartCandlestick, Compass, LogIn, MessagesSquare, Rss, UserRound } from 'lucide-react'
 import RoomList from './social/RoomList'
 import NewGroup from './social/NewGroup'
@@ -96,6 +96,26 @@ export default function SocialView({ route, onNavigate, onOpenProfile, onOpenTok
   const setTab = useCallback((id) => onNavigate?.({ tab: id }), [onNavigate])
   const setRoom = useCallback((slug) => onNavigate?.({ tab: 'rooms', room: slug }), [onNavigate])
 
+  /*
+   * What somebody typed into the room filter that turned out to be a person.
+   *
+   * Carried across rather than dropped: the hand-off reads "Looking for a
+   * person?", and answering that by clearing the box and showing an empty
+   * search would be a worse outcome than the empty room list they were
+   * already looking at.
+   *
+   * Not in the URL. A search term is what somebody is doing right now, not
+   * where they are, and putting it in the address bar would make Back walk
+   * backwards through their typing.
+   */
+  const [handoff, setHandoff] = useState(null)
+  const findPeople = useCallback(
+    (term) => {
+      setHandoff(term || '')
+      setTab('discover')
+    },
+    [setTab],
+  )
 
   /*
    * Only counted while the rooms tab is open. Polling for badges nobody can
@@ -194,7 +214,16 @@ export default function SocialView({ route, onNavigate, onOpenProfile, onOpenTok
 
       {tab === 'feed' && <PublicFeed onOpenProfile={onOpenProfile} />}
 
-      {tab === 'discover' && <DiscoverPanel onOpenProfile={onOpenProfile} />}
+      {tab === 'discover' && (
+        <DiscoverPanel
+          onOpenProfile={onOpenProfile}
+          /* Only the once. The panel unmounts when the tab changes, so
+             without clearing it a term handed over an hour ago would come
+             back every time somebody opened Discover. */
+          initialTerm={handoff}
+          onUsedInitialTerm={() => setHandoff(null)}
+        />
+      )}
 
       {tab === 'notifications' && <NotificationsPanel onOpenProfile={onOpenProfile} />}
 
@@ -236,6 +265,10 @@ export default function SocialView({ route, onNavigate, onOpenProfile, onOpenTok
               onSelect={setRoom}
               unread={rooms.unread}
               groups={groups}
+              /* A room filter that finds no rooms hands the term to the
+                 surface that does search people, rather than searching them
+                 twice in two places. */
+              onFindPeople={findPeople}
             />
             <NewGroup onCreated={refreshGroups} />
           </div>
@@ -259,6 +292,9 @@ export default function SocialView({ route, onNavigate, onOpenProfile, onOpenTok
               room={room}
               onOpenProfile={onOpenProfile}
               onSeen={rooms.seen}
+              /* From /r/<slug>#m<id>. The panel scrolls to it and marks it,
+                 reusing what jumping to a quoted reply already does. */
+              focusMessage={route?.message || null}
               /* The row the sidebar already holds, so the panel can state the
                  room's rule without asking for it again. */
               gatedOn={activeGroup}

@@ -399,16 +399,41 @@ async function run(name, { viewport = DESKTOP, path = '/', steps, ...opts } = {}
     errors.push(`STEP FAILED: ${err.message}`.slice(0, 200))
   }
 
-  const state = await page.evaluate(() => {
-    const root = document.getElementById('root')
-    const main = document.querySelector('main')
-    return {
-      mounted: Boolean(root && root.children.length),
-      mainLen: (main?.innerText || '').trim().length,
-      // A wider page than the viewport is a horizontal scrollbar on a phone.
-      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    }
-  })
+  /*
+   * What the page ended up as.
+   *
+   * Read through a retry, and that is not defensiveness for its own sake. A
+   * step that fails part-way can leave a navigation in flight, and evaluating
+   * into a context that is being torn down throws - which used to take the
+   * whole matrix down with it, so one stale expectation at scenario 57 meant
+   * the remaining forty were never run at all. A harness that stops at the
+   * first surprise reports less than one that keeps going, and the run it
+   * does report is the one nobody looks at because it never finished.
+   */
+  const probe = () =>
+    page.evaluate(() => {
+      const root = document.getElementById('root')
+      const main = document.querySelector('main')
+      return {
+        mounted: Boolean(root && root.children.length),
+        mainLen: (main?.innerText || '').trim().length,
+        // A wider page than the viewport is a horizontal scrollbar on a phone.
+        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      }
+    })
+
+  let state
+  try {
+    state = await probe()
+  } catch {
+    // Once the navigation lands there is a context again. If there still is
+    // not, that is itself the finding, and it is recorded rather than thrown.
+    await page.waitForTimeout(1200)
+    state = await probe().catch((err) => {
+      errors.push(`UNREADABLE: ${err.message}`.slice(0, 200))
+      return { mounted: false, mainLen: 0, overflow: 0 }
+    })
+  }
 
   /*
    * What a failing database looks like to the reader.
@@ -494,6 +519,24 @@ const socialTab = (label) => async (page) => {
   const t = page.locator('.social-tabs .xp-tab', { hasText: label }).first()
   if (!(await t.count())) throw new Error(`no "${label}" social tab`)
   await t.click()
+  await page.waitForTimeout(1400)
+}
+
+/**
+ * The inbox, through the bell.
+ *
+ * Not `socialTab('Notifications')` any more: the flattening took it out of
+ * the row and put the count in the chrome, so the way in is the bell on the
+ * nav bar - from whichever tab the reader happens to be on.
+ *
+ * Driven through the control rather than by going straight to /notifications
+ * because the bell being reachable is half of what the move was for. The
+ * direct URL is covered separately, by CHROME_SURFACES above.
+ */
+const bell = async (page) => {
+  const b = page.locator('.notif-bell').first()
+  if (!(await b.count())) throw new Error('no bell in the chrome')
+  await b.click()
   await page.waitForTimeout(1400)
 }
 
@@ -695,6 +738,130 @@ await run('chat / token rooms in the sidebar', {
     if (!label.startsWith('0x')) throw new Error(`a token room is labelled "${label}"`)
   },
   expectText: '41',
+})
+
+/*
+ * Finding a room.
+ *
+ * Three stacked lists read fine at five rooms and stop reading at the first
+ * busy week - a token room exists for every address anybody opens. What is
+ * being checked here is not that a substring test works, which is in
+ * src/utils/roomFilter.test.js, but the thing a unit test cannot see: that
+ * what the sidebar *draws* is what can be typed. A token room has no name,
+ * only "0xa107…9a27", and a reader typing the tail off the screen has to
+ * find it - otherwise the list is showing a label that does not work as a
+ * search term.
+ */
+await run('chat / finding a room by name', {
+  steps: async (page) => {
+    await socialTab('Rooms')(page)
+    const before = await page.locator('.room-item').count()
+    if (before < 6) throw new Error(`only ${before} rooms to narrow`)
+
+    await page.locator('.room-filter-input').fill('trench')
+    await page.waitForTimeout(400)
+
+    const names = (await page.locator('.room-name').allInnerTexts()).map((n) => n.trim())
+    // The fixed room and the group named for it: a search is not confined to
+    // one section.
+    if (!names.includes('Trenches')) throw new Error(`the fixed room is gone: ${names.join('|')}`)
+    if (!names.includes('The Trenches')) throw new Error(`the group is gone: ${names.join('|')}`)
+    if (await page.locator('.room-item.is-token').count()) {
+      throw new Error('a token room survived a term that does not match it')
+    }
+  },
+})
+
+await run('chat / finding a token room by what the list shows', {
+  steps: async (page) => {
+    await socialTab('Rooms')(page)
+    const label = (await page.locator('.room-item.is-token .room-name').first().innerText()).trim()
+
+    // The tail of the shortened address, read off the screen and typed back.
+    const tail = label.split('\u2026').pop()
+    if (!tail || tail.length < 4) throw new Error(`nothing typeable in "${label}"`)
+
+    await page.locator('.room-filter-input').fill(tail)
+    await page.waitForTimeout(400)
+
+    const found = await page.locator('.room-item.is-token').count()
+    if (found !== 1) throw new Error(`typing "${tail}" off the screen found ${found} rooms`)
+  },
+})
+
+await run('chat / a room filter that matches nothing', {
+  steps: async (page) => {
+    await socialTab('Rooms')(page)
+    await page.locator('.room-filter-input').fill('nobody has a room called this')
+    await page.waitForTimeout(400)
+
+    if (await page.locator('.room-item').count()) throw new Error('something matched')
+    if (!(await page.locator('.room-empty').count())) throw new Error('nothing said so')
+
+    /* The hand-off. Somebody typing a person's name into a room filter has
+       made a reasonable mistake, and being told only that no rooms matched
+       leaves them believing the site cannot find people at all. */
+    const out = page.locator('.room-empty-link')
+    if (!(await out.count())) throw new Error('no way on to Discover')
+    await out.click()
+    await page.waitForTimeout(1200)
+
+    const where = new URL(page.url()).pathname
+    if (where !== '/discover') throw new Error(`the hand-off landed on ${where}`)
+
+    /* And it carries what was typed. Landing on an empty search box would be
+       a worse answer than the empty room list they were already looking at. */
+    const carried = await page.locator('.discover-input').inputValue()
+    if (!carried.startsWith('nobody has a room')) {
+      throw new Error(`the term did not come along: "${carried}"`)
+    }
+  },
+  expectText: 'Discover',
+})
+
+/*
+ * A link to one message.
+ *
+ * `/r/<slug>#m<id>` is the shape a shared link takes, and the two halves fail
+ * differently: the message is on this page, or it is further back than the
+ * page reaches. The second is the one worth a scenario - somebody who
+ * followed a link and landed on an ordinary-looking room believes the link
+ * was broken, when what happened is the conversation moved on past it.
+ */
+await run('chat / a link to a message', {
+  path: '/r/lounge#m1',
+  steps: async (page) => {
+    await page.waitForTimeout(1600)
+    if (!(await page.locator('[data-message-id="1"]').count())) {
+      throw new Error('the linked message is not on the page')
+    }
+  },
+})
+
+await run('chat / a link to a message further back', {
+  path: '/r/lounge#m999999',
+  steps: async (page) => {
+    await page.waitForTimeout(1800)
+    if (!(await page.getByText('further back').count())) {
+      throw new Error('a link to a message nobody can see said nothing about it')
+    }
+  },
+})
+
+await run('chat / a fragment that is not a message id', {
+  // Nonsense after the hash is a link to the room, not a broken page.
+  path: '/r/lounge#mnope',
+  steps: async (page) => {
+    await page.waitForTimeout(1600)
+    if (await page.getByText('further back').count()) {
+      throw new Error('nonsense in the fragment was taken for a message')
+    }
+  },
+})
+
+await run('chat / a link to a message on a phone', {
+  viewport: PHONE,
+  path: '/r/lounge#m1',
 })
 
 await run('chat / a token room that cannot be linked to', {
@@ -1188,31 +1355,54 @@ await run('chat / searching for something absurd', { steps: search(HUGE.slice(0,
  * fill it, because on a new account that is the ordinary state and not a
  * failure.
  */
+/*
+ * Signed out there is no bell to press - which is the point of it, and is
+ * asserted just below - so the inbox is reached by its URL, as somebody
+ * following a link they were sent would reach it.
+ */
 await run('notifications / signed out', {
   signedIn: false,
-  steps: socialTab('Notifications'),
+  path: '/notifications',
   expectText: 'Sign in',
 })
 
+await run('notifications / signed out has no bell to press', {
+  signedIn: false,
+  steps: async (page) => {
+    if (await page.locator('.notif-bell').count()) {
+      throw new Error('a bell nobody can have notifications for')
+    }
+  },
+})
+
 await run('notifications / with unread', {
-  steps: socialTab('Notifications'),
+  steps: bell,
   expectText: 'mentioned you',
 })
 
 await run('notifications / empty inbox', {
   fixture: 'empty',
-  steps: socialTab('Notifications'),
+  path: '/notifications',
   expectText: 'Nothing yet',
 })
 
+/*
+ * From a phone, and from another tab entirely.
+ *
+ * Both halves matter: the bell is in the nav bar rather than in the section,
+ * so it has to survive the phone layout, and it has to work from the tab
+ * somebody is actually on - which on a screener is not the social one.
+ */
 await run('notifications / phone', {
   viewport: PHONE,
+  steps: bell,
+  expectText: 'mentioned you',
+})
+
+await run('notifications / from the screener', {
   steps: async (page) => {
-    await mobileTab('Social')(page)
-    const t = page.locator('.social-tabs .xp-tab', { hasText: 'Notifications' }).first()
-    if (!(await t.count())) throw new Error('no Notifications tab on a phone')
-    await t.click()
-    await page.waitForTimeout(1400)
+    await tab('Screener')(page)
+    await bell(page)
   },
   expectText: 'mentioned you',
 })

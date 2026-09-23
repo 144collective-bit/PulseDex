@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Loader2, AlertTriangle, ChevronUp, Users, PenLine, Search, X, Lock } from 'lucide-react'
+import { Loader2, AlertTriangle, ChevronUp, Users, PenLine, Search, X, Lock, CornerUpLeft } from 'lucide-react'
 import ChatMessageRow from './ChatMessageRow'
 import ChatComposer from './ChatComposer'
 import ChatProfileCard from './ChatProfileCard'
@@ -38,7 +38,15 @@ const FOLLOWING_THRESHOLD_PX = 120
  * conversation is not the same conversation when the room changes, and saying
  * so to React is cheaper than maintaining the list.
  */
-export default function RoomPanel({ room, onOpenProfile, onSeen, gatedOn = null }) {
+export default function RoomPanel({
+  room,
+  onOpenProfile,
+  onSeen,
+  gatedOn = null,
+  /* A message somebody was linked to, from `/r/<slug>#m<id>`. Null for an
+     ordinary visit, which is almost every visit. */
+  focusMessage = null,
+}) {
   const { account } = useSiweAuth()
   const isModerator = useIsModerator()
   const { messages, status, error, add, remove, replace, react, hasMore, loadingOlder, loadOlder } =
@@ -176,6 +184,41 @@ export default function RoomPanel({ room, onOpenProfile, onSeen, gatedOn = null 
       highlightTimer.current = setTimeout(() => setHighlighted(null), 1600)
     })
   }, [])
+
+  /*
+   * Somebody arrived on a link to one message.
+   *
+   * Fired once per id rather than whenever the list changes: the list grows
+   * as older pages load and as people talk, and re-jumping on each of those
+   * would drag the reader back to the linked message every time anybody said
+   * anything.
+   *
+   * Below `onJumpTo` and `loadedIds`, and that is not cosmetic - the same
+   * mistake in this file once threw "Cannot access before initialization" on
+   * every room open, past lint, the suite and the build.
+   */
+  const jumped = useRef(null)
+
+  useEffect(() => {
+    if (!focusMessage || jumped.current === focusMessage) return
+    // Not loaded yet. Either the page has not arrived or the message is
+    // further back than it reaches; the notice below covers the second case.
+    if (!loadedIds.has(focusMessage)) return
+
+    jumped.current = focusMessage
+    onJumpTo(focusMessage)
+  }, [focusMessage, loadedIds, onJumpTo])
+
+  /*
+   * Whether to say that the linked message is not on screen.
+   *
+   * Only once the room has loaded, so this does not flash while the first
+   * page is in flight - and it goes away by itself if loading older messages
+   * brings the message into view, because `loadedIds` is what it is computed
+   * from.
+   */
+  const missingFocus =
+    Boolean(focusMessage) && status === CHAT_STATUS.ready && !loadedIds.has(focusMessage)
 
   /*
    * How much arrived while the reader was not looking at the live end.
@@ -473,7 +516,7 @@ export default function RoomPanel({ room, onOpenProfile, onSeen, gatedOn = null 
 
       {/*
         Typing, where there is any, and the head count otherwise.
-        
+
         One line, not two. They answer the same question - is anybody else
         here - and stacking them means the composer jumps down the moment
         somebody touches a key, which moves the thing the reader is aiming at.
@@ -501,6 +544,20 @@ export default function RoomPanel({ room, onOpenProfile, onSeen, gatedOn = null 
         three sentences and then being told the room is for holders is a
         worse experience than knowing going in.
       */}
+      {/*
+        A link to a message further back than this page reaches.
+
+        Said rather than swallowed: somebody who followed a link and landed on
+        an ordinary room would otherwise think the link was broken, when what
+        actually happened is that the conversation has moved on past it.
+      */}
+      {missingFocus && (
+        <p className="chat-gate font-mono" role="status">
+          <CornerUpLeft size={11} />
+          That message is further back — load older messages to reach it.
+        </p>
+      )}
+
       {gate && (
         <p className="chat-gate font-mono">
           <Lock size={11} />

@@ -22,13 +22,31 @@ import { readSocialPath, socialPath } from '../utils/socialPath'
  * had to change for that.
  */
 export function useSocialRoute() {
-  const [route, setRoute] = useState(() => readSocialPath(window.location.pathname))
+  /*
+   * The hash is read alongside the path, because a link to one message
+   * carries `#m<id>` and `location.pathname` does not include it.
+   */
+  const read = () => readSocialPath(window.location.pathname, window.location.hash)
+
+  const [route, setRoute] = useState(read)
 
   // Back and forward move through the section rather than out of it.
   useEffect(() => {
-    const onPop = () => setRoute(readSocialPath(window.location.pathname))
+    const onPop = () => setRoute(read())
     window.addEventListener('popstate', onPop)
-    return () => window.removeEventListener('popstate', onPop)
+
+    /*
+     * `hashchange` as well as `popstate`. Following a link that differs only
+     * in its fragment - one message to another in the same room - does not
+     * fire `popstate`, so without this the URL would move and the page would
+     * not.
+     */
+    window.addEventListener('hashchange', onPop)
+
+    return () => {
+      window.removeEventListener('popstate', onPop)
+      window.removeEventListener('hashchange', onPop)
+    }
   }, [])
 
   /*
@@ -50,10 +68,16 @@ export function useSocialRoute() {
    */
   useEffect(() => {
     if (!route) return
+
     const canonical = socialPath(route)
-    if (window.location.pathname !== canonical) {
+    // Compared against path and fragment together, because the canonical
+    // form carries the message id in the fragment and comparing only the
+    // pathname would rewrite `/r/lounge#m12` to `/r/lounge` on every render.
+    const current = `${window.location.pathname}${window.location.hash}`
+
+    if (current !== canonical) {
       window.history.replaceState({}, '', canonical)
-      setRoute(readSocialPath(canonical))
+      setRoute(readSocialPath(window.location.pathname, window.location.hash))
     }
   }, [route])
 
@@ -73,7 +97,7 @@ export function useSocialRoute() {
      * matches what the URL says - so a room that did not survive the round
      * trip is corrected here rather than two renders later.
      */
-    setRoute(readSocialPath(path))
+    setRoute(readSocialPath(window.location.pathname, window.location.hash))
   }, [])
 
   /**
@@ -90,7 +114,7 @@ export function useSocialRoute() {
    */
   const closeSocial = useCallback(() => {
     setRoute(null)
-    if (readSocialPath(window.location.pathname)) {
+    if (readSocialPath(window.location.pathname, window.location.hash)) {
       window.history.pushState({}, '', '/')
     }
   }, [])

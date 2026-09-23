@@ -1,7 +1,9 @@
-import { Lock } from 'lucide-react'
+import { useState } from 'react'
+import { Lock, Search, Users, X } from 'lucide-react'
 import { ROOMS, isTokenRoom, tokenRoomLabel } from '../../config/rooms'
 import { useTokenRooms } from '../../hooks/useTokenRooms'
 import { roomGate } from '../../utils/gate'
+import { filterRooms } from '../../utils/roomFilter'
 
 /**
  * The rooms, down the left.
@@ -28,8 +30,28 @@ import { roomGate } from '../../utils/gate'
  * changes under the reader while the first never does. Presenting them as one
  * list would mean a room appearing and disappearing among the fixtures.
  */
-export default function RoomList({ current, onSelect, unread = {}, groups = [] }) {
+export default function RoomList({
+  current,
+  onSelect,
+  unread = {},
+  groups = [],
+  /* Sends somebody to Discover with what they typed. People are found there,
+     not here - see the note on the empty state below. */
+  onFindPeople,
+}) {
   const tokenRooms = useTokenRooms()
+
+  /*
+   * What is being looked for.
+   *
+   * Three stacked lists read fine at five rooms and stop reading at the first
+   * busy week, because a token room exists for every address anybody opens.
+   * A filter is the cheapest thing that keeps the column usable as it grows,
+   * and it does not change what the list is - the sections stay, because the
+   * five are permanent and the rest are not.
+   */
+  const [term, setTerm] = useState('')
+  const searching = term.trim().length > 0
 
   /*
    * The room being read, when it is a token room nobody else is talking in.
@@ -40,15 +62,84 @@ export default function RoomList({ current, onSelect, unread = {}, groups = [] }
    * where the reader is stays where they can see it.
    */
   const listed = tokenRooms.some((room) => room.slug === current)
-  const shown =
+  const withCurrent =
     !listed && isTokenRoom(current)
       ? [{ slug: current, address: null, messageCount: 0 }, ...tokenRooms]
       : tokenRooms
 
+  /*
+   * Every section narrowed by one rule, in src/utils/roomFilter.js.
+   *
+   * Filtered together rather than per section so that a term matching a group
+   * and a token room shows both, and so "nothing matched" is one answer about
+   * the whole column rather than three empty lists stacked up.
+   */
+  const found = filterRooms({ fixed: ROOMS, groups, tokens: withCurrent }, term)
+  const shown = found.tokens
+
   return (
     <nav className="room-list" aria-label="Chat rooms">
+      {/*
+        The filter, above everything.
+
+        Always present rather than appearing past some number of rooms: a
+        control that arrives when a list gets long is a control nobody knows
+        is there until the day they need it most.
+      */}
+      <div className="room-filter">
+        <Search size={12} className="room-filter-icon" />
+        <input
+          type="search"
+          className="room-filter-input"
+          value={term}
+          onChange={(e) => setTerm(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setTerm('')
+          }}
+          placeholder="Find a room"
+          aria-label="Find a room"
+        />
+        {searching && (
+          <button
+            type="button"
+            className="chat-tool"
+            onClick={() => setTerm('')}
+            aria-label="Clear the filter"
+            title="Clear"
+          >
+            <X size={11} />
+          </button>
+        )}
+      </div>
+
+      {/*
+        Nothing matched.
+
+        The hand-off to Discover is the point of this block. Somebody typing a
+        person's name into a room filter has made a reasonable mistake, and
+        telling them only that no rooms matched leaves them believing the site
+        cannot find people at all. Discover already searches people properly;
+        duplicating that query here would be two implementations of it, which
+        is how two searches start disagreeing.
+      */}
+      {searching && found.matches === 0 && (
+        <p className="room-empty">
+          <span>No rooms match “{term.trim()}”.</span>
+          {onFindPeople && (
+            <button
+              type="button"
+              className="room-empty-link font-mono"
+              onClick={() => onFindPeople(term.trim())}
+            >
+              <Users size={11} />
+              Looking for a person?
+            </button>
+          )}
+        </p>
+      )}
+
       <ul role="tablist" aria-orientation="vertical">
-        {ROOMS.map((room) => {
+        {found.fixed.map((room) => {
           const active = room.slug === current
           return (
             <li key={room.slug}>
@@ -83,11 +174,11 @@ export default function RoomList({ current, onSelect, unread = {}, groups = [] }
         })}
       </ul>
 
-      {groups.length > 0 && (
+      {found.groups.length > 0 && (
         <>
           <h2 className="room-group font-mono">Groups</h2>
           <ul role="tablist" aria-orientation="vertical">
-            {groups.map((group) => {
+            {found.groups.map((group) => {
               const active = group.slug === current
               const gate = roomGate(group)
               return (

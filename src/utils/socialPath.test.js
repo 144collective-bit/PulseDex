@@ -15,38 +15,51 @@ const TOKEN_ROOM = 'token-0xa1077a294dde1b09bb078844df40758a5d0f9a27'
 
 describe('readSocialPath', () => {
   it('reads each surface', () => {
-    expect(readSocialPath('/feed')).toEqual({ tab: 'feed', room: null })
-    expect(readSocialPath('/me')).toEqual({ tab: 'profile', room: null })
-    expect(readSocialPath('/discover')).toEqual({ tab: 'discover', room: null })
-    expect(readSocialPath('/notifications')).toEqual({ tab: 'notifications', room: null })
+    expect(readSocialPath('/feed')).toEqual({ tab: 'feed', room: null, message: null })
+    expect(readSocialPath('/me')).toEqual({ tab: 'profile', room: null, message: null })
+    expect(readSocialPath('/discover')).toEqual({ tab: 'discover', room: null, message: null })
+    expect(readSocialPath('/notifications')).toEqual({
+      tab: 'notifications',
+      room: null,
+      message: null,
+    })
   })
 
   it('tolerates a trailing slash', () => {
-    expect(readSocialPath('/feed/')).toEqual({ tab: 'feed', room: null })
-    expect(readSocialPath('/r/lounge/')).toEqual({ tab: 'rooms', room: 'lounge' })
+    expect(readSocialPath('/feed/')).toEqual({ tab: 'feed', room: null, message: null })
+    expect(readSocialPath('/r/lounge/')).toEqual({ tab: 'rooms', room: 'lounge', message: null })
   })
 
   it('reads all three kinds of room from one path shape', () => {
-    expect(readSocialPath('/r/lounge')).toEqual({ tab: 'rooms', room: 'lounge' })
-    expect(readSocialPath('/r/group-whales')).toEqual({ tab: 'rooms', room: 'group-whales' })
-    expect(readSocialPath(`/r/${TOKEN_ROOM}`)).toEqual({ tab: 'rooms', room: TOKEN_ROOM })
+    expect(readSocialPath('/r/lounge')).toEqual({ tab: 'rooms', room: 'lounge', message: null })
+    expect(readSocialPath('/r/group-whales')).toEqual({
+      tab: 'rooms',
+      room: 'group-whales',
+      message: null,
+    })
+    expect(readSocialPath(`/r/${TOKEN_ROOM}`)).toEqual({
+      tab: 'rooms',
+      room: TOKEN_ROOM,
+      message: null,
+    })
   })
 
   it('keeps the rooms surface when the slug is not a room', () => {
     // `/r/nonsense` is still a request for the rooms surface. Answering it
     // with the home page would be answering a different question.
-    expect(readSocialPath('/r/nonsense')).toEqual({ tab: 'rooms', room: null })
-    expect(readSocialPath('/r/group--bad')).toEqual({ tab: 'rooms', room: null })
-    expect(readSocialPath('/r/token-0xdeadbeef')).toEqual({ tab: 'rooms', room: null })
-    expect(readSocialPath('/r')).toEqual({ tab: 'rooms', room: null })
-    expect(readSocialPath('/r/')).toEqual({ tab: 'rooms', room: null })
+    const rooms = { tab: 'rooms', room: null, message: null }
+    expect(readSocialPath('/r/nonsense')).toEqual(rooms)
+    expect(readSocialPath('/r/group--bad')).toEqual(rooms)
+    expect(readSocialPath('/r/token-0xdeadbeef')).toEqual(rooms)
+    expect(readSocialPath('/r')).toEqual(rooms)
+    expect(readSocialPath('/r/')).toEqual(rooms)
   })
 
   it('survives a slug that cannot be decoded', () => {
     // A malformed percent sequence throws inside decodeURIComponent, and a
     // bad link is not a reason to take the page down.
     expect(() => readSocialPath('/r/%E0%A4%A')).not.toThrow()
-    expect(readSocialPath('/r/%E0%A4%A')).toEqual({ tab: 'rooms', room: null })
+    expect(readSocialPath('/r/%E0%A4%A')).toEqual({ tab: 'rooms', room: null, message: null })
   })
 
   it('leaves the other two routers alone', () => {
@@ -101,15 +114,20 @@ describe('socialPath', () => {
      * the page disagree, and the correction the hook makes would loop.
      */
     for (const where of [
-      { tab: 'feed', room: null },
-      { tab: 'profile', room: null },
-      { tab: 'discover', room: null },
-      { tab: 'notifications', room: null },
-      { tab: 'rooms', room: 'lounge' },
-      { tab: 'rooms', room: 'group-whales' },
-      { tab: 'rooms', room: TOKEN_ROOM },
+      { tab: 'feed', room: null, message: null },
+      { tab: 'profile', room: null, message: null },
+      { tab: 'discover', room: null, message: null },
+      { tab: 'notifications', room: null, message: null },
+      { tab: 'rooms', room: 'lounge', message: null },
+      { tab: 'rooms', room: 'group-whales', message: null },
+      { tab: 'rooms', room: TOKEN_ROOM, message: null },
+      { tab: 'rooms', room: 'lounge', message: 1234 },
     ]) {
-      expect(readSocialPath(socialPath(where))).toEqual(where)
+      // The builder puts the message in the fragment, so reading it back
+      // needs both halves - which is exactly how the hook calls it.
+      const built = socialPath(where)
+      const [path, hash] = built.split('#')
+      expect(readSocialPath(path, hash ? `#${hash}` : '')).toEqual(where)
     }
   })
 
@@ -117,7 +135,7 @@ describe('socialPath', () => {
     // Not an identity, and deliberately: the point of the correction is that
     // a bad slug settles on a good one and then stays there.
     const once = socialPath({ tab: 'rooms', room: null })
-    expect(readSocialPath(once)).toEqual({ tab: 'rooms', room: DEFAULT_ROOM })
+    expect(readSocialPath(once)).toEqual({ tab: 'rooms', room: DEFAULT_ROOM, message: null })
     expect(socialPath(readSocialPath(once))).toBe(once)
   })
 })
@@ -127,5 +145,64 @@ describe('isSocialPath', () => {
     for (const path of ['/feed', '/r/lounge', '/', '/u/@satoshi', '/nope']) {
       expect(isSocialPath(path)).toBe(readSocialPath(path) !== null)
     }
+  })
+})
+
+/*
+ * A link to one message.
+ *
+ * `/r/lounge#m1234` is the same document as `/r/lounge` - the fragment says
+ * where to look inside it, which is what a fragment is for. Getting this
+ * wrong in the permissive direction is the bad one: a room link that quietly
+ * carries a stale message id would scroll somebody somewhere they did not ask
+ * to go, every time they opened it.
+ */
+describe('a message in a room', () => {
+  it('reads the id out of the fragment', () => {
+    expect(readSocialPath('/r/lounge', '#m1234')).toEqual({
+      tab: 'rooms',
+      room: 'lounge',
+      message: 1234,
+    })
+  })
+
+  it('builds the fragment only when there is one', () => {
+    expect(socialPath({ tab: 'rooms', room: 'lounge', message: 1234 })).toBe('/r/lounge#m1234')
+    expect(socialPath({ tab: 'rooms', room: 'lounge' })).toBe('/r/lounge')
+    expect(socialPath({ tab: 'rooms', room: 'lounge', message: null })).toBe('/r/lounge')
+  })
+
+  it('treats a leading zero as the same message', () => {
+    // `#m007` and `#m7` are one message, not two strings that will not
+    // compare equal to the id on a row.
+    expect(readSocialPath('/r/lounge', '#m007')?.message).toBe(7)
+  })
+
+  it('ignores a fragment that is not a message', () => {
+    for (const hash of ['', '#', '#top', '#m', '#m0', '#m-1', '#mabc', '#message-4', 'm4', null, 42]) {
+      expect(readSocialPath('/r/lounge', hash)?.message).toBeNull()
+    }
+  })
+
+  it('ignores an id too large to be one', () => {
+    // Past the safe integer range a parsed id stops being the number that
+    // was written, so it is no id at all rather than a nearby one.
+    expect(readSocialPath('/r/lounge', `#m${'9'.repeat(19)}`)?.message).toBeNull()
+  })
+
+  it('is ignored on the surfaces that have no messages', () => {
+    expect(readSocialPath('/feed', '#m12')?.message).toBeNull()
+    expect(readSocialPath('/notifications', '#m12')?.message).toBeNull()
+  })
+
+  it('keeps the message when the room is corrected', () => {
+    // A link to a message in a room that has gone still lands on the rooms
+    // surface. Dropping the id there would be tidier and would also mean the
+    // fragment silently changing meaning between the link and the page.
+    expect(readSocialPath('/r/nonsense', '#m9')).toEqual({
+      tab: 'rooms',
+      room: null,
+      message: 9,
+    })
   })
 })

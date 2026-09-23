@@ -129,18 +129,73 @@ attention.
 people and the rooms. Naming it after one of the four is why nobody looking
 for their notifications found them.
 
-### Batch 3 - one directory instead of three lists
+### Batch 3 - one directory instead of three lists  <- done
 
-The sidebar is currently three stacked lists - the five, then Groups, then
-Tokens - which works at today's sizes and stops working at the first busy
-week, because a token room exists for every address anybody opens.
+The sidebar was three stacked lists - the five, then Groups, then Tokens -
+which works at today's sizes and stops working at the first busy week, because
+a token room exists for every address anybody opens.
 
-- One Rooms surface with search across rooms, groups and people.
-- Sections kept, because the five are permanent and the rest are not, but
-  searchable as one thing.
-- `/r/<slug>#m<id>` scrolls to a message and marks it. The scrolling and the
-  highlight already exist - they were built for jumping to a quoted reply in
-  Batch A - so this is the URL half only.
+- [x] One filter above the column, narrowing all three sections at once.
+      `src/utils/roomFilter.js`, pure and tested.
+- [x] Sections kept, because the five are permanent and the rest are not, but
+      searchable as one thing.
+- [x] `/r/<slug>#m<id>` scrolls to a message and marks it. The scrolling and
+      the highlight already existed - they were built for jumping to a quoted
+      reply in Batch A - so this was the URL half only.
+
+**What the list draws has to be what can be typed.** A token room has no name,
+only `0xa107…9a27`, and the first version of the haystack matched the slug and
+the full address - so somebody reading the label off the screen and typing its
+tail found nothing. The shortened form is now split on the ellipsis and both
+halves are searchable, because nobody types `…`. That is the rule worth
+keeping past this batch: anything a navigation list shows is a search term
+somebody will try.
+
+**People-search stayed in Discover, against the plan above.** The plan said
+"search across rooms, groups and people". Discover already owns that query -
+`searchProfiles`, with its own results, its own empty state and its own
+paging - and putting it in the sidebar too would have been two
+implementations of one search, which is how two searches start disagreeing
+about who exists. So the empty state hands off instead: *"Looking for a
+person?"* switches to Discover carrying what was typed. One query, and the
+mistake of typing a name into a room filter is answered rather than punished.
+
+**The filter is always there, not revealed past some number of rooms.** A
+control that appears when a list gets long is a control nobody knows exists
+until the day they need it most.
+
+**Filtering is not navigation.** Narrowing the column does not change the room
+being read or touch the address bar, and the room being read is prepended to
+the token list when it is not among the busiest eight - otherwise opening a
+quiet token room from a chart and then looking at the sidebar shows no room
+selected at all.
+
+**`#m<id>` is a fragment, and that is the whole reason it works.**
+`/r/lounge#m1234` is the same document as `/r/lounge` to the server and to the
+router, so a link to a message is a link to the room plus an instruction about
+where to look - which is exactly what it is. A path segment would have made it
+a separate route that has to load the room anyway. The jump fires once per id
+rather than on every render: the list grows as older pages load and as people
+talk, and re-jumping on each of those would drag the reader back to the linked
+message every time anybody said anything.
+
+**A link to a message further back than the page reaches says so.** Otherwise
+somebody who followed a link and landed on an ordinary-looking room concludes
+the link is broken, when what actually happened is that the conversation moved
+on past it. The notice clears itself when loading older messages brings the
+message into view, because it is computed from what is loaded rather than set
+once.
+
+**The stress matrix stopped at scenario 57 and reported exit 0.** A step that
+failed part-way left a navigation in flight, and the probe that reads the
+final page state threw into a context being torn down - taking the run with
+it, so the remaining forty never ran. The four scenarios that failed were
+stale expectations from Batch 2, still walking the Notifications sub-tab that
+the flattening removed. Both are fixed: the probe retries and records rather
+than throwing, and the inbox scenarios go through the bell. The lesson is the
+same one as the stale preview in Batch 2 - **a harness that stops early
+reports less than one that keeps going, and nobody reads the run that never
+finished.**
 
 ### Batch 4 - what URLs unlock
 

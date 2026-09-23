@@ -686,6 +686,78 @@
   color: inherit;
 }
 
+/* ── Finding a room ── */
+
+.room-filter {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 8px;
+  padding: 5px 7px;
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.room-filter-icon {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+.room-filter-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.room-filter-input:focus {
+  outline: none;
+}
+
+.room-filter-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* The browser's own clear control, removed in favour of the one beside it. */
+.room-filter-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.room-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 8px 4px;
+  font-size: var(--fs-label, 11px);
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+/* The way out of an empty result. Styled as a link rather than a button
+   because it is a suggestion about where to look, not an action on this
+   list. */
+.room-empty-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--pulse-cyan);
+  font-size: var(--fs-label, 11px);
+  text-align: left;
+  cursor: pointer;
+}
+
+.room-empty-link:hover {
+  text-decoration: underline;
+}
+
 /* ── Groups, and holders-only rooms ── */
 
 .room-column {
