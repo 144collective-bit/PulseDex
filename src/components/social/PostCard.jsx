@@ -1,4 +1,4 @@
-import { Trash2, Flag, Ban, MessageCircle } from 'lucide-react'
+import { Trash2, Flag, Ban, MessageCircle, Pin, PinOff } from 'lucide-react'
 import ChatAvatar from './ChatAvatar'
 import { formatAddress, formatTimeAgo } from '../../utils/formatters'
 import PostBody from './PostBody'
@@ -30,6 +30,16 @@ export default function PostCard({
   onToggleReplies,
   replyCount,
   threadOpen,
+  /*
+   * Pinning, offered only where it means something.
+   *
+   * Passed in rather than decided here, because "can this be pinned" is not a
+   * property of the post - it is your own post, on your own page. The same
+   * post in the feed has nothing to pin it to, so the control is absent there
+   * and this component does not have to know why.
+   */
+  pinned = false,
+  onTogglePin,
 }) {
   const written = Date.parse(post.createdAt)
 
@@ -137,6 +147,26 @@ export default function PostCard({
               title="Report this post"
             >
               <Flag size={12} />
+            </button>
+          )}
+
+          {/*
+            Pin and unpin are one control, and it says which it will do rather
+            than which state it is in - the opposite choice from the Follow
+            button above it, on purpose. Follow has two states somebody wants
+            to read at a glance on a stranger's page; a pin has one state per
+            page and it is already obvious from the label above the post, so
+            the useful thing for this button to say is what pressing it does.
+          */}
+          {onTogglePin && (
+            <button
+              type="button"
+              className={`feed-tool ${pinned ? 'is-pinned' : ''}`}
+              onClick={() => onTogglePin(pinned ? null : post.id)}
+              aria-label={pinned ? 'Unpin this post' : 'Pin this post to your profile'}
+              title={pinned ? 'Unpin from your profile' : 'Pin to the top of your profile'}
+            >
+              {pinned ? <PinOff size={12} /> : <Pin size={12} />}
             </button>
           )}
 

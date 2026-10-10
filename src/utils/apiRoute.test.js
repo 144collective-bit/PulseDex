@@ -34,6 +34,14 @@ describe('routeKey', () => {
     expect(routeKey('/api/chat/messages')).toBe('chat/messages')
     expect(routeKey('/api/chat/reactions')).toBe('chat/reactions')
     expect(routeKey('/api/profile/avatar')).toBe('profile/avatar')
+    /*
+     * A hyphen in a segment, which the shape check has always allowed and
+     * nothing had used until Batch 2. Worth pinning: the pattern is the thing
+     * standing between a URL and a table lookup, and a tightening of it that
+     * dropped hyphens would take the wallet-age lookup out without any other
+     * check noticing.
+     */
+    expect(routeKey('/api/profile/first-seen')).toBe('profile/first-seen')
     expect(routeKey('/api/posts/report')).toBe('posts/report')
     expect(routeKey('/api/auth/verify')).toBe('auth/verify')
   })

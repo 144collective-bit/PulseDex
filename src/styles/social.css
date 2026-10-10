@@ -3050,3 +3050,199 @@ button.notif-excerpt {
   opacity: 0.5;
   cursor: default;
 }
+
+/* ==========================================================================
+   Batch 2: a profile worth visiting
+   ========================================================================== */
+
+/* ── A new wallet, said rather than implied ── */
+
+/*
+ * Warm rather than red. This is a fact worth noticing, not an accusation -
+ * plenty of new wallets belong to people who just arrived - and a red badge on
+ * somebody's name would be this site making a judgement it has no basis for.
+ * Amber says look; red would say stop.
+ */
+.xp-meta-item.is-fresh {
+  padding: 1px 7px;
+  border: 1px solid rgba(255, 176, 32, 0.35);
+  border-radius: 999px;
+  background: rgba(255, 176, 32, 0.1);
+  color: #ffc14d;
+}
+
+/* ── Counts you can open ── */
+
+/*
+ * Styled to look like the text it replaced rather than like a button, with
+ * only the hover saying it is pressable. The number is the content here; a
+ * button chrome around each one would turn a quiet line of metadata into two
+ * competing controls directly above the tab strip.
+ */
+.xp-count {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.xp-count:hover {
+  text-decoration: underline;
+}
+
+/* ── The pinned post ── */
+
+.xp-pinned {
+  border-top: 1px solid var(--ch-hairline);
+  padding: 10px 14px 4px;
+}
+
+/*
+ * The word, above the post. Small, muted and in the mono face the rest of
+ * this app's metadata uses - it is a label on something, not a heading
+ * competing with the post under it.
+ */
+.xp-pinned-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 0 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Pinned, as a state on the control that unpins it. */
+.feed-tool.is-pinned {
+  color: var(--pulse-cyan, #00e5ff);
+  border-color: rgba(0, 229, 255, 0.35);
+  background: rgba(0, 229, 255, 0.1);
+}
+
+/* ── Holdings, when the account has asked for them ── */
+
+.xp-holdings {
+  border-top: 1px solid var(--ch-hairline);
+  padding: 12px 14px;
+}
+
+.xp-holdings-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.xp-holdings-head h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.xp-holdings-head span {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.xp-holdings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.xp-holding {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--ch-hairline);
+}
+
+.xp-holding:last-child {
+  border-bottom: 0;
+}
+
+.xp-holding-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/*
+ * Two tokens with the same ticker is the normal case on PulseChain, not an
+ * edge one - a test wallet held two DAI, one worth a fifth of a cent and one
+ * worth a dollar. Both rows are correct and both say DAI, so a reader
+ * comparing them concludes the app has mispriced their stablecoin. Said in
+ * words rather than as an icon, because an icon here would need explaining
+ * and the explanation is the point.
+ */
+.xp-holding-warn {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  color: #ffc14d;
+}
+
+.xp-holding-value {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+/* What was left out of the list and why. Muted, because it is bookkeeping -
+   but present, because a trimmed list presented as a whole one is a lie about
+   somebody's wallet. */
+.xp-holdings-hidden,
+.xp-holdings-note {
+  margin: 7px 0 0;
+  font-family: var(--font-instrument);
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* ── Followers and following, as pages ── */
+
+.follow-list {
+  padding: 10px 14px 14px;
+}
+
+/*
+ * The sentence that says follows are public, at the bottom of the list.
+ *
+ * 0008 made the graph public deliberately. This page is where that becomes
+ * obvious to anybody who had not thought about it, and finding out by seeing
+ * your own name on a stranger's list is a worse way to learn it than being
+ * told.
+ */
+.follow-list-note {
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--ch-hairline);
+  font-family: var(--font-instrument);
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
