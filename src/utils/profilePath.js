@@ -21,14 +21,32 @@
  * can type, so a stricter pattern here would be a second, quieter rule about
  * what a name may be, disagreeing with normaliseHandle and making certain
  * accounts unreachable by their own name.
+ *
+ * The optional tail is the follow graph: /u/@degen/followers and
+ * /u/@degen/following. Two more URLs rather than a tab inside the page,
+ * because they are places - somebody linking "look who follows this account"
+ * is linking a list, and a list that only exists as state inside a profile
+ * cannot be linked, cannot be gone Back out of, and cannot be shared. That is
+ * the whole argument of docs/navigation-roadmap.md applied to one more
+ * surface.
+ *
+ * Only those two words. Anything else after the name is not a profile path at
+ * all, rather than a profile with a tail nobody understands - a URL that half
+ * resolves is how /u/@a/b came to render somebody's page under a path that
+ * meant nothing.
  */
-const PROFILE_PATH = /^\/u\/(0x[a-fA-F0-9]{40}|@[^/]{1,32})\/?$/
+const PROFILE_PATH = /^\/u\/(0x[a-fA-F0-9]{40}|@[^/]{1,32})(?:\/(followers|following))?\/?$/
 
 /**
- * Who does this path mean?
+ * Who does this path mean, and which of their pages?
+ *
+ * `list` is null for the profile itself, or 'followers' or 'following'. Always
+ * present, never conditional: a caller reading `route.list` should get null
+ * rather than undefined for the ordinary case, because the two read the same
+ * in a condition and differently in a comparison.
  *
  * @param {unknown} pathname
- * @returns {{ handle: string|null, address: string|null } | null}
+ * @returns {{ handle: string|null, address: string|null, list: string|null } | null}
  *   null when the path is not a profile at all
  */
 export function readProfilePath(pathname) {
@@ -47,16 +65,18 @@ export function readProfilePath(pathname) {
     return null
   }
 
+  const list = match[2] || null
+
   if (!raw.startsWith('@')) {
     // Lowercased because that is how the column stores it. Every explorer
     // shows the mixed-case checksummed form, so a link copied from one would
     // otherwise match nothing.
-    return { handle: null, address: raw.toLowerCase() }
+    return { handle: null, address: raw.toLowerCase(), list }
   }
 
   const handle = raw.slice(1)
   // "/u/@" is a path with no name in it.
-  return handle ? { handle, address: null } : null
+  return handle ? { handle, address: null, list } : null
 }
 
 /**
@@ -66,10 +86,16 @@ export function readProfilePath(pathname) {
  * if it gets copied from there - and falls back to the address, which always
  * resolves.
  *
+ * `list` appends /followers or /following. Anything else is ignored rather
+ * than appended, so a typo cannot build a path this module would then refuse
+ * to read - a builder and a parser that disagree is a Back button that lands
+ * on a page that does not exist.
+ *
  * @returns {string | null} null when given neither
  */
-export function profilePath({ address, handle } = {}) {
-  if (handle) return `/u/@${encodeURIComponent(handle)}`
-  if (address) return `/u/${address.toLowerCase()}`
-  return null
+export function profilePath({ address, handle, list } = {}) {
+  const base = handle ? `/u/@${encodeURIComponent(handle)}` : address ? `/u/${address.toLowerCase()}` : null
+  if (!base) return null
+
+  return list === 'followers' || list === 'following' ? `${base}/${list}` : base
 }

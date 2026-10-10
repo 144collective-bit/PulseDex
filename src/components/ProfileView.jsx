@@ -22,6 +22,7 @@ import {
   removeAvatar,
   uploadMyBanner,
   removeBanner,
+  setShowHoldings,
 } from '../services/profile'
 import { MAX_LINKS, normaliseLink } from '../utils/profileFields'
 import { hasSupabase } from '../config/supabase'
@@ -194,6 +195,20 @@ export default function ProfileView({ onOpenPublicProfile }) {
   const [banner, setBanner] = useState(null)
   const [bannerBusy, setBannerBusy] = useState(false)
   const [bannerError, setBannerError] = useState('')
+
+  /*
+   * Whether this account shows its token holdings on its public page.
+   *
+   * Written the moment the switch moves rather than on Save, unlike every
+   * other field on this form. That is deliberate and it is the one exception:
+   * the rest of this form is a draft until Save, and a draft is exactly what
+   * a privacy switch must not be. Somebody who turns this off and closes the
+   * tab has turned it off. Somebody who turns it on and walks away has
+   * published - and has been told so, which is the other half of it.
+   */
+  const [holdingsPublic, setHoldingsPublic] = useState(false)
+  const [holdingsBusy, setHoldingsBusy] = useState(false)
+  const [holdingsError, setHoldingsError] = useState('')
   const bannerInputRef = useRef(null)
 
   // Whether publishing is possible at all here. On a deployment with no
@@ -213,6 +228,9 @@ export default function ProfileView({ onOpenPublicProfile }) {
         setServerLoaded(true)
         setPublished(server.avatarUrl || null)
         setBanner(server.bannerUrl || null)
+        // Against `true` rather than truthy, so a row written before 0019 ran
+        // - where the column reads as null - is off rather than ambiguous.
+        setHoldingsPublic(server.showHoldings === true)
         // The server is the authority on links, since they only exist there.
         const saved = (server.links || []).map((l) => l.url)
         setLinks([...saved, ...EMPTY_LINKS].slice(0, MAX_LINKS))
@@ -379,6 +397,27 @@ export default function ProfileView({ onOpenPublicProfile }) {
       setBannerError(err.message)
     } finally {
       setBannerBusy(false)
+    }
+  }
+
+  /*
+   * Show or hide holdings, written immediately.
+   *
+   * Moved optimistically so the switch does not sit still while a request is
+   * in flight, and put back if the write fails - a privacy control that
+   * appears to have changed and has not is the worst version of this.
+   */
+  const toggleHoldings = async (next) => {
+    setHoldingsError('')
+    setHoldingsPublic(next)
+    setHoldingsBusy(true)
+    try {
+      await setShowHoldings(next)
+    } catch (err) {
+      setHoldingsPublic(!next)
+      setHoldingsError(err.message)
+    } finally {
+      setHoldingsBusy(false)
     }
   }
 
@@ -691,6 +730,57 @@ export default function ProfileView({ onOpenPublicProfile }) {
                     </div>
                   </FormField>
                 )}
+
+                {canPublish && (
+                  <FormField
+                    label="Show my holdings"
+                    hint="Off unless you turn it on · saves immediately"
+                  >
+                    <div className="profile-holdings-toggle">
+                      <label className="profile-holdings-switch">
+                        <input
+                          type="checkbox"
+                          checked={holdingsPublic}
+                          disabled={holdingsBusy}
+                          onChange={(e) => toggleHoldings(e.target.checked)}
+                        />
+                        <span>
+                          {holdingsPublic
+                            ? 'Anyone can see what this wallet holds'
+                            : 'Nobody can see what this wallet holds here'}
+                        </span>
+                      </label>
+
+                      {/*
+                        Said in full, once, at the point of decision.
+
+                        The honest framing matters more here than anywhere else
+                        on this form. Balances are already public - a block
+                        explorer shows anybody's to anybody - so this switch
+                        does not make them secret and must not imply it does.
+                        What it controls is whether they are reachable by name
+                        rather than only by address, which is the part that
+                        actually changes somebody's exposure. And turning it
+                        off later cannot unsee what was already seen.
+                      */}
+                      <p className="profile-field-note">
+                        Your balances are already on the chain, where anyone with
+                        your address can read them. This only decides whether
+                        they are shown on your page, next to your name - which
+                        is what makes them findable by people who have never
+                        seen your address. You can turn it off at any time;
+                        that hides the panel, it does not un-see anything.
+                      </p>
+
+                      {holdingsError && (
+                        <p className="chat-error" role="alert">
+                          {holdingsError}
+                        </p>
+                      )}
+                    </div>
+                  </FormField>
+                )}
+
                 <div className="profile-form-action-row">
                   <button type="submit" className="profile-save-btn" disabled={isSaving}><Save size={14} />{isSaving ? 'Saving…' : 'Save Changes'}</button>
                   {saveMsg && <span className="profile-success-chip animate-fade-in"><CheckCircle2 size={12} />{saveMsg}</span>}

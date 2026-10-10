@@ -55,10 +55,23 @@ async function signedInAddress(req) {
   }
 }
 
+/**
+ * The columns this endpoint reads back and echoes.
+ *
+ * One string, because `read` and `write` both have to ask for the same shape
+ * and when they drifted the symptom was a save that answered with a profile
+ * missing a field the form had just set. Not PUBLIC_PROFILE_FIELDS: that one
+ * is what strangers get, and these two differ on purpose - `created_at` is on
+ * the public one and not here, because your own profile form has no use for
+ * it, and nothing private is on either.
+ */
+const OWN_PROFILE_COLUMNS =
+  'address, handle, avatar_id, avatar_url, banner_url, bio, links, pinned_post_id, show_holdings'
+
 async function read(res, db, address) {
   const { data, error } = await db
     .from('profiles')
-    .select('address, handle, avatar_id, avatar_url, banner_url, bio, links')
+    .select(OWN_PROFILE_COLUMNS)
     .eq('address', address)
     .maybeSingle()
 
@@ -77,6 +90,10 @@ async function read(res, db, address) {
     bannerUrl: data?.banner_url || null,
     bio: data?.bio || null,
     links: Array.isArray(data?.links) ? data.links : [],
+    pinnedPostId: data?.pinned_post_id || null,
+    // Explicitly against `true`, so a null column on a row written before 0019
+    // ran reads as off rather than as truthy-ish nothing.
+    showHoldings: data?.show_holdings === true,
   })
 }
 
@@ -125,10 +142,45 @@ async function write(req, res, db, address) {
   // the two that are https rather than an error about the third.
   if ('links' in body) patch.links = normaliseLinks(body.links)
 
+  /*
+   * Holdings on or off. A boolean and nothing else - anything that is not
+   * literally true is off, so a request that sends "false", 0 or an object
+   * cannot turn somebody's balances into a public page by being truthy.
+   *
+   * This is the switch described in 0019_profile_depth.sql, and the only thing
+   * in the app that throws it. It is never set as a side effect of anything
+   * else, and there is no default-on path: an account that has never touched
+   * it shows nothing.
+   */
+  if ('showHoldings' in body) patch.show_holdings = body.showHoldings === true
+
+  /*
+   * The pin, which is the one field here that cannot be validated by looking
+   * at it.
+   *
+   * A handle is checked against a pattern, a bio against a length. A post id
+   * is only valid if that post exists, has not been removed, and belongs to
+   * the account pinning it - and none of that is knowable without asking. So
+   * it is asked, before the write, and a pin that does not pass is refused
+   * rather than quietly dropped: somebody pressing Pin and seeing nothing
+   * happen would press it again.
+   *
+   * Without the ownership half of that check this endpoint would let any
+   * signed-in account display any post, by anybody, at the top of its own
+   * page under its own name - which is the shape of every impersonation this
+   * site has to worry about. src/services/profile.js checks it again at read
+   * time, on the other side of the database, for the same reason.
+   */
+  if ('pinnedPostId' in body) {
+    const pin = await readPin(db, address, body.pinnedPostId)
+    if (pin.error) return res.status(pin.status).json({ error: pin.error })
+    patch.pinned_post_id = pin.id
+  }
+
   const { data, error } = await db
     .from('profiles')
     .upsert(patch, { onConflict: 'address' })
-    .select('address, handle, avatar_id, avatar_url, banner_url, bio, links')
+    .select(OWN_PROFILE_COLUMNS)
     .single()
 
   if (error) {
@@ -156,5 +208,57 @@ async function write(req, res, db, address) {
     bannerUrl: data.banner_url || null,
     bio: data.bio,
     links: Array.isArray(data.links) ? data.links : [],
+    pinnedPostId: data.pinned_post_id || null,
+    showHoldings: data.show_holdings === true,
   })
+}
+
+/**
+ * Which post, if any, this account is allowed to pin.
+ *
+ * Returns `{ id }` to write, or `{ error, status }` to answer with. Null is a
+ * legitimate id: it is how a pin is cleared, and clearing is always allowed
+ * because there is nothing to verify about removing something.
+ *
+ * `deleted_at is null` is part of the lookup rather than checked afterwards,
+ * so a post a moderator has taken down cannot be pinned back onto a page. The
+ * answer for a removed post and for one that never existed is the same
+ * sentence, deliberately - telling somebody which of the two it was would say
+ * whether a post they cannot see had been deleted.
+ *
+ * @param {object} db service-role client
+ * @param {string} address the signed-in account
+ * @param {unknown} value whatever the request sent
+ */
+async function readPin(db, address, value) {
+  if (value === null || value === undefined || value === '') return { id: null }
+
+  const id = Number(value)
+  // Integer and positive. A float or a huge number would reach Postgres as a
+  // type error and come back as a 503 about profiles being unavailable, which
+  // is a misleading thing to say about somebody mistyping an id.
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    return { error: 'That is not a post.', status: 400 }
+  }
+
+  const { data, error } = await db
+    .from('posts')
+    .select('id, address')
+    .eq('id', id)
+    .is('deleted_at', null)
+    .maybeSingle()
+
+  if (error) {
+    console.error('profile: pin lookup failed:', error.message)
+    return { error: 'Profiles are unavailable right now.', status: 503 }
+  }
+
+  if (!data) return { error: 'That post is not here.', status: 404 }
+
+  // The whole reason this function exists.
+  if (data.address !== address) {
+    return { error: 'You can only pin your own posts.', status: 403 }
+  }
+
+  return { id: data.id }
 }

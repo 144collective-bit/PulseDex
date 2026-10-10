@@ -15,6 +15,7 @@ import postsReport from './_routes/posts/report.js'
 import profile from './_routes/profile.js'
 import profileAvatar from './_routes/profile/avatar.js'
 import profileBanner from './_routes/profile/banner.js'
+import profileFirstSeen from './_routes/profile/first-seen.js'
 import roomGroups from './_routes/rooms/groups.js'
 import tokenClaim from './_routes/token/claim.js'
 
@@ -76,6 +77,7 @@ const ROUTES = {
   profile,
   'profile/avatar': profileAvatar,
   'profile/banner': profileBanner,
+  'profile/first-seen': profileFirstSeen,
   'rooms/groups': roomGroups,
   'token/claim': tokenClaim,
 }

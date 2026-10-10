@@ -1,9 +1,11 @@
-import { AlertTriangle, CalendarDays, ExternalLink, ImageOff, Loader2, UserCheck, UserPlus } from 'lucide-react'
+import { AlertTriangle, CalendarDays, ExternalLink, ImageOff, Loader2, Sprout, UserCheck, UserPlus, Wallet } from 'lucide-react'
 import ClaimedTokens from './ClaimedTokens'
 import ChatAvatar from './ChatAvatar'
 import { useFollow } from '../../hooks/useFollow'
+import { useWalletAge } from '../../hooks/useWalletAge'
 import { isSafeAvatarSrc } from '../../utils/avatarImage'
 import { formatAddress, formatCompactCount } from '../../utils/formatters'
+import { FRESH_WALLET_DAYS, isFreshWallet, walletAgeLabel } from '../../utils/walletAge'
 
 /**
  * The top of somebody's page.
@@ -38,8 +40,25 @@ export default function ProfileHeader({
      social section too, which has no route to one, and a claim there is a
      line of text rather than a link. */
   onOpenToken,
+  /* Opens /u/<who>/followers or /following. Optional, for the same reason as
+     onOpenToken: this header is drawn in places that have no route to a page,
+     and there the counts stay as counts. */
+  onOpenList,
+  /* Whether to draw the tab strip at all. False while a follow list is
+     showing: the tabs would be switching a feed that is not on screen, and a
+     tab that does nothing when pressed is how a tab strip teaches people it
+     is decoration. */
+  showTabs = true,
 }) {
   const { counts, following, canFollow, busy, error, toggle } = useFollow(address)
+
+  /*
+   * How old the wallet is. Cached on the profile row once anybody has looked
+   * it up, so this is a read almost every time - see useWalletAge.
+   */
+  const firstSeenAt = useWalletAge(address, profile?.firstSeenAt)
+  const ageLabel = walletAgeLabel(firstSeenAt)
+  const fresh = isFreshWallet(firstSeenAt)
 
   const name = profile?.handle || formatAddress(address)
   const uploaded = isSafeAvatarSrc(profile?.bannerUrl)
@@ -146,6 +165,46 @@ export default function ProfileHeader({
             </span>
           )}
 
+          {/*
+            When the chain first saw this address, beside when they joined
+            here - and the pair is the point. "Joined last week" with "first
+            seen March 2024" is somebody who has been around and only just
+            signed up; both saying last week is a wallet created to say
+            whatever it is about to say.
+
+            Drawn only when we know. An address nobody has looked up yet, or
+            one the explorer has no record of, shows nothing rather than a
+            guess - walletAgeLabel returns null and this renders nothing,
+            because "first seen" with the wrong date is worse than silence on
+            a page read to decide whether to trust somebody.
+          */}
+          {ageLabel && (
+            <span
+              className="xp-meta-item"
+              title={`${new Date(firstSeenAt).toLocaleString()} - the first transaction this address appears in, according to the block explorer`}
+            >
+              <Wallet size={12} />
+              {ageLabel}
+            </span>
+          )}
+
+          {/*
+            A new wallet is said in words, not left to arithmetic on a date.
+
+            This is the one piece of on-chain identity that earns its place on
+            every profile by default: the risk this site carries is somebody
+            being talked into a token by an account that did not exist last
+            month, and a reader should not have to work that out from a month
+            name. Never the inverse claim - nothing here says an account is
+            trustworthy for being old.
+          */}
+          {fresh && (
+            <span className="xp-meta-item is-fresh" title={`Under ${FRESH_WALLET_DAYS} days old`}>
+              <Sprout size={12} />
+              New wallet
+            </span>
+          )}
+
           {profile?.links?.map((link) => (
             <a
               key={link.url}
@@ -162,15 +221,24 @@ export default function ProfileHeader({
 
         {/* Counts read as one line, following then followers, which is the
             order every social profile uses and therefore the one nobody has
-            to stop and parse. */}
+            to stop and parse.
+
+            Pressable now, each one opening its own URL. They have been on this
+            page since 0008 and have never been openable, which made them
+            trivia - a number you cannot follow is a number you cannot do
+            anything with, and on a site this small a follower list is how the
+            next person worth reading gets found. */}
         <div className="xp-counts font-mono">
-          <span>
-            <strong>{formatCompactCount(counts.following)}</strong> Following
-          </span>
-          <span>
-            <strong>{formatCompactCount(counts.followers)}</strong>{' '}
-            {counts.followers === 1 ? 'Follower' : 'Followers'}
-          </span>
+          <Count
+            value={counts.following}
+            label="Following"
+            onOpen={onOpenList && (() => onOpenList('following'))}
+          />
+          <Count
+            value={counts.followers}
+            label={counts.followers === 1 ? 'Follower' : 'Followers'}
+            onOpen={onOpenList && (() => onOpenList('followers'))}
+          />
         </div>
 
         <p className="chat-profile-warning">
@@ -185,17 +253,60 @@ export default function ProfileHeader({
         )}
       </div>
 
-      {/* Posts and Replies, because somebody's half of ten conversations is
-          not the same as the things they chose to write. */}
-      <nav className="xp-tabs" role="tablist">
-        <Tab id="posts" current={tab} onSelect={onTab} count={postCount}>
-          Posts
-        </Tab>
-        <Tab id="replies" current={tab} onSelect={onTab} count={replyCount}>
-          Replies
-        </Tab>
-      </nav>
+      {/*
+        Posts and Replies, because somebody's half of ten conversations is not
+        the same as the things they chose to write.
+
+        Two, not four. The roadmap asks for Media and Likes as well, and both
+        are deliberately absent until there is something behind them:
+
+        - Media would be empty on every profile in the app, because a post
+          cannot carry an image yet. That is Batch 3's work. A tab that is
+          always empty is worse than no tab - it reads as a feature that is
+          broken rather than one that has not arrived.
+        - Likes has nothing to list either. Reactions exist on chat messages
+          and not on posts; there is no `post_reactions` table. Adding the tab
+          first would mean inventing the table to fill it, which is a different
+          batch's decision.
+
+        Both are in docs/social-roadmap.md, in the batch that can actually
+        deliver them.
+      */}
+      {showTabs && (
+        <nav className="xp-tabs" role="tablist">
+          <Tab id="posts" current={tab} onSelect={onTab} count={postCount}>
+            Posts
+          </Tab>
+          <Tab id="replies" current={tab} onSelect={onTab} count={replyCount}>
+            Replies
+          </Tab>
+        </nav>
+      )}
     </header>
+  )
+}
+
+/**
+ * One of the two counts.
+ *
+ * A button when there is somewhere to go and plain text when there is not,
+ * rather than a button that does nothing - this header is drawn inside the
+ * chat as well, where there is no route to a page, and a pressable number
+ * that ignores the press is worse than a number.
+ */
+function Count({ value, label, onOpen }) {
+  const body = (
+    <>
+      <strong>{formatCompactCount(value)}</strong> {label}
+    </>
+  )
+
+  if (!onOpen) return <span>{body}</span>
+
+  return (
+    <button type="button" className="xp-count" onClick={onOpen}>
+      {body}
+    </button>
   )
 }
 

@@ -82,6 +82,17 @@ const PAIRS = [
 ]
 
 const HUGE = 'A'.repeat(40_000)
+
+/** Somebody other than the signed-in account, so a follow list has a row on
+ *  it that is not the reader and the Follow button is drawn at all. */
+const FRIEND = '0x2222222222222222222222222222222222222222'
+
+/*
+ * Nulls in all three columns 0019 adds, which is what every row that predates
+ * that migration looks like - `show_holdings` has a default but a row written
+ * before the column existed still reads as null through an old cache, and the
+ * app checks against `true` rather than truthiness for exactly this reason.
+ */
 const NASTY_PROFILE = {
   address: ADDRESS,
   handle: null,
@@ -91,7 +102,41 @@ const NASTY_PROFILE = {
   bio: null,
   links: null,
   created_at: null,
+  pinned_post_id: null,
+  first_seen_at: null,
+  show_holdings: null,
 }
+
+/*
+ * One edge of the follow graph, carrying both column names.
+ *
+ * The fixture answers every select on a table the same way and cannot see
+ * which one was asked, and a followers list reads `follower` while a following
+ * list reads `followee` - so the row holds both. The embed is named `profiles`
+ * in both select strings, which is what lets one row serve either.
+ */
+const FOLLOW_EDGE = {
+  created_at: '2026-02-01T00:00:00Z',
+  follower: FRIEND,
+  followee: FRIEND,
+  profiles: {
+    address: FRIEND,
+    handle: 'whale',
+    avatar_id: null,
+    avatar_url: null,
+    bio: 'buys dips',
+  },
+}
+
+/*
+ * An edge whose person is missing.
+ *
+ * The foreign keys make this impossible in the database, which is exactly why
+ * it is fixtured: the constraint lives somewhere this code does not get to
+ * see, and a row with no profile on it must be dropped rather than drawn as a
+ * blank person or thrown over.
+ */
+const NASTY_FOLLOW_EDGE = { created_at: null, follower: null, followee: null, profiles: null }
 const NASTY_POST = {
   id: 1,
   address: ADDRESS,
@@ -257,13 +302,30 @@ const FIXTURES = {
   /** The ordinary case, so a failure elsewhere is known to be the data. */
   healthy: (table) => {
     if (table === 'profiles')
-      return [{ ...NASTY_PROFILE, handle: 'degen', bio: 'gm', links: [], created_at: '2026-01-01T00:00:00Z' }]
+      return [
+        {
+          ...NASTY_PROFILE,
+          handle: 'degen',
+          bio: 'gm',
+          links: [],
+          created_at: '2026-01-01T00:00:00Z',
+          /* Pinned to the post the posts fixture returns, so the pin resolves
+             and the ownership check in fetchPinnedPost passes - both rows are
+             ADDRESS. */
+          pinned_post_id: 1,
+          /* Old enough that the page says "first seen" and does not say "new
+             wallet". The fresh case has its own scenario. */
+          first_seen_at: '2021-06-01T00:00:00Z',
+          show_holdings: false,
+        },
+      ]
     if (table === 'posts')
       return [{ ...NASTY_POST, body: 'gm', created_at: '2026-01-01T00:00:00Z', profiles: { handle: 'degen', avatar_id: null, avatar_url: null } }]
     if (table === 'messages')
       return [{ ...NASTY_MESSAGE, body: 'gm', created_at: '2026-01-01T00:00:00Z', profiles: { handle: 'degen', avatar_id: null, avatar_url: null }, message_reactions: [] }]
     if (table === 'rooms') return [TOKEN_ROOM, OPEN_GROUP, GATED_GROUP]
     if (table === 'token_claims') return [TOKEN_CLAIM]
+    if (table === 'follows') return [FOLLOW_EDGE]
     /*
      * The last change to a room's rule, which the room draws a notice from.
      * A notice rather than a message, because `messages.address` is not null
@@ -293,6 +355,8 @@ const FIXTURES = {
     // A revoked claim and one with nothing in it. Neither may draw a badge.
     if (table === 'token_claims')
       return [REVOKED_CLAIM, { token_address: null, address: null, claimed_at: null, revoked_at: null }]
+    // A real edge and one with nobody on the other end of it.
+    if (table === 'follows') return [FOLLOW_EDGE, NASTY_FOLLOW_EDGE]
     // A change row with every nullable column null, which is what removing a
     // gate looks like - and one whose date is unreadable.
     if (table === 'room_gate_changes')
@@ -310,10 +374,36 @@ const FIXTURES = {
   },
   /** Nothing at all - the state every one of these tables starts in. */
   empty: () => [],
+  /*
+   * The healthy data, with one account having turned its holdings on.
+   *
+   * A fixture of its own rather than a flag, because `show_holdings` is the
+   * one column in this app where the default and the opt-in have to be tested
+   * as two separate states of the same page - the scenario that proves the
+   * panel is hidden and the scenario that proves it works cannot share a
+   * profile row.
+   */
+  shownHoldings: (table) =>
+    table === 'profiles'
+      ? FIXTURES.healthy(table).map((row) => ({ ...row, show_holdings: true }))
+      : FIXTURES.healthy(table),
 }
 
 /** Answer the database, the session and the app's own endpoints. */
-async function wire(page, { fixture = 'healthy', signedIn = true, apiStatus = 200, token = false } = {}) {
+async function wire(page, {
+  fixture = 'healthy',
+  signedIn = true,
+  apiStatus = 200,
+  token = false,
+  /* An explorer answering with token balances, for the holdings panel. Opt-in,
+     because every other scenario should keep testing what that panel does when
+     the chain cannot be reached - which is the ordinary case here, since the
+     catch-all aborts everything. */
+  holdings = false,
+  /* What the wallet-age endpoint answers. Null is the default and means "we do
+     not know", which must draw nothing rather than a date. */
+  firstSeen = null,
+} = {}) {
   // Nothing leaves localhost, so the run says the same thing everywhere.
   await page.route('**/*', (route) =>
     route.request().url().startsWith(BASE) ? route.continue() : route.abort()
@@ -478,15 +568,126 @@ async function wire(page, { fixture = 'healthy', signedIn = true, apiStatus = 20
     })
   })
 
-  await page.route('**/api/profile', (route) =>
-    apiStatus !== 200
-      ? route.fulfill({ status: apiStatus, contentType: 'application/json', body: '{"error":"Profiles are unavailable right now."}' })
-      : route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ address: ADDRESS, handle: null, avatarId: null, avatarUrl: null, bannerUrl: null, bio: null, links: null }),
-        })
+  /*
+   * Your own profile, read and written.
+   *
+   * Method-aware now, because pinning and the holdings switch are PUTs to this
+   * same path. A mock that answered GET's body to a PUT would have let a
+   * failing write look like a working one - the app only reads `error` off a
+   * non-2xx, so a 200 with the wrong shape is indistinguishable from success.
+   */
+  await page.route('**/api/profile', (route) => {
+    if (apiStatus !== 200) {
+      return route.fulfill({
+        status: apiStatus,
+        contentType: 'application/json',
+        body: '{"error":"Profiles are unavailable right now."}',
+      })
+    }
+
+    const base = {
+      address: ADDRESS,
+      handle: null,
+      avatarId: null,
+      avatarUrl: null,
+      bannerUrl: null,
+      bio: null,
+      links: null,
+      pinnedPostId: null,
+      showHoldings: false,
+    }
+
+    if (route.request().method() === 'PUT') {
+      // Echoed back the way the endpoint does, so what the form reads after a
+      // save is what it asked for rather than the unchanged row.
+      let sent = {}
+      try {
+        sent = JSON.parse(route.request().postData() || '{}')
+      } catch {
+        sent = {}
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ...base, ...sent }),
+      })
+    }
+
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(base) })
+  })
+
+  /*
+   * How old a wallet is.
+   *
+   * Registered after the route above, deliberately. Playwright matches routes
+   * in reverse registration order, so the later one wins - and the time that
+   * was got wrong in Batch 5 cost an afternoon. `**\/api/profile` should not
+   * match this path anyway; registering it last means it does not matter
+   * whether that reasoning is right.
+   */
+  await page.route('**/api/profile/first-seen**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ address: ADDRESS, firstSeenAt: firstSeen }),
+    })
   )
+
+  /*
+   * The explorer's view of what an address holds.
+   *
+   * Three tokens, and each one is in the fixture to prove a different branch
+   * of visibleHoldings against a real render: one priced position, one
+   * airdropped advertisement that must be dropped and counted as such, and one
+   * held token with no market, which must be counted rather than drawn at
+   * $0.00 - a row reading zero claims a holding is worthless, which is a
+   * different statement from not knowing what it is worth.
+   *
+   * QUIET_TOKEN is priced by the dexscreener fixture above at $1.25, so a
+   * thousand of them is a position worth listing.
+   */
+  if (holdings) {
+    await page.route('**/api.scan.pulsechain.com/**', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: [
+            {
+              value: '1000000000000000000000',
+              token: {
+                address: QUIET_TOKEN,
+                symbol: 'QUIET',
+                name: 'Nobody Talks',
+                decimals: '18',
+                type: 'ERC-20',
+              },
+            },
+            {
+              value: '5000000000000000000000',
+              token: {
+                address: '0x' + '7'.repeat(40),
+                symbol: 'CLAIM',
+                name: 'Visit claim-airdrop.com',
+                decimals: '18',
+                type: 'ERC-20',
+              },
+            },
+            {
+              value: '9000000000000000000000',
+              token: {
+                address: '0x' + '6'.repeat(40),
+                symbol: 'NOMKT',
+                name: 'No Market Here',
+                decimals: '18',
+                type: 'ERC-20',
+              },
+            },
+          ],
+        }),
+      })
+    )
+  }
 }
 
 const results = []
@@ -1129,6 +1330,316 @@ await run('direct / profile by handle', { path: '/u/@degen' })
 await run('direct / profile, nasty row', { path: `/u/${ADDRESS}`, fixture: 'nasty' })
 await run('direct / profile, no such person', { path: `/u/${ADDRESS}`, fixture: 'empty' })
 await run('direct / unknown path', { path: '/no/such/page' })
+
+/* ------------------------------------------------- Batch 2: the profile -- */
+
+/*
+ * Everything below is about one page, and that is where this batch's risk
+ * lives. The migration adds three columns to the select every profile read
+ * goes through, the header gained a lookup that can answer null, the page
+ * gained two more URLs, and one of the new panels publishes somebody's
+ * balances. Lint and 1129 unit tests pass all of it; a browser is what notices
+ * that a pinned post is drawn twice, or that an unknown wallet age renders as
+ * a date.
+ */
+
+await run('profile / a pin is drawn once, above the tabs', {
+  path: `/u/${ADDRESS}`,
+  steps: async (page) => {
+    await page.waitForSelector('.xp-pinned', { timeout: 6000 })
+
+    /*
+     * The pinned post and the feed return the same row - the fixture pins the
+     * post it also lists - so this is the check that the feed drops it. Drawn
+     * twice is the obvious way to get this wrong and it looks like a bug
+     * rather than a feature, which is why it is asserted rather than eyeballed.
+     */
+    const cards = await page.locator('.feed-post').count()
+    if (cards !== 1) throw new Error(`expected the pinned post once, saw ${cards} posts`)
+
+    const label = await page.locator('.xp-pinned-label').innerText()
+    if (!/pinned/i.test(label)) throw new Error(`the pin is not labelled - saw ${JSON.stringify(label)}`)
+  },
+})
+
+/*
+ * Two tabs, and this scenario exists to keep it that way.
+ *
+ * The roadmap asks for Media and Likes. Neither has anything behind it - a
+ * post cannot carry an image until Batch 3, and there is no post_reactions
+ * table at all - so both are deliberately absent. An always-empty tab reads as
+ * a broken feature rather than an unbuilt one, and this fails the build if one
+ * appears before the thing it would list.
+ */
+await run('profile / no tab without something behind it', {
+  path: `/u/${ADDRESS}`,
+  steps: async (page) => {
+    await page.waitForSelector('.xp-tabs', { timeout: 6000 })
+    const tabs = await page.locator('.xp-tab').allInnerTexts()
+    if (tabs.length !== 2) throw new Error(`expected Posts and Replies, saw ${JSON.stringify(tabs)}`)
+    const text = tabs.join(' ').toLowerCase()
+    if (/media|likes/.test(text)) throw new Error(`a tab with nothing behind it: ${JSON.stringify(tabs)}`)
+  },
+})
+
+await run('profile / an old wallet is dated and not called new', {
+  path: `/u/${ADDRESS}`,
+  steps: async (page) => {
+    const meta = await page.locator('.xp-meta').innerText()
+    if (!/first seen/i.test(meta)) throw new Error(`no wallet age - saw ${JSON.stringify(meta)}`)
+    if (/new wallet/i.test(meta)) throw new Error('a 2021 wallet was called new')
+  },
+})
+
+/*
+ * The claim that earns this feature its place on every profile by default.
+ *
+ * The whole risk this site carries is somebody being talked into a token by an
+ * account that did not exist last month, and a reader should not have to do
+ * arithmetic on a month name to notice.
+ */
+await run('profile / a wallet made this week says so', {
+  path: `/u/${ADDRESS}`,
+  fixture: 'nasty',
+  firstSeen: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+  steps: async (page) => {
+    await page.waitForSelector('.xp-meta-item.is-fresh', { timeout: 6000 })
+    const meta = await page.locator('.xp-meta').innerText()
+    if (!/new wallet/i.test(meta)) throw new Error(`a three-day-old wallet was not flagged - ${JSON.stringify(meta)}`)
+  },
+})
+
+/*
+ * The asymmetry that matters most here. An address nobody has looked up, or
+ * one the explorer has no record of, must draw nothing - never a date, and
+ * never the absence of a "new wallet" badge read as "this account is old".
+ */
+await run('profile / an unknown wallet age says nothing at all', {
+  path: `/u/${ADDRESS}`,
+  fixture: 'nasty',
+  firstSeen: null,
+  steps: async (page) => {
+    const meta = await page.locator('.xp-meta').innerText().catch(() => '')
+    if (/first seen|new wallet/i.test(meta)) {
+      throw new Error(`an unknown age was rendered as something - ${JSON.stringify(meta)}`)
+    }
+  },
+})
+
+/*
+ * Holdings are off unless the account turned them on, and this is the scenario
+ * that fails the build if that ever inverts. The fixture's profile says false;
+ * nothing about the page may say otherwise.
+ */
+await run('profile / holdings stay hidden unless asked for', {
+  path: `/u/${ADDRESS}`,
+  holdings: true,
+  steps: async (page) => {
+    const panels = await page.locator('.xp-holdings').count()
+    if (panels !== 0) throw new Error('holdings were published without the account asking')
+  },
+})
+
+/*
+ * Signed out, deliberately: this is the stranger's view, which is the whole
+ * reason the feature is worth being careful about. The owner's view says
+ * something different and has its own scenario below.
+ */
+await run('profile / holdings when the account asked for them', {
+  path: `/u/${ADDRESS}`,
+  holdings: true,
+  fixture: 'shownHoldings',
+  signedIn: false,
+  steps: async (page) => {
+    await page.waitForSelector('.xp-holdings', { timeout: 8000 })
+    const text = await page.locator('.xp-holdings').innerText()
+
+    // The priced position is listed.
+    if (!/QUIET/.test(text)) throw new Error(`the priced holding is missing - ${JSON.stringify(text.slice(0, 200))}`)
+
+    /*
+     * The airdropped advertisement is not, and the page says it left something
+     * out. A trimmed list presented as a whole one is a lie about somebody's
+     * wallet; naming spam as spam is what stops forty scam tokens being
+     * counted against the person holding them.
+     */
+    if (/CLAIM|claim-airdrop/i.test(text)) throw new Error('an airdropped token was listed as a holding')
+    if (!/not shown/i.test(text)) throw new Error(`the panel hid rows without saying so - ${JSON.stringify(text.slice(0, 200))}`)
+
+    // And it says whose choice it was that any of this is visible.
+    if (!/chose to/i.test(text)) throw new Error('the panel does not say the account opted in')
+  },
+})
+
+/*
+ * The owner's view of their own panel, which has to say the opposite thing:
+ * not "this account chose to" but "you chose to, and here is where to undo
+ * it". A privacy control somebody cannot find their way back to is one they
+ * cannot revoke.
+ */
+await run('profile / your own holdings tell you how to hide them', {
+  path: `/u/${ADDRESS}`,
+  holdings: true,
+  fixture: 'shownHoldings',
+  steps: async (page) => {
+    await page.waitForSelector('.xp-holdings', { timeout: 8000 })
+    const text = await page.locator('.xp-holdings').innerText()
+    if (!/profile settings/i.test(text)) {
+      throw new Error(`no route back to the switch - ${JSON.stringify(text.slice(-200))}`)
+    }
+  },
+})
+
+/*
+ * The holdings panel with no chain reachable, which is the ordinary case for
+ * every other scenario in this file and the one most likely to be met in
+ * production by somebody on a bad connection.
+ */
+await run('profile / holdings when the chain cannot be read', {
+  path: `/u/${ADDRESS}`,
+  fixture: 'shownHoldings',
+  steps: async (page) => {
+    await page.waitForSelector('.xp-holdings', { timeout: 8000 })
+    const text = await page.locator('.xp-holdings').innerText()
+    if (/\$NaN|undefined|null/.test(text)) throw new Error(`arithmetic leaked into the panel - ${JSON.stringify(text.slice(0, 160))}`)
+  },
+})
+
+/* ── The follow graph, as two pages ── */
+
+await run('profile / who follows this account', {
+  path: `/u/${ADDRESS}/followers`,
+  steps: async (page) => {
+    await page.waitForSelector('.follow-list', { timeout: 6000 })
+    const text = await page.locator('.follow-list').innerText()
+    if (!/whale/i.test(text)) throw new Error(`the follower is not listed - ${JSON.stringify(text.slice(0, 200))}`)
+    // Said once, where somebody will read it, rather than discovered by
+    // finding your own name on a stranger's list.
+    if (!/public/i.test(text)) throw new Error('the list does not say follows are public')
+  },
+})
+
+await run('profile / who this account follows', {
+  path: `/u/@degen/following`,
+  steps: async (page) => {
+    await page.waitForSelector('.follow-list', { timeout: 6000 })
+    const heading = await page.locator('.follow-list .discover-title').innerText()
+    if (!/follows/i.test(heading)) throw new Error(`the heading does not say which list - ${JSON.stringify(heading)}`)
+  },
+})
+
+/*
+ * The tabs are switching a feed that is not on the screen while a list is
+ * showing, so they are not drawn. A tab that does nothing when pressed is how
+ * a tab strip teaches people it is decoration.
+ */
+await run('profile / no tab strip over a follow list', {
+  path: `/u/${ADDRESS}/followers`,
+  steps: async (page) => {
+    await page.waitForSelector('.follow-list', { timeout: 6000 })
+    const tabs = await page.locator('.xp-tabs').count()
+    if (tabs !== 0) throw new Error('the tab strip is drawn over a list it cannot switch')
+  },
+})
+
+await run('profile / an empty follow list is said, not shown as nothing', {
+  path: `/u/${ADDRESS}/following`,
+  fixture: 'empty',
+  steps: async (page) => {
+    const text = await page.locator('main').innerText()
+    if (!/does not follow anyone|nobody follows/i.test(text)) {
+      throw new Error(`an empty list said nothing - ${JSON.stringify(text.replace(/\s+/g, ' ').slice(0, 200))}`)
+    }
+  },
+})
+
+/* An edge with nobody on the other end of it. Impossible in the database,
+   which is why it is here - the constraint is somewhere this code cannot see. */
+await run('profile / a follow list on rows full of nulls', {
+  path: `/u/${ADDRESS}/followers`,
+  fixture: 'nasty',
+  steps: async (page) => {
+    await page.waitForSelector('.follow-list', { timeout: 6000 })
+    const rows = await page.locator('.follow-list .person-card').count()
+    if (rows !== 1) throw new Error(`expected the one real person, saw ${rows} rows`)
+  },
+})
+
+await run('profile / a follow list on a phone', {
+  viewport: PHONE,
+  path: `/u/${ADDRESS}/followers`,
+})
+
+await run('db 500 / a follow list', { path: `/u/${ADDRESS}/followers`, apiStatus: 500 })
+
+/*
+ * The counts have been on this page since 0008 and have never been pressable,
+ * which made them trivia. This is the check that pressing one goes somewhere -
+ * and that where it goes is a URL, so it can be sent to somebody.
+ */
+await run('profile / the counts open the lists', {
+  path: `/u/${ADDRESS}`,
+  steps: async (page) => {
+    await page.waitForSelector('.xp-count', { timeout: 6000 })
+    await page.locator('.xp-count', { hasText: /follower/i }).first().click()
+    await page.waitForTimeout(900)
+
+    const url = page.url()
+    if (!url.endsWith('/followers')) throw new Error(`the count did not open a URL - at ${url}`)
+    await page.waitForSelector('.follow-list', { timeout: 6000 })
+  },
+})
+
+/*
+ * The switch itself, in profile settings.
+ *
+ * The one control on that form that writes when it is pressed rather than on
+ * Save, and the scenario exists for the sentence as much as the behaviour: a
+ * switch that implied it made balances secret would be a privacy promise this
+ * app cannot keep, because the chain shows them to anybody with the address.
+ * What it controls is findability, and the page has to say so.
+ */
+await run('account / the holdings switch says what it actually does', {
+  steps: async (page) => {
+    await accountMenu('Profile settings')(page)
+    await page.waitForSelector('.profile-holdings-toggle', { timeout: 8000 })
+
+    const note = await page.locator('.profile-holdings-toggle .profile-field-note').innerText()
+    if (!/already on the chain/i.test(note)) {
+      throw new Error(`the switch overstates what it hides - ${JSON.stringify(note.slice(0, 200))}`)
+    }
+    if (!/turn it off/i.test(note)) throw new Error('the switch does not say it is reversible')
+
+    // Off to begin with, for every account, always.
+    const box = page.locator('.profile-holdings-switch input')
+    if (await box.isChecked()) throw new Error('holdings were on before anybody asked')
+
+    await box.check()
+    await page.waitForTimeout(700)
+    if (!(await box.isChecked())) throw new Error('the switch did not stay on')
+  },
+})
+
+await run('history / back out of a follow list', {
+  steps: async (page) => {
+    await page.goto(`${BASE}/u/${ADDRESS}`, { waitUntil: 'domcontentloaded' })
+    await page.waitForTimeout(1000)
+    await page.locator('.xp-count', { hasText: /follower/i }).first().click()
+    await page.waitForTimeout(900)
+    await page.goBack()
+    await page.waitForTimeout(1000)
+
+    /*
+     * Back from a list lands on the profile, not on the home page. The three
+     * routing hooks that Batch 5 unified are the reason this is worth
+     * asserting: each one pushed and read independently, and the symptom was
+     * always a Back that overshot.
+     */
+    const lists = await page.locator('.follow-list').count()
+    if (lists !== 0) throw new Error('Back left the follow list on screen')
+    await page.waitForSelector('.xp-tabs', { timeout: 6000 })
+  },
+})
 
 /*
  * A cold load of every social surface.

@@ -22,7 +22,18 @@ import { usePostActions } from '../../hooks/usePostActions'
  * would publish it to the feed, not to them, which is not what the box under
  * their name appears to promise.
  */
-export default function FeedPanel({ author = null, authors = null, replies = false, onOpenProfile }) {
+export default function FeedPanel({
+  author = null,
+  authors = null,
+  replies = false,
+  onOpenProfile,
+  /* Which post is pinned, and how to change it. Both come from the profile
+     page, which owns the pin - this list only draws the control. Absent
+     everywhere else, which is what keeps the control off the main feed, where
+     there is nothing for a post to be pinned to. */
+  pinnedPostId = null,
+  onTogglePin,
+}) {
   const { account } = useSiweAuth()
   const isModerator = useIsModerator()
   const { posts, status, error, add, remove, hasMore, loadingOlder, loadOlder } = useFeed({ author, authors, replies })
@@ -41,6 +52,26 @@ export default function FeedPanel({ author = null, authors = null, replies = fal
   const [replyCounts, setReplyCounts] = useState(() => new Map())
 
   const mine = account ? account.toLowerCase() : null
+
+  /*
+   * The pinned post, dropped from this list because it is drawn above it.
+   *
+   * Caught by the browser harness and by nothing else: the pin and the feed
+   * are two queries that both legitimately return the same row, so every unit
+   * test passed and the page showed the same post twice, once under the word
+   * "Pinned" and once in date order. That reads as a bug rather than a
+   * feature, which is the whole problem with it.
+   *
+   * It costs the page one row out of a page of twenty rather than
+   * re-requesting, which is the right trade - asking the database to exclude
+   * one id would be a second query shape to keep in step with this one for
+   * the sake of one row.
+   *
+   * `pinnedPostId` is only passed on a profile, so the main feed is untouched:
+   * somebody's pinned post is still an ordinary post there, because there is
+   * nothing on that page for it to be pinned to.
+   */
+  const shownPosts = pinnedPostId ? posts.filter((post) => post.id !== pinnedPostId) : posts
 
   /*
    * Reply counts for whatever is on screen.
@@ -100,12 +131,18 @@ export default function FeedPanel({ author = null, authors = null, replies = fal
         </p>
       )}
 
-      {posts.length === 0 ? (
-        <p className="chat-empty">
-          {author ? 'Nothing posted yet.' : 'Nobody has posted yet. Go first.'}
-        </p>
+      {shownPosts.length === 0 ? (
+        /*
+         * Nothing to say when the only post is the one pinned above. An
+         * account whose single post is its pinned post has a page with
+         * something on it, and "Nothing here yet" underneath that post would
+         * be contradicted by the thing directly above it.
+         */
+        pinnedPostId ? null : (
+          <p className="chat-empty">{emptyText({ author, ownProfile, replies })}</p>
+        )
       ) : (
-        posts.map((post) => (
+        shownPosts.map((post) => (
           <div key={post.id} className="feed-item">
           <PostCard
             post={post}
@@ -120,6 +157,18 @@ export default function FeedPanel({ author = null, authors = null, replies = fal
             onToggleReplies={replies ? undefined : toggleThread}
             replyCount={replyCounts.get(post.id) || 0}
             threadOpen={openThread === post.id}
+            /*
+             * Pinning only on your own profile, and only for top-level posts.
+             *
+             * `ownProfile` is the condition rather than `isOwn`: your own post
+             * appears in the main feed too, and a pin control there would be
+             * offering to change a page you are not looking at. A reply is
+             * excluded because a pin is what an account leads with, and
+             * leading with your half of somebody else's conversation says
+             * nothing about you.
+             */
+            pinned={post.id === pinnedPostId}
+            onTogglePin={ownProfile && !replies ? onTogglePin : undefined}
           />
 
           {openThread === post.id && (
@@ -149,6 +198,29 @@ export default function FeedPanel({ author = null, authors = null, replies = fal
       )}
     </div>
   )
+}
+
+/**
+ * What an empty list says.
+ *
+ * Five sentences rather than two, because "Nothing posted yet." was the same
+ * answer to five different questions - and on your own brand new profile it
+ * was the answer to the only one that matters, which is "what do I do now".
+ * An empty state on a page somebody owns should be a next step; on somebody
+ * else's it should be a fact and nothing more.
+ */
+function emptyText({ author, ownProfile, replies }) {
+  if (ownProfile) {
+    return replies
+      ? 'You have not replied to anything yet. Replying is how anybody finds you.'
+      : 'Nothing here yet. The box above posts to the feed, and whatever you write stays on this page.'
+  }
+
+  if (author) {
+    return replies ? 'No replies from this account yet.' : 'This account has not posted yet.'
+  }
+
+  return 'Nobody has posted yet. Go first.'
 }
 
 /** The three states that are not a feed, said the same way the chat says them. */

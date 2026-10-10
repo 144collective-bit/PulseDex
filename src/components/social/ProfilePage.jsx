@@ -1,8 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, ArrowLeft, Loader2 } from 'lucide-react'
 import FeedPanel from './FeedPanel'
+import FollowList from './FollowList'
+import HoldingsPanel from './HoldingsPanel'
+import PinnedPost from './PinnedPost'
 import ProfileHeader from './ProfileHeader'
-import { fetchPublicProfile, fetchProfileByHandle, removeAvatar, removeBanner } from '../../services/profile'
+import {
+  fetchPinnedPost,
+  fetchProfileByHandle,
+  fetchPublicProfile,
+  removeAvatar,
+  removeBanner,
+  setPinnedPost,
+} from '../../services/profile'
 import { useIsModerator } from '../../hooks/useIsModerator'
 import { useSiweAuth } from '../../context/SiweAuthContext'
 import { fetchPostCount } from '../../services/posts'
@@ -30,7 +40,9 @@ import '../../styles/social.css'
  * Reachable at /u/@handle or /u/0x..., and it resolves whichever it is given.
  * Both spellings exist deliberately: the handle is what anyone would paste
  * into a conversation, and the address is what still works after they change
- * it.
+ * it. /u/<who>/followers and /u/<who>/following are the same surface showing
+ * one of the two lists instead of the posts - see FollowList for why those are
+ * URLs rather than tabs.
  *
  * Read entirely over the anon key. Nothing here is behind a sign-in, because
  * nothing here is private - a profile that only members could see would be a
@@ -50,9 +62,10 @@ export default function ProfilePage({
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState(null)
   const [postCount, setPostCount] = useState(null)
+  const [pinned, setPinned] = useState(null)
   const [tab, setTab] = useState('posts')
 
-  const { address, handle } = route
+  const { address, handle, list } = route
 
   useEffect(() => {
     let active = true
@@ -100,6 +113,42 @@ export default function ProfilePage({
     }
   }, [shownAddress])
 
+  /*
+   * The pinned post, fetched by id once the profile says there is one.
+   *
+   * Separate rather than embedded in the profile query, and the reason is in
+   * src/config/queries.js: `profiles` reaches `posts` two ways now, so an
+   * embed would need a foreign key hint, and "unless it has been removed" is
+   * not a condition PostgREST expresses well inside one. By id, through the
+   * ordinary post path, a removed pin comes back as null and the page simply
+   * has no pin - which is what it should look like.
+   */
+  const pinnedId = profile?.pinnedPostId || null
+  useEffect(() => {
+    if (!pinnedId || !profile) {
+      setPinned(null)
+      return undefined
+    }
+
+    let active = true
+    fetchPinnedPost(profile).then((post) => {
+      if (active) setPinned(post)
+    })
+
+    return () => {
+      active = false
+    }
+    /*
+     * Keyed on the id and the address rather than on `profile`, which is a new
+     * object on every load of the page and would re-fetch the same post for
+     * no reason. Both, because the id alone would not notice the page moving
+     * to a different person who happens to have pinned the same post - which
+     * cannot happen, since a pin must be your own post, but the dependency
+     * being right should not rest on that.
+     */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pinnedId, profile?.address])
+
   const onRemovePicture = useCallback(async () => {
     if (!profile) return
     const ok = window.confirm(
@@ -120,6 +169,38 @@ export default function ProfilePage({
       setError(err.message)
     }
   }, [profile])
+
+  /*
+   * Pin or unpin, from the control on your own post.
+   *
+   * The profile in state is moved first so the label and the block at the top
+   * of the page agree immediately, and put back if the write fails - the same
+   * shape as the follow button, and for the same reason: a pin that takes a
+   * round trip to appear reads as a control that did not work.
+   */
+  const onTogglePin = useCallback(
+    async (postId) => {
+      const before = profile?.pinnedPostId ?? null
+      setError(null)
+      setProfile((prev) => (prev ? { ...prev, pinnedPostId: postId } : prev))
+
+      try {
+        await setPinnedPost(postId)
+      } catch (err) {
+        setProfile((prev) => (prev ? { ...prev, pinnedPostId: before } : prev))
+        setError(err.message)
+      }
+    },
+    [profile?.pinnedPostId],
+  )
+
+  /** Open one of the two follow lists, as a URL. */
+  const onOpenList = useCallback(
+    (which) => {
+      onOpenProfile?.({ address: profile?.address || address, handle, list: which })
+    },
+    [onOpenProfile, profile?.address, address, handle],
+  )
 
   /*
    * An address-spelled URL for somebody with no profile row still shows a
@@ -174,16 +255,24 @@ export default function ProfilePage({
         onRemovePicture={onRemovePicture}
         tab={tab}
         onTab={setTab}
+        onOpenList={onOpenList}
+        /*
+         * The tabs are hidden while a follow list is showing. They would be
+         * switching a feed that is not on the screen, and pressing one and
+         * watching nothing happen is how a tab strip teaches people it is
+         * decoration.
+         */
+        showTabs={!list}
       />
 
       {/* A next step rather than a blank space. Every new account lands here
           with nothing on it, so this is the version of the page most people
           see first, and "nothing here" is a dead end. */}
-      {isBare && (
+      {isBare && !list && (
         <p className="profile-public-prompt">
           This is your page, and it is empty. Add a picture, a line about
           yourself and up to three links in profile settings - then post
-          something below and it stays here.
+          something below and it stays here. Pin the one you want read first.
         </p>
       )}
 
@@ -193,14 +282,47 @@ export default function ProfilePage({
         </p>
       )}
 
-      {/* Keyed by the tab, so switching rebuilds the list rather than
-          merging replies into the posts already held. */}
-      <FeedPanel
-        key={tab}
-        author={shown.address}
-        replies={tab === 'replies'}
-        onOpenProfile={onOpenProfile}
-      />
+      {list ? (
+        <FollowList
+          subject={{ address: shown.address, handle: shown.handle }}
+          list={list}
+          onOpenProfile={onOpenProfile}
+        />
+      ) : (
+        <>
+          {/*
+            Holdings, when and only when this account has asked for them to be
+            shown. Off for everybody until they say otherwise - the reasoning
+            is in 0019_profile_depth.sql and in HoldingsPanel itself.
+          */}
+          {profile?.showHoldings && <HoldingsPanel address={shown.address} isMine={isMine} />}
+
+          {/* Above the tabs, because a pin is part of who this account is
+              rather than the first item of their timeline. */}
+          <PinnedPost
+            post={pinned}
+            isOwn={isMine}
+            onOpenProfile={onOpenProfile}
+            onTogglePin={isMine ? onTogglePin : undefined}
+            /* A pinned post removed from here leaves the page with no pin,
+               which is what the database will say on the next read anyway -
+               `on delete set null` does not fire on a soft delete, so
+               fetchPinnedPost is what turns it into no pin. */
+            onRemoved={() => setPinned(null)}
+          />
+
+          {/* Keyed by the tab, so switching rebuilds the list rather than
+              merging replies into the posts already held. */}
+          <FeedPanel
+            key={tab}
+            author={shown.address}
+            replies={tab === 'replies'}
+            onOpenProfile={onOpenProfile}
+            pinnedPostId={profile?.pinnedPostId || null}
+            onTogglePin={isMine ? onTogglePin : undefined}
+          />
+        </>
+      )}
     </Frame>
   )
 }
@@ -225,17 +347,4 @@ function Frame({ onClose, embedded, children }) {
       {children}
     </div>
   )
-}
-
-/**
- * When somebody joined, as a month and year.
- *
- * Not a full date and not "3 months ago". The exact day is on the tooltip for
- * anyone who wants it; on the page it is a rough vintage, which is what the
- * number is actually read for - whether this account has been around.
- */
-function formatJoined(iso) {
-  const at = Date.parse(iso)
-  if (!Number.isFinite(at)) return 'recently'
-  return new Date(at).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
 }

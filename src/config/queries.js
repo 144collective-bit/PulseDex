@@ -135,9 +135,61 @@ export const NOTIFICATION_FIELDS = `
  * `updated_at` is deliberately absent. It would say when somebody last touched
  * their profile, which is harmless-looking and a way of telling who is active
  * right now.
+ *
+ * `first_seen_checked_at` is absent for a related reason and a smaller one: it
+ * is our bookkeeping about when we last asked an explorer, which is nobody
+ * else's business and tells a reader nothing.
  */
 export const PUBLIC_PROFILE_FIELDS =
-  'address, handle, avatar_id, avatar_url, banner_url, bio, links, created_at'
+  'address, handle, avatar_id, avatar_url, banner_url, bio, links, created_at, ' +
+  /*
+   * Added by 0019. Three columns, and this is what makes that migration
+   * required rather than optional - the same trade as `archived_at` and 0018.
+   * A select naming a column that does not exist fails outright, and every
+   * profile read goes through this string, so a deployment whose migration has
+   * not been run presents as a profile page that will not load.
+   *
+   * That is the chosen failure: loud, at a named place, with
+   * api/_routes/health.js able to say which column is missing. The alternative
+   * - reading the columns only where they are used - would mean a profile page
+   * that silently never shows a pin, and nobody able to say why.
+   *
+   * `pinned_post_id` is an id and not an embed, deliberately. `profiles`
+   * reaches `posts` twice now - a post's author, and this - so an embed would
+   * need a foreign key hint, and PostgREST's filtering of embedded rows is not
+   * the place to express "unless it has been deleted". A pinned post is
+   * fetched by id instead, through the same path as any other post, which
+   * already drops the removed ones.
+   */
+  'pinned_post_id, first_seen_at, show_holdings'
+
+/**
+ * One edge of the follow graph, with the person on the other end of it.
+ *
+ * Two strings rather than one, because the join goes in two directions and
+ * each has to name which. `follows` reaches `profiles` twice - through
+ * `follower` and through `followee` - so an unqualified embed is the "more
+ * than one relationship was found" error that has taken this app's chat and
+ * feed down once each already.
+ *
+ * The constraint names are the ones Postgres generated for 0008's inline
+ * `references`, which were never written down anywhere. They are now:
+ * 0019_profile_depth.sql verifies both exist and raises if they do not, so
+ * this file's assumption fails at the moment a human is running a migration
+ * rather than later, in front of a reader, on a page that will not load.
+ *
+ * Only what a row in a list of people needs. Not `links`, not `banner_url`,
+ * not the new on-chain columns - a followers list is scanned twenty at a time,
+ * and every column it does not draw is weight on a query it runs for every
+ * page.
+ */
+const FOLLOW_PERSON = 'address, handle, avatar_id, avatar_url, bio'
+
+export const FOLLOWER_FIELDS =
+  `created_at, follower, profiles!follows_follower_fkey ( ${FOLLOW_PERSON} )`
+
+export const FOLLOWEE_FIELDS =
+  `created_at, followee, profiles!follows_followee_fkey ( ${FOLLOW_PERSON} )`
 
 /**
  * A room as the app reads one.

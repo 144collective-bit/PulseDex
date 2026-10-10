@@ -19,12 +19,29 @@ describe('readRoute', () => {
   })
 
   it('reads a profile, by handle and by address', () => {
-    expect(readRoute('/u/@satoshi')).toEqual({ kind: 'profile', handle: 'satoshi', address: null })
+    expect(readRoute('/u/@satoshi')).toEqual({ kind: 'profile', handle: 'satoshi', address: null, list: null })
     expect(readRoute(`/u/${ADDRESS}`)).toEqual({
       kind: 'profile',
       handle: null,
       address: ADDRESS,
+      list: null,
     })
+  })
+
+  it('reads the follow graph as two more profile surfaces', () => {
+    expect(readRoute('/u/@satoshi/followers')).toEqual({
+      kind: 'profile',
+      handle: 'satoshi',
+      address: null,
+      list: 'followers',
+    })
+    expect(readRoute(`/u/${ADDRESS}/following`)?.list).toBe('following')
+  })
+
+  it('round-trips a follow list back to the path it came from', () => {
+    for (const path of ['/u/@satoshi/followers', `/u/${ADDRESS}/following`]) {
+      expect(routePath(readRoute(path))).toBe(path)
+    }
   })
 
   it('reads every social surface', () => {
@@ -80,8 +97,10 @@ describe('routePath', () => {
   it('round-trips every surface', () => {
     for (const route of [
       { kind: 'token', address: ADDRESS },
-      { kind: 'profile', handle: 'satoshi', address: null },
-      { kind: 'profile', handle: null, address: ADDRESS },
+      { kind: 'profile', handle: 'satoshi', address: null, list: null },
+      { kind: 'profile', handle: null, address: ADDRESS, list: null },
+      { kind: 'profile', handle: 'satoshi', address: null, list: 'followers' },
+      { kind: 'profile', handle: null, address: ADDRESS, list: 'following' },
       { kind: 'social', tab: 'feed', room: null, message: null, post: null },
       { kind: 'social', tab: 'rooms', room: 'lounge', message: null, post: null },
       { kind: 'social', tab: 'rooms', room: 'lounge', message: 9, post: null },

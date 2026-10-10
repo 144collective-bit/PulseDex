@@ -181,9 +181,19 @@ function MainApp() {
     window.scrollTo({ top: 0 })
   }, [go])
 
-  const openProfile = useCallback(({ address, handle } = {}) => {
+  /**
+   * Somebody's page, or one of the two follow lists hanging off it.
+   *
+   * `list` is passed through rather than being a second function, because
+   * /u/@who and /u/@who/followers are the same surface with a different view
+   * of the same person - and a separate `openFollowers` would be a second
+   * place that has to remember to prefer the handle over the address.
+   * routePath drops a `list` it would not be able to read back, so an
+   * unexpected value lands on the profile rather than on nothing.
+   */
+  const openProfile = useCallback(({ address, handle, list = null } = {}) => {
     if (!address && !handle) return
-    go({ kind: 'profile', address: address || null, handle: handle || null })
+    go({ kind: 'profile', address: address || null, handle: handle || null, list })
     window.scrollTo({ top: 0 })
   }, [go])
 
@@ -387,7 +397,9 @@ function MainApp() {
             rather than unmounting the app and leaving a white screen. Keyed on
             the current view, so moving to another tab clears a failure instead
             of leaving the message in place for every tab. */}
-        <RouteErrorBoundary resetKey={`${shownTab}|${tokenAddress || ''}|${profileRoute?.address || profileRoute?.handle || ''}`}>
+        {/* The follow list is part of the key, so a failure loading one does
+            not survive going back to the profile it hangs off. */}
+        <RouteErrorBoundary resetKey={`${shownTab}|${tokenAddress || ''}|${profileRoute?.address || profileRoute?.handle || ''}|${profileRoute?.list || ''}`}>
         <Suspense fallback={<TabLoading />}>
         {/* A direct /token/<address> link takes over the content area; the tab
             shell stays mounted underneath so Back returns to it instantly. */}

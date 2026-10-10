@@ -14568,6 +14568,54 @@
 }
 
 /* --------------------------------------------------------------------------
+   Holdings, opt-in
+   --------------------------------------------------------------------------
+   The one control on this form that writes when it is pressed rather than on
+   Save, so it is drawn as a switch with a sentence rather than as a field -
+   a checkbox that looks like the rest of the form would imply it is a draft,
+   and a privacy decision must not be a draft.
+   -------------------------------------------------------------------------- */
+.profile-holdings-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.profile-holdings-switch {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-instrument);
+  font-size: 12.5px;
+  color: var(--text-primary, #fff);
+  cursor: pointer;
+}
+
+.profile-holdings-switch input {
+  /* Big enough to hit on a phone without a custom control to maintain. */
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  accent-color: var(--pulse-green, #00e5ff);
+  cursor: pointer;
+}
+
+.profile-holdings-switch input:disabled {
+  cursor: progress;
+}
+
+/* The explanation under a field, which is longer than a hint and has to be
+   readable rather than decorative - it is the text somebody makes the
+   decision on. */
+.profile-field-note {
+  font-family: var(--font-instrument);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* --------------------------------------------------------------------------
    Signed-out profile
    -------------------------------------------------------------------------- */
 .profile-locked-card {
