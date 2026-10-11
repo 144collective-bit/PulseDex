@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { decodeAvatar, REJECTED_AVATAR, MAX_AVATAR_BYTES } from './avatarUpload'
+import { decodeAvatar, REJECTED_AVATAR, MAX_AVATAR_BYTES, MAX_POST_IMAGE_EDGE, isPostImageSize } from './avatarUpload'
 
 /*
  * Checking an uploaded picture.
@@ -73,5 +73,54 @@ describe('decodeAvatar', () => {
     const result = decodeAvatar(toDataUrl('image/jpeg', JPEG))
     expect(result.ok).toBe(true)
     expect(Array.from(result.bytes)).toEqual(JPEG)
+  })
+})
+
+/*
+ * The dimensions a post's image claims.
+ *
+ * They are a claim and not a measurement: measuring would mean decoding the
+ * image on the server, which is an image library in a serverless function -
+ * a large dependency and a large attack surface for two integers. What rests
+ * on the claim is only how much space the feed reserves before the picture
+ * arrives, so a wrong pair makes the layout jump, which is what happens with
+ * no pair at all. Bounded so it cannot be absurd, and refused outright when
+ * half-answered, because 0020's posts_image_shape constraint wants all three
+ * of url, width and height or none of them.
+ */
+describe('isPostImageSize', () => {
+  it('accepts an ordinary pair', () => {
+    expect(isPostImageSize(1280, 720)).toBe(true)
+    expect(isPostImageSize(1, 1)).toBe(true)
+    expect(isPostImageSize(MAX_POST_IMAGE_EDGE, MAX_POST_IMAGE_EDGE)).toBe(true)
+  })
+
+  it('accepts numbers that arrived as strings, since JSON is loose', () => {
+    expect(isPostImageSize('800', '600')).toBe(true)
+  })
+
+  it('refuses a half-answer', () => {
+    expect(isPostImageSize(1280, null)).toBe(false)
+    expect(isPostImageSize(null, 720)).toBe(false)
+    expect(isPostImageSize(undefined, undefined)).toBe(false)
+  })
+
+  it('refuses anything past the column check', () => {
+    expect(isPostImageSize(MAX_POST_IMAGE_EDGE + 1, 100)).toBe(false)
+    expect(isPostImageSize(100, MAX_POST_IMAGE_EDGE + 1)).toBe(false)
+  })
+
+  it('refuses zero, negatives and fractions', () => {
+    expect(isPostImageSize(0, 100)).toBe(false)
+    expect(isPostImageSize(100, 0)).toBe(false)
+    expect(isPostImageSize(-10, 10)).toBe(false)
+    expect(isPostImageSize(10.5, 10)).toBe(false)
+  })
+
+  it('refuses anything that is not a number at all', () => {
+    expect(isPostImageSize('wide', 'tall')).toBe(false)
+    expect(isPostImageSize({}, [])).toBe(false)
+    expect(isPostImageSize(NaN, NaN)).toBe(false)
+    expect(isPostImageSize(Infinity, 100)).toBe(false)
   })
 })

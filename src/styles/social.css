@@ -3246,3 +3246,364 @@ button.notif-excerpt {
   font-size: 10.5px;
   color: var(--text-muted);
 }
+
+/* ==========================================================================
+   Batch 3: posts worth making
+   ========================================================================== */
+
+/* ── A link in a post ── */
+
+/*
+ * Underlined rather than merely coloured. A link that is only a different
+ * colour is invisible to anybody who cannot see that colour, and on a site
+ * where following the wrong link costs money, "is this a link" is not a
+ * question to answer with hue alone.
+ */
+.feed-post-link {
+  color: var(--pulse-cyan, #00e5ff);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  /* A long label still breaks rather than widening the post past the column
+     and giving the whole feed a horizontal scrollbar. */
+  overflow-wrap: anywhere;
+}
+
+.feed-post-link:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* ── "edited" ── */
+
+/*
+ * Beside the timestamp, muted, lowercase. It has to be visible and must not
+ * compete with the post - the marker's job is to be there, not to accuse.
+ */
+.feed-post-edited {
+  color: var(--text-muted);
+  font-style: italic;
+  cursor: help;
+}
+
+/* ── An image on a post ── */
+
+/*
+ * The box is sized by `aspect-ratio` from the stored dimensions, set inline,
+ * so the space is reserved before the bytes arrive. Without it a feed reflows
+ * every time an image decodes - you start reading a post and it jumps up the
+ * screen.
+ */
+.post-image {
+  margin: 8px 0 0;
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-md, 10px);
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.02);
+  /*
+   * Capped height. A 600x4000 screenshot would otherwise be four screens of
+   * one post, and scrolling past it would be the only thing a reader could do
+   * with the feed. `contain` rather than `cover` so the cap shrinks the
+   * picture instead of cropping it - the whole point of fitting rather than
+   * cropping on the way in.
+   */
+  max-height: 70vh;
+  display: flex;
+}
+
+.post-image img {
+  width: 100%;
+  height: auto;
+  max-height: 70vh;
+  object-fit: contain;
+  display: block;
+}
+
+.post-image-failed {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border: 1px dashed var(--ch-hairline);
+  border-radius: var(--radius-md, 10px);
+  font-family: var(--font-instrument);
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+/* ── A quoted post ── */
+
+/*
+ * A bordered card, inset, with no tint of its own. A quote is somebody else's
+ * post inside this one, and a coloured background would read as this app
+ * taking a view on it.
+ */
+.post-quote {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-md, 10px);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.post-quote:hover,
+.post-quote:focus-visible {
+  border-color: rgba(0, 229, 255, 0.35);
+  background: rgba(0, 229, 255, 0.04);
+}
+
+.post-quote.is-gone {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: default;
+  font-family: var(--font-instrument);
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.post-quote.is-gone:hover {
+  border-color: var(--ch-hairline);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.post-quote-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+.post-quote-text {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  /*
+   * Clipped to four lines. A quote of a two-thousand-character post would
+   * otherwise bury the post quoting it - and the card opens the original,
+   * which is where the whole thing belongs.
+   */
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.post-quote-image {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 5px 0 0;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* ── A link preview ── */
+
+.post-link-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 8px 0 0;
+  padding: 9px 11px;
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-md, 10px);
+  background: rgba(255, 255, 255, 0.02);
+  text-decoration: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.post-link-preview:hover {
+  border-color: rgba(0, 229, 255, 0.35);
+  background: rgba(0, 229, 255, 0.04);
+}
+
+/* The host leads, because it is the part that decides where a press goes - a
+   long URL can be made to read as pointing somewhere it does not. */
+.post-link-host {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.post-link-title {
+  font-family: var(--font-instrument);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.post-link-description {
+  font-family: var(--font-instrument);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/*
+ * "What this page says about itself", said on every card.
+ *
+ * A preview is this site repeating a claim a stranger's page made about
+ * itself. On a site about which tokens to buy, that is exactly the kind of
+ * thing worth not appearing to endorse.
+ */
+.post-link-note {
+  margin-top: 2px;
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  opacity: 0.75;
+}
+
+/* ── Editing in place ── */
+
+.post-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+.post-editor-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.post-editor-foot .chat-hint,
+.post-editor-foot .chat-error {
+  flex: 1;
+  min-width: 120px;
+}
+
+/* ── Saving ── */
+
+/* Filled, not counted. Nobody else can see this, so there is no number for it
+   to carry - see 0020 on why a saved list is private. */
+.feed-tool.is-saved {
+  color: var(--pulse-cyan, #00e5ff);
+  border-color: rgba(0, 229, 255, 0.35);
+  background: rgba(0, 229, 255, 0.1);
+}
+
+/* ── The composer's attachments ── */
+
+.composer-quote,
+.composer-image {
+  position: relative;
+  margin: 6px 0 0;
+}
+
+.composer-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 320px;
+  object-fit: contain;
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-md, 10px);
+}
+
+/* Over the top-right corner of whatever it removes, which is where every
+   interface has put this control for twenty years. */
+.composer-chip-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--ch-hairline);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  cursor: pointer;
+}
+
+.composer-chip-remove:hover {
+  background: rgba(244, 63, 94, 0.8);
+  border-color: rgba(244, 63, 94, 0.5);
+}
+
+/* ── A thread, rather than a list of replies ── */
+
+.post-thread-count {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 2px 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/*
+ * A column with a line down its left edge, replacing the per-reply arrow
+ * icons. The line is what makes a set of replies read as one conversation -
+ * an icon on each said "this is a reply" once per row and never said they
+ * were the same thread.
+ */
+.post-reply {
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 10px;
+  border-left: 2px solid var(--ch-hairline);
+}
+
+/* Consecutive replies by one person close up, so somebody answering three
+   points in a row is one block rather than three cards. */
+.post-reply.is-grouped {
+  margin-top: -6px;
+}
+
+/* The original author's replies carry a brighter line as well as the words
+   below - the words are what actually says it, and this is only so the eye
+   can find them while scrolling. */
+.post-reply.is-author {
+  border-left-color: rgba(0, 229, 255, 0.45);
+}
+
+/*
+ * "· author", in words.
+ *
+ * A tint alone would be read as decoration or missed entirely by anybody who
+ * cannot see it, and this is the one fact in a thread a reader actually needs:
+ * whether the person answering is the person who posted. It is also the shape
+ * of the obvious scam here - a reply impersonating the author and pointing
+ * somewhere else.
+ */
+.post-reply-author {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--pulse-cyan, #00e5ff);
+  padding-left: 2px;
+}
+
+/* ── Reacted and Saved ── */
+
+.post-list-badge {
+  margin: 0 0 2px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}

@@ -18,7 +18,7 @@ import { useSiweAuth } from '../../context/SiweAuthContext'
  * switching tabs does not refetch it and the feed stays a component that takes
  * a set of authors and renders their posts.
  */
-export default function PublicFeed({ onOpenProfile }) {
+export default function PublicFeed({ onOpenProfile, onOpenPost }) {
   const { account, isSignedIn } = useSiweAuth()
 
   const [tab, setTab] = useState('for-you')
@@ -90,6 +90,7 @@ export default function PublicFeed({ onOpenProfile }) {
           key={active}
           authors={active === 'following' ? following : null}
           onOpenProfile={onOpenProfile}
+          onOpenPost={onOpenPost}
         />
       )}
     </div>

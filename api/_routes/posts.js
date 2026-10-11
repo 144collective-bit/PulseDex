@@ -9,8 +9,11 @@ import {
   FEED_POST_LIMITS,
   longestWindowMs,
 } from '../../src/utils/chatRate.js'
-import { POST_FIELDS } from '../../src/config/queries.js'
+import { POST_WRITE_FIELDS } from '../../src/config/queries.js'
 import { resolveMentions, recordMentions, notifyReply } from '../_lib/notify.js'
+import { canEditPost, EDIT_REFUSED } from '../../src/utils/postEdit.js'
+import { isPostImageSize } from '../../src/utils/avatarUpload.js'
+import { POST_IMAGE_BUCKET } from '../_lib/avatars.js'
 
 /**
  * Publishing and removing posts.
@@ -45,9 +48,10 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST') return publish(req, res)
+  if (req.method === 'PATCH') return edit(req, res)
   if (req.method === 'DELETE') return remove(req, res)
 
-  res.setHeader('Allow', 'POST, DELETE')
+  res.setHeader('Allow', 'POST, PATCH, DELETE')
   return res.status(405).json({ error: 'Method not allowed' })
 }
 
@@ -144,6 +148,76 @@ async function publish(req, res) {
     }
   }
 
+  /*
+   * The post being quoted, checked rather than trusted.
+   *
+   * Distinct from `parentId` above: a reply lives under the post it answers
+   * and is kept out of the main feed, while a quote is a post of its own that
+   * carries somebody else's words. So both can be present, and both are
+   * validated the same way - the id arrives in a body, and a quote_id pointing
+   * at nothing would be a foreign key violation returned as a 500 rather than
+   * a sentence.
+   *
+   * A quote of a removed post is refused. The read path can draw "that post is
+   * not here" for something taken down after the fact, which is right - but
+   * letting somebody quote a post that is already gone would be a way to
+   * manufacture that state deliberately, attaching their own framing to a
+   * card nobody can check.
+   *
+   * Quoting a reply is allowed, unlike replying to one. A reply is a public
+   * post with an author, and quoting it is how somebody answers a point made
+   * in a thread out where it can be seen - the nesting limit that stops
+   * replies-to-replies is about the thread view, and a quote is not in it.
+   */
+  let quoteId = null
+  if (req.body?.quoteId !== undefined && req.body?.quoteId !== null) {
+    quoteId = Number(req.body.quoteId)
+    if (!Number.isSafeInteger(quoteId) || quoteId <= 0) {
+      return res.status(400).json({ error: 'That is not a post to quote.' })
+    }
+
+    const quoted = await db
+      .from('posts')
+      .select('id')
+      .eq('id', quoteId)
+      .is('deleted_at', null)
+      .maybeSingle()
+
+    if (quoted.error) {
+      console.error('posts: reading the quoted post failed:', quoted.error.message)
+      return res.status(503).json({ error: 'Posting is unavailable right now.' })
+    }
+
+    if (!quoted.data) return res.status(404).json({ error: 'Not found.' })
+  }
+
+  /*
+   * The image, as the URL and size that api/_routes/posts/image.js came back
+   * with.
+   *
+   * Not the bytes: they went to their own route, before this one, so that a
+   * picture which cannot be stored fails before anybody's words are published.
+   * What arrives here is therefore a URL the caller was handed - and is still
+   * checked, because this endpoint is reachable with curl and a URL in a body
+   * is a claim.
+   *
+   * The check is narrow on purpose: it must be an https URL inside our own
+   * post-image bucket. Accepting any https URL would let somebody publish a
+   * post whose image is hotlinked from anywhere - which hands that host the IP
+   * of every reader who scrolls past, the exact leak that link previews are
+   * fetched server-side to avoid.
+   */
+  let image = {}
+  if (req.body?.image) {
+    const { url, width, height } = req.body.image
+
+    if (!isPostImageSize(width, height) || !isOurImageUrl(url)) {
+      return res.status(400).json({ error: 'That image could not be attached.' })
+    }
+
+    image = { image_url: url, image_w: Number(width), image_h: Number(height) }
+  }
+
   const since = new Date(Date.now() - longestWindowMs(FEED_POST_LIMITS)).toISOString()
   const recent = await db
     .from('posts')
@@ -195,8 +269,15 @@ async function publish(req, res) {
 
   const inserted = await db
     .from('posts')
-    .insert({ address, body: post.body, parent_id: parentId })
-    .select(POST_FIELDS)
+    .insert({
+      address,
+      body: post.body,
+      parent_id: parentId,
+      quote_id: quoteId,
+      ...image,
+    })
+    // Without the reactions embed: a post that was just published has none.
+    .select(POST_WRITE_FIELDS)
     .single()
 
   if (inserted.error) {
@@ -285,4 +366,181 @@ async function remove(req, res) {
   }
 
   return res.status(200).json({ id, removed: true })
+}
+
+/**
+ * Is this URL one of our own post images?
+ *
+ * The narrow check the publish path applies to an image URL that arrived in a
+ * body. It must be https, and its path must sit inside the post-image bucket
+ * that api/_routes/posts/image.js writes to.
+ *
+ * Narrow on purpose. Accepting any https URL would let somebody publish a post
+ * whose image is hotlinked from anywhere they like - which hands that host the
+ * IP address of every reader who scrolls past the post, which is the exact
+ * leak that link previews are fetched on the server to avoid. An image on a
+ * post has to come from us for the same reason a preview does.
+ *
+ * The bucket name is matched as a whole path segment, so a bucket called
+ * `post-images-evil` on somebody else's Supabase project does not satisfy it.
+ * The host is not checked against our own project's, deliberately: the project
+ * URL is an environment variable that differs between production, preview and
+ * local, and a check that has to be right in three places is a check that
+ * will be wrong in one. What this guarantees is the shape; what guarantees the
+ * origin is that the only way to get a URL of this shape is to have uploaded
+ * through our own endpoint.
+ */
+function isOurImageUrl(value) {
+  if (typeof value !== 'string' || value.length > 500) return false
+
+  let url
+  try {
+    url = new URL(value)
+  } catch {
+    return false
+  }
+
+  if (url.protocol !== 'https:') return false
+
+  return url.pathname.split('/').includes(POST_IMAGE_BUCKET)
+}
+
+/**
+ * Change the body of a post inside the edit window.
+ *
+ * The rules live in src/utils/postEdit.js and are consulted by both this and
+ * the interface, so what gets offered and what gets allowed cannot disagree
+ * about what the rule is. Briefly: your own post, within five minutes, and not
+ * if somebody has already replied to it.
+ *
+ * `edited_at` is always stamped, and that is the point of the feature rather
+ * than bookkeeping for it. An edit that left no trace would be a way to change
+ * what you said after people read it - and on a site where posts are about
+ * what to buy, "I said sell" after the fact is worth money.
+ *
+ * Only the body. Not the image, not the quote, not the parent: those are what
+ * the post *is*, and an edit that could swap the picture would let the words
+ * stay and the evidence change.
+ */
+async function edit(req, res) {
+  const address = await signedInAddress(req)
+  if (!address) return res.status(401).json({ error: 'Sign in first.' })
+
+  const limited = rateLimit(req, { key: 'post-edit', limit: 20, windowMs: 60_000 })
+  if (!limited.ok) {
+    res.setHeader('Retry-After', String(limited.retryAfter))
+    return res.status(429).json({ error: 'Too many requests. Try again shortly.' })
+  }
+
+  const id = Number(req.body?.id)
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    return res.status(400).json({ error: 'That is not a post.' })
+  }
+
+  const post = normalisePost(req.body?.body)
+  if (!post.ok) {
+    return res.status(400).json({ error: REFUSALS[post.reason] || 'That post cannot be saved.' })
+  }
+
+  const db = serviceClient()
+  if (!db) return res.status(503).json({ error: 'Posting is not configured on this deployment.' })
+
+  const existing = await db
+    .from('posts')
+    .select('id, address, created_at, deleted_at')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (existing.error) {
+    console.error('posts: reading the post to edit failed:', existing.error.message)
+    return res.status(503).json({ error: 'Posting is unavailable right now.' })
+  }
+
+  /*
+   * Gone, never there, or somebody else's: all the same 404.
+   *
+   * `canEditPost` distinguishes them and the interface uses that to decide
+   * what to offer, but an answer sent to a caller must not - telling a
+   * stranger that a given id is somebody else's live post is a way to walk the
+   * table.
+   */
+  if (!existing.data) return res.status(404).json({ error: 'Not found.' })
+
+  /*
+   * How many replies it has, which is one of the rules.
+   *
+   * Counted here rather than taken from the request, obviously - but worth
+   * saying why it is counted at all when the window is only five minutes: a
+   * reply can arrive in thirty seconds, and rewriting a post that has an
+   * answer under it makes the answer look like a response to something nobody
+   * said. The time limit protects readers in general; this protects the one
+   * person who replied.
+   */
+  const replies = await db
+    .from('posts')
+    .select('id', { count: 'exact', head: true })
+    .eq('parent_id', id)
+    .is('deleted_at', null)
+
+  if (replies.error) {
+    console.error('posts: counting replies failed:', replies.error.message)
+    return res.status(503).json({ error: 'Posting is unavailable right now.' })
+  }
+
+  const allowed = canEditPost({
+    post: {
+      id: existing.data.id,
+      address: existing.data.address,
+      createdAt: existing.data.created_at,
+      deletedAt: existing.data.deleted_at,
+    },
+    account: address,
+    replyCount: replies.count || 0,
+  })
+
+  if (!allowed.ok) {
+    if (allowed.reason === EDIT_REFUSED.notYours || allowed.reason === EDIT_REFUSED.gone) {
+      return res.status(404).json({ error: 'Not found.' })
+    }
+    if (allowed.reason === EDIT_REFUSED.answered) {
+      return res.status(409).json({ error: 'Somebody has replied. This can no longer be edited.' })
+    }
+    return res.status(409).json({ error: 'The edit window for this post has closed.' })
+  }
+
+  const updated = await db
+    .from('posts')
+    .update({ body: post.body, edited_at: new Date().toISOString() })
+    .eq('id', id)
+    // Scoped to the author as well, so the write itself cannot touch anybody
+    // else's row even if the check above were ever reordered away.
+    .eq('address', address)
+    .select(POST_WRITE_FIELDS)
+    .single()
+
+  if (updated.error) {
+    console.error('posts: the edit failed:', updated.error.message)
+    return res.status(503).json({ error: 'That edit could not be saved.' })
+  }
+
+  /*
+   * Mentions are re-resolved, so naming somebody in an edit notifies them.
+   *
+   * `notifications_once_idx` is what stops this telling anybody twice: a
+   * person already mentioned in the original is already notified, and the
+   * upsert ignores the duplicate. Somebody added by the edit is new and hears
+   * about it, which is the behaviour anybody would expect.
+   *
+   * Mentions removed by an edit are deliberately left in `post_mentions`. The
+   * row is a record that the post named them at the time, which is what makes
+   * the notification they already received make sense when they open it.
+   */
+  const mentioned = await resolveMentions(db, {
+    body: post.body,
+    author: address,
+    explicit: req.body?.mentions,
+  })
+  await recordMentions(db, { postId: id, author: address, addresses: mentioned })
+
+  return res.status(200).json({ post: updated.data })
 }

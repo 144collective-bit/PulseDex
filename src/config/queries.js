@@ -84,14 +84,89 @@ export const POST_MENTIONS =
   'post_mentions ( address, profiles!post_mentions_address_fkey ( handle ) )'
 
 /**
- * A post, the same shape on both sides.
+ * The post this one is quoting, drawn inside it.
+ *
+ * Two foreign key hints in one embed, both load-bearing, and the same shape as
+ * MESSAGE_REPLY above - which is not a coincidence but the same problem. The
+ * outer hint picks `posts.quote_id` out of the two ways `posts` now reaches
+ * itself (`parent_id` is the other); the inner one is the
+ * `posts_address_fkey` ambiguity one level down, because a quoted post reaches
+ * `profiles` exactly as its quoter does.
+ *
+ * `deleted_at` rides along so the card can say a post was removed rather than
+ * showing its text to somebody it was taken away from. The quote's foreign key
+ * is `on delete set null`, which only fires on a hard delete - the ordinary
+ * removal is a `deleted_at` stamp, so this column is the one that does the
+ * work.
+ *
+ * Deliberately not recursive. A quote of a quote renders the inner post's text
+ * and not its own quote, because nesting cards inside cards is unreadable at
+ * two levels and a denial of service at twenty.
+ */
+export const POST_QUOTE =
+  'quote:posts!posts_quote_fkey ( id, address, body, created_at, deleted_at, image_url, profiles!posts_address_fkey ( handle ) )'
+
+/**
+ * A post, as the feed and the profile read one.
  *
  * `parent_id` rides along because a reply is a post with a parent, and the
  * feed has to tell them apart to know whether it is looking at something that
  * belongs at the top level or under something else.
+ *
+ * Reactions come with the page rather than in a request per post, for the
+ * reason MESSAGE_FIELDS gives: fifty posts would otherwise be fifty round
+ * trips before a single number could be drawn.
+ *
+ * The three image columns and `edited_at` and `quote_id` are added by 0020,
+ * which is what makes that migration required rather than optional - the same
+ * trade as `archived_at` and 0018, and `pinned_post_id` and 0019. A select
+ * naming a column that does not exist fails outright, and every read of a post
+ * in this app goes through this string, so a deployment whose migration has
+ * not been run presents as a feed that will not load, at a named place, with
+ * api/_routes/health.js able to say which column is missing.
  */
 export const POST_FIELDS =
-  `id, address, body, created_at, parent_id, ${POST_AUTHOR}, ${POST_MENTIONS}`
+  'id, address, body, created_at, edited_at, parent_id, quote_id, ' +
+  'image_url, image_w, image_h, ' +
+  `${POST_AUTHOR}, ${POST_MENTIONS}, ${POST_QUOTE}, post_reactions ( emoji, address )`
+
+/**
+ * A post as an endpoint returns it after writing one.
+ *
+ * Without the reactions, because a post that was just published or edited has
+ * none the writer does not already know about - and with them the insert would
+ * join a table it has no reason to touch. The same split as
+ * MESSAGE_WRITE_FIELDS, for the same reason.
+ *
+ * The quote stays, because a quote post's whole content is the post it quotes:
+ * returned without it, the card the composer draws from the response would
+ * appear with the quote missing until something refetched it.
+ */
+export const POST_WRITE_FIELDS =
+  'id, address, body, created_at, edited_at, parent_id, quote_id, ' +
+  'image_url, image_w, image_h, ' +
+  `${POST_AUTHOR}, ${POST_MENTIONS}, ${POST_QUOTE}`
+
+/**
+ * What a linked page says about itself.
+ *
+ * Read from the browser over the anon key, like the posts it sits under: the
+ * row holds what a public page published about itself, fetched from a public
+ * URL, so there is nothing in it belonging to anybody. Reading it directly
+ * means drawing a feed is one more query rather than one request per link.
+ *
+ * `ok` is selected although a false row has nothing in it to draw. A cached
+ * failure is as valuable as a cached success - it is what stops a URL that
+ * times out being re-fetched by our server for every reader who scrolls past
+ * the post - and the browser needs to tell "we looked and there was nothing"
+ * from "we have not looked yet".
+ *
+ * There is deliberately no image column to select. 0020 says why at length:
+ * rendering somebody else's og:image hands the linked site the IP address of
+ * every reader who scrolled past, which is the exact thing fetching the
+ * preview on the server avoids.
+ */
+export const LINK_PREVIEW_FIELDS = 'url_hash, url, title, description, site_name, ok'
 
 /**
  * One notification, as the inbox endpoint reads it.

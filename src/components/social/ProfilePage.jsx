@@ -4,6 +4,7 @@ import FeedPanel from './FeedPanel'
 import FollowList from './FollowList'
 import HoldingsPanel from './HoldingsPanel'
 import PinnedPost from './PinnedPost'
+import PostList from './PostList'
 import ProfileHeader from './ProfileHeader'
 import {
   fetchPinnedPost,
@@ -15,7 +16,8 @@ import {
 } from '../../services/profile'
 import { useIsModerator } from '../../hooks/useIsModerator'
 import { useSiweAuth } from '../../context/SiweAuthContext'
-import { fetchPostCount } from '../../services/posts'
+import { fetchBookmarks, fetchPostCount, fetchReactedPosts } from '../../services/posts'
+import { useBookmarks } from '../../hooks/useBookmarks'
 import { formatAddress } from '../../utils/formatters'
 /*
  * The stylesheet, imported here as well as in SocialView.
@@ -53,10 +55,17 @@ export default function ProfilePage({
   onOpenProfile,
   onClose,
   onOpenToken,
+  /** Opens one post's page, for a press on a quote card. Optional: this page
+   *  renders inside the social section too, which routes posts its own way. */
+  onOpenPost,
   embedded = false,
 }) {
   const isModerator = useIsModerator()
   const { account } = useSiweAuth()
+
+  /* Only for the count on the Saved tab. The list itself is fetched when that
+     tab is opened, because most visits to a profile never open it. */
+  const bookmarks = useBookmarks()
 
   const [profile, setProfile] = useState(null)
   const [status, setStatus] = useState('loading')
@@ -194,6 +203,30 @@ export default function ProfilePage({
     [profile?.pinnedPostId],
   )
 
+  /*
+   * The two loaders the non-feed tabs use.
+   *
+   * Memoised, and that is load-bearing rather than tidiness: PostList runs its
+   * fetch in an effect keyed on the loader, so a new function every render
+   * would be a fetch every render. The address is the only thing either
+   * depends on.
+   */
+  const loadReacted = useCallback(
+    async () =>
+      (await fetchReactedPosts(shownAddress)).map(({ post, emoji }) => ({
+        post,
+        // Which reaction, because there is no single "like" here and the tab
+        // would otherwise claim an endorsement nobody gave.
+        badge: `reacted ${emoji}`,
+      })),
+    [shownAddress],
+  )
+
+  const loadSaved = useCallback(
+    async () => (await fetchBookmarks({ limit: 50 })).posts.map((post) => ({ post })),
+    [],
+  )
+
   /** Open one of the two follow lists, as a URL. */
   const onOpenList = useCallback(
     (which) => {
@@ -256,6 +289,7 @@ export default function ProfilePage({
         tab={tab}
         onTab={setTab}
         onOpenList={onOpenList}
+        savedCount={isMine ? bookmarks.count : null}
         /*
          * The tabs are hidden while a follow list is showing. They would be
          * switching a feed that is not on the screen, and pressing one and
@@ -311,16 +345,48 @@ export default function ProfilePage({
             onRemoved={() => setPinned(null)}
           />
 
-          {/* Keyed by the tab, so switching rebuilds the list rather than
-              merging replies into the posts already held. */}
-          <FeedPanel
-            key={tab}
-            author={shown.address}
-            replies={tab === 'replies'}
-            onOpenProfile={onOpenProfile}
-            pinnedPostId={profile?.pinnedPostId || null}
-            onTogglePin={isMine ? onTogglePin : undefined}
-          />
+          {/*
+            Three of the five tabs are a feed with a filter on it; two are a
+            fixed set fetched once. Which is why they are different
+            components rather than one with a mode: `useFeed` carries a
+            realtime subscription and a cursor, both of which exist for a
+            timeline that grows from the top, and neither of which means
+            anything for "the posts I saved".
+          */}
+          {tab === 'reacted' ? (
+            <PostList
+              load={loadReacted}
+              loading="Loading reactions"
+              empty={
+                isMine
+                  ? 'You have not reacted to anything yet.'
+                  : 'This account has not reacted to anything yet.'
+              }
+              onOpenProfile={onOpenProfile}
+              onOpenPost={onOpenPost}
+            />
+          ) : tab === 'saved' ? (
+            <PostList
+              load={loadSaved}
+              loading="Loading your saved posts"
+              empty="Nothing saved yet. The bookmark on a post saves it here, and only you can see this."
+              onOpenProfile={onOpenProfile}
+              onOpenPost={onOpenPost}
+            />
+          ) : (
+            /* Keyed by the tab, so switching rebuilds the list rather than
+               merging replies into the posts already held. */
+            <FeedPanel
+              key={tab}
+              author={shown.address}
+              replies={tab === 'replies'}
+              media={tab === 'media'}
+              onOpenProfile={onOpenProfile}
+              onOpenPost={onOpenPost}
+              pinnedPostId={profile?.pinnedPostId || null}
+              onTogglePin={isMine ? onTogglePin : undefined}
+            />
+          )}
         </>
       )}
     </Frame>

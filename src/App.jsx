@@ -199,6 +199,25 @@ function MainApp() {
 
   const openSocial = useCallback((where) => go({ kind: 'social', ...where }), [go])
 
+  /**
+   * One post's page, at `/p/<id>`.
+   *
+   * Its own callback rather than a call to `openSocial` at each site, because
+   * three surfaces need it now - a quote card, a notification and a share
+   * link - and the tab has to be set as well as the route, or a profile opened
+   * directly would land on the post with the shell still showing whichever tab
+   * was underneath.
+   */
+  const openPost = useCallback(
+    (id) => {
+      if (!id) return
+      openSocial({ tab: 'post', post: id })
+      setActiveTab('social')
+      window.scrollTo({ top: 0 })
+    },
+    [openSocial],
+  )
+
   /** The room about a token, from the screener. */
   const openTokenRoom = useCallback(
     (address) => {
@@ -408,6 +427,7 @@ function MainApp() {
             route={profileRoute}
             onOpenProfile={openProfile}
             onOpenToken={openToken}
+            onOpenPost={openPost}
             onClose={home}
           />
         ) : tokenAddress ? (

@@ -4,6 +4,8 @@ import PostCard from './PostCard'
 import PostThread from './PostThread'
 import { fetchPost } from '../../services/posts'
 import { usePostActions } from '../../hooks/usePostActions'
+import { usePostReactions } from '../../hooks/usePostReactions'
+import { useBookmarks } from '../../hooks/useBookmarks'
 import { useIsModerator } from '../../hooks/useIsModerator'
 import { useSiweAuth } from '../../context/SiweAuthContext'
 
@@ -25,12 +27,17 @@ import { useSiweAuth } from '../../context/SiweAuthContext'
  * threads make a list unreadable; here there is one post and the replies are
  * usually the reason somebody followed the link.
  */
-export default function PostPage({ id, onOpenProfile }) {
+export default function PostPage({ id, onOpenProfile, onOpenPost }) {
   const { account } = useSiweAuth()
   const isModerator = useIsModerator()
 
   const [post, setPost] = useState(null)
   const [status, setStatus] = useState('loading')
+
+  /* One post, so the list this hook is given is one long - but it is the same
+     hook the feed uses, so a reaction behaves identically here. */
+  const reactions = usePostReactions(post ? [post] : [])
+  const bookmarks = useBookmarks()
 
   /*
    * Removing the post removes the page's subject, so it is emptied rather
@@ -100,10 +107,10 @@ export default function PostPage({ id, onOpenProfile }) {
 
   return (
     <div className="xp-panel">
-      {actionError && (
+      {(actionError || reactions.error || bookmarks.error) && (
         <p className="chat-notice" role="alert">
           <AlertTriangle size={15} />
-          <span>{actionError}</span>
+          <span>{actionError || reactions.error || bookmarks.error}</span>
         </p>
       )}
 
@@ -121,15 +128,22 @@ export default function PostPage({ id, onOpenProfile }) {
            * that opens what is open is a control that does nothing.
            */
           onToggleReplies={undefined}
+          reactions={reactions.reactionsFor(post.id)}
+          canReact={reactions.canReact}
+          onToggleReaction={reactions.toggle}
+          saved={bookmarks.isSaved(post.id)}
+          onToggleSave={bookmarks.toggle || undefined}
+          onOpenPost={onOpenPost}
+          /* Edited in place: this page holds the one post, so it replaces it
+             rather than merging into a list. */
+          onEdited={setPost}
         />
 
         <PostThread
           post={post}
           isModerator={isModerator}
           onOpenProfile={onOpenProfile}
-          onRemove={onRemove}
-          onReport={onReport}
-          onBlock={onBlock}
+          onOpenPost={onOpenPost}
         />
       </div>
     </div>

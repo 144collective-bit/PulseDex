@@ -10,14 +10,17 @@ held only in a conversation is a plan that gets re-litigated every time.
 
 ## Where this stands
 
-Roughly 5,450 lines across 31 components in `src/components/social/`, and
-thirteen tables. Migrations `0001` through `0019`.
+Roughly 6,650 lines across 36 components in `src/components/social/`, and
+sixteen tables. Migrations `0001` through `0020`.
 
 | table | holds |
 | --- | --- |
 | `profiles` | handle, avatar (preset id or uploaded url), banner, bio, links, pinned post, wallet age, the holdings switch |
-| `posts` | the feed and its replies, via `parent_id` |
+| `posts` | the feed, its replies via `parent_id`, quotes via `quote_id`, one image, and `edited_at` |
 | `post_mentions` | who a post names, as rows rather than as text to parse |
+| `post_reactions` | emoji, per address per post |
+| `post_bookmarks` | **private** — no read policy for any browser-facing role |
+| `link_previews` | what a linked page says about itself, fetched once by us |
 | `follows` | one-way, follower → followee |
 | `notifications` | mention, reply, follow, reaction |
 | `messages` | chat rooms |
@@ -29,19 +32,22 @@ thirteen tables. Migrations `0001` through `0019`.
 | `blocked` | moderator action against an address |
 | `post_reports` | what readers have flagged |
 
-Working today: posting, replying, following, reacting, mentions with an
-autocomplete, an inbox with unread counts that opens what each notification is
-about, chat rooms with realtime and per-room unread counts, a room per token
-reachable from its page, the dev claim, groups and holders-only rooms, search
-within a room, a URL for every surface, and profiles with a pinned post, a
-followers and following list, wallet age, and holdings when the account asks
-for them.
+Working today: posting with an image, replying in a real thread, quoting,
+reacting, saving privately, editing inside a five-minute window, following,
+mentions with an autocomplete, an inbox with unread counts that opens what each
+notification is about, link previews fetched server-side, chat rooms with
+realtime and per-room unread counts, a room per token reachable from its page,
+the dev claim, groups and holders-only rooms, search within a room, a URL for
+every surface, and profiles with a pinned post, five tabs, browsable follower
+lists, wallet age, and holdings when the account asks for them.
 
 **What the first version of this section said was missing — notifications,
-mentions, unread state, search — now exists.** What is missing has moved: a
-post cannot carry an image, there is no way to react to one, moderation is
-still one human reading a queue, and the feed is reverse-chronological with no
-ranking. Batches 3, 5 and 6 below.
+mentions, unread state, search — now exists, and so does everything Batch 3
+asked for.** What is left is the two batches below: moderation is still one
+human reading a queue, and the feed is reverse-chronological with no ranking.
+The one thing deferred out of a finished batch is a public track record (the
+"called it" badge), which needs a trade-history index this app does not have —
+see Batch 2.
 
 ---
 
@@ -198,23 +204,104 @@ the fourth of these — a handler referencing deleted imports, a dependency arra
 naming a `const` below it, a doubled `+` making a select the literal `"NaN"`,
 and now this. Each one needed a running page to see.
 
-### Batch 3 — posts worth making
+### Batch 3 — posts worth making  ← done
 
-- Images, cropped and stripped of EXIF in the browser as avatars already are
-  — **and a Media tab on the profile, which waits on this**
-- Link previews, fetched server-side so the reader's IP never reaches the
-  target
-- Quote-posts and bookmarks
-- An edit window, with `edited_at` already in the schema and shown
-- A real thread view rather than a flat reply list
-- Reactions on posts, which is what a Likes tab would list — there is no
-  `post_reactions` table today
+Migration `0020_posts_worth_making.sql`, which must run before this merges.
 
-### Batch 4 — chat
+- [x] **Images**, fitted and stripped of EXIF in the browser — and the **Media
+      tab** that was deferred from Batch 2 for want of them.
+- [x] **Link previews**, fetched server-side, text only.
+- [x] **Quote-posts**, as a column on `posts` rather than a table.
+- [x] **Bookmarks**, private, on a table with no read policy at all.
+- [x] **An edit window** of five minutes, with every edit marked.
+- [x] **A real thread view**: the author marked, consecutive replies grouped,
+      the count stated, and the same controls on a reply as on a post.
+- [x] **Reactions on posts**, and the profile tab that lists them — named
+      **Reacted**, not Likes.
+- [x] Links in a post body are links at all, which they were not before.
+
+**The plan was wrong about `edited_at`.** It said the column was "already in
+the schema". It was not: `0007` added `edited_at` to `messages`, and nothing
+ever added it to `posts`. Worth recording, because a plan that is confidently
+wrong about the schema is how a feature gets built against a column that is
+not there.
+
+**The edit window is five minutes, and a post with a reply cannot be edited at
+all.** The time limit is the compromise; the reply rule is what actually stops
+the abuse. Rewriting a post that has an answer under it makes the answer look
+like a response to something nobody said — the clock protects readers in
+general, the reply rule protects the specific person who replied. Every edit
+stamps `edited_at` and the marker sits beside the *original* timestamp rather
+than replacing it: both facts matter, and the date a reply is measured against
+is the first one.
+
+**Link previews are text, and that absence is the design.** An og:image is the
+obvious thing to put on a preview card and the one thing that would undo the
+reason the preview is fetched on the server at all: rendering it means the
+reader's browser requests it from the linked site, which hands that site the IP
+address of everybody who scrolled past the post. On a site where a post might
+link to a token's page, that is a list of this app's readers handed to whoever
+wrote the link. `link_previews` has no image column, so adding one is a
+migration somebody has to write and think about.
+
+**The preview fetch is the only server-side request forgery surface in this
+app, and it is four layers deep.** The URL's shape (https, no credentials,
+default port, no internal hostname, no literal address in a reserved range),
+then every address the hostname resolves to, then both of those again on every
+redirect hop, then HTML-only with a cap and a deadline. The residual risk is
+written down in `api/_lib/linkPreview.js` rather than left to be discovered:
+between resolving a hostname and connecting to it, `fetch` resolves it again,
+so DNS rebinding is open. Closing it means connecting to a validated literal
+address with the Host header set by hand, which `fetch` does not expose.
+
+**Bookmarks are the first private thing in this schema.** `post_bookmarks` has
+no row-level security policy for any browser-facing role — that blank space is
+the whole security model, because `auth.uid()` is null here and a policy
+comparing against it would empty the table rather than restrict it. The Saved
+tab appears only on your own profile, since there is nothing it could show on
+anybody else's.
+
+**"Reacted", not "Likes".** There is no single like on this site; there are six
+reactions, and 👀 "Watching" on a scam warning is not an endorsement of it. A
+tab that flattened all six into "Likes" would be claiming an approval nobody
+gave, so it is named for what it lists and every row says which reaction it
+was. A stress scenario fails the build if a "Likes" tab appears.
+
+**A quote of a removed post says so and shows none of it.** The row carries the
+body; the card must not. Showing the text of something taken down, inside
+somebody else's post, would make a quote the way around a removal — and saying
+nothing at all would make the quoting post look like it was always just those
+words, which turns a removal into a quiet rewrite of whoever quoted it.
+
+**Text is still required, even with an image.** `posts.body` is NOT NULL with a
+minimum of 1 by `0005`, and rather than widen it, the composer keeps the
+requirement: the body is what makes a post searchable, quotable and readable to
+somebody using a screen reader. A picture with no words is a post that says
+nothing to a third of the people who might read it.
+
+**Two pre-existing bugs fixed in passing.** `fileToCroppedDataUrl` took
+`width`, `height` and `quality` and used none of them — the canvas was
+hardcoded to 256 square — so every profile banner was a 256×256 JPEG stretched
+across a 1200×400 box. Three unused-parameter lint warnings said exactly that
+and had been read as noise for months. And `createImageBitmap` was called
+without `imageOrientation: 'from-image'`, so the canvas re-encode stripped the
+EXIF rotation tag *without applying it* — which is what turns a portrait phone
+photo sideways. Stripping metadata is the feature; applying orientation before
+stripping it is what stops the feature breaking the picture.
+
+**`notificationTarget` had a hole this batch opened and closed.** A reaction on
+a post is `kind: 'reaction'` with `post_id` set — no new kind and no migration,
+because `0010` gave `notifications` two nullable id columns precisely so one
+kind could point at either thing. But the reaction branch looked only at
+`messageId` and returned null, so a notification about somebody reacting to
+your post would have arrived as a row with nowhere to go.
+
+### Batch 4 — chat  ← done
 
 Moved out to **`docs/chat-roadmap.md`**, which outgrew a bullet list the
 moment rooms stopped being five fixed strings. It covers unread state and
-threads, a room per token, the dev claim, groups, and holders-only rooms.
+threads, a room per token, the dev claim, groups, and holders-only rooms — all
+of which shipped in the chat batches.
 
 ### Batch 5 — safety that scales past one person
 

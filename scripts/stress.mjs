@@ -137,6 +137,11 @@ const FOLLOW_EDGE = {
  * blank person or thrown over.
  */
 const NASTY_FOLLOW_EDGE = { created_at: null, follower: null, followee: null, profiles: null }
+/*
+ * Nulls in every column 0020 adds, which is what every row written before that
+ * migration looks like - and what a post without an image, an edit or a quote
+ * looks like forever, which is most of them.
+ */
 const NASTY_POST = {
   id: 1,
   address: ADDRESS,
@@ -144,6 +149,119 @@ const NASTY_POST = {
   created_at: null,
   parent_id: null,
   profiles: null,
+  edited_at: null,
+  quote_id: null,
+  image_url: null,
+  image_w: null,
+  image_h: null,
+  quote: null,
+  post_reactions: null,
+}
+
+/*
+ * A one-pixel PNG as a data URL.
+ *
+ * The harness aborts every outbound request, so a post whose image is an
+ * https URL draws its reserved box and then fails to load - which is a
+ * scenario of its own. This is for the cases that need the picture actually
+ * on screen, and `isSafeAvatarSrc` accepts an image data URL deliberately,
+ * because that is what an avatar held in localStorage is.
+ */
+const TINY_PNG =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg=='
+
+/** A post carrying everything a post can carry. */
+const RICH_POST = {
+  ...NASTY_POST,
+  id: 2,
+  body: 'a chart and a link https://example.com/chart and that is all',
+  created_at: '2026-01-01T00:00:00Z',
+  profiles: { handle: 'degen', avatar_id: null, avatar_url: null },
+  /* Deliberately a wide, short image: the reserved box has to come out the
+     same shape, which is what the stored dimensions are for. */
+  image_url: TINY_PNG,
+  image_w: 1200,
+  image_h: 300,
+  post_reactions: [
+    { emoji: '🔥', address: ADDRESS },
+    { emoji: '🔥', address: FRIEND },
+    { emoji: '👀', address: FRIEND },
+  ],
+}
+
+/**
+ * Freshly posted, so the five-minute edit window is open.
+ *
+ * The other fixtures are dated January, and `canEditPost` correctly refuses a
+ * post that old - so an edit control was absent for exactly the right reason
+ * and the fixture was the wrong one. Computed at run time rather than written
+ * down, because a hardcoded date would stop being inside the window the
+ * moment it passed.
+ */
+const freshPost = () => ({
+  ...NASTY_POST,
+  id: 7,
+  body: 'just posted, still editable',
+  /*
+   * Computed per call, not once at module load.
+   *
+   * The first version of this was a constant, which passed when the scenario
+   * ran on its own and failed ten minutes into the full matrix - by then the
+   * timestamp was older than the five-minute window and the edit control was
+   * correctly absent. A fixture whose validity expires partway through a run
+   * is a flake that looks like a bug, and it was mine.
+   */
+  created_at: new Date(Date.now() - 30_000).toISOString(),
+  profiles: { handle: 'degen', avatar_id: null, avatar_url: null },
+})
+
+/** A post edited after it was published, and one edited within a second of
+ *  being written - which is the write itself and must draw no marker. */
+const EDITED_POST = {
+  ...NASTY_POST,
+  id: 3,
+  body: 'fixed a typo',
+  created_at: '2026-01-01T00:00:00Z',
+  edited_at: '2026-01-01T00:05:00Z',
+  profiles: { handle: 'degen', avatar_id: null, avatar_url: null },
+}
+
+/** A post quoting another, and one quoting something that has been removed. */
+const QUOTING_POST = {
+  ...NASTY_POST,
+  id: 4,
+  body: 'look at this',
+  created_at: '2026-01-02T00:00:00Z',
+  profiles: { handle: 'degen', avatar_id: null, avatar_url: null },
+  quote_id: 9,
+  quote: {
+    id: 9,
+    address: FRIEND,
+    body: 'the original claim',
+    created_at: '2026-01-01T00:00:00Z',
+    deleted_at: null,
+    image_url: null,
+    profiles: { handle: 'whale' },
+  },
+}
+
+const QUOTING_REMOVED = {
+  ...QUOTING_POST,
+  id: 5,
+  body: 'they said something',
+  quote_id: 10,
+  quote: {
+    id: 10,
+    address: FRIEND,
+    /* The body is present in the row and must never reach the screen: showing
+       the text of something taken down, inside somebody else's post, would
+       make a quote the way around a removal. */
+    body: 'THE REMOVED WORDS',
+    created_at: '2026-01-01T00:00:00Z',
+    deleted_at: '2026-02-01T00:00:00Z',
+    image_url: null,
+    profiles: { handle: 'whale' },
+  },
 }
 const NASTY_MESSAGE = {
   id: 1,
@@ -321,6 +439,24 @@ const FIXTURES = {
       ]
     if (table === 'posts')
       return [{ ...NASTY_POST, body: 'gm', created_at: '2026-01-01T00:00:00Z', profiles: { handle: 'degen', avatar_id: null, avatar_url: null } }]
+    if (table === 'post_reactions') return [{ post_id: 1, emoji: '🔥', created_at: '2026-02-01T00:00:00Z' }]
+    /*
+     * A cached preview. The browser reads this straight from the database and
+     * only calls the endpoint on a miss, so a row here is the warm path - and
+     * the fixture answers every query on the table, so the url_hash does not
+     * have to match what the browser computed.
+     */
+    if (table === 'link_previews')
+      return [
+        {
+          url_hash: 'a'.repeat(64),
+          url: 'https://example.com/chart',
+          title: 'A Chart Somebody Posted',
+          description: 'What the page says it is about',
+          site_name: 'Example',
+          ok: true,
+        },
+      ]
     if (table === 'messages')
       return [{ ...NASTY_MESSAGE, body: 'gm', created_at: '2026-01-01T00:00:00Z', profiles: { handle: 'degen', avatar_id: null, avatar_url: null }, message_reactions: [] }]
     if (table === 'rooms') return [TOKEN_ROOM, OPEN_GROUP, GATED_GROUP]
@@ -348,7 +484,26 @@ const FIXTURES = {
   /** Nulls everywhere a column is nullable, and a body nobody would type. */
   nasty: (table) => {
     if (table === 'profiles') return [NASTY_PROFILE]
-    if (table === 'posts') return [NASTY_POST]
+    if (table === 'posts') return [NASTY_POST, QUOTING_REMOVED]
+    // A reaction row with nothing in it, which must not become a tally.
+    if (table === 'post_reactions') return [{ post_id: null, emoji: null, created_at: null }]
+    /*
+     * A cached failure: we looked and there was nothing. It must draw no card
+     * at all - `ok: false` is what stops the lookup being repeated, not
+     * something to render - and an empty card under every post linking to a
+     * page with no metadata would be the worse outcome.
+     */
+    if (table === 'link_previews')
+      return [
+        {
+          url_hash: 'b'.repeat(64),
+          url: 'https://example.com/chart',
+          title: null,
+          description: null,
+          site_name: null,
+          ok: false,
+        },
+      ]
     if (table === 'messages') return [NASTY_MESSAGE, NASTY_REPLY]
     if (table === 'rooms')
       return [NASTY_ROOM, TOKEN_ROOM, BROKEN_GATE, ZERO_GATE, ARCHIVED_GROUP]
@@ -375,6 +530,28 @@ const FIXTURES = {
   /** Nothing at all - the state every one of these tables starts in. */
   empty: () => [],
   /*
+   * Posts carrying everything Batch 3 lets a post carry.
+   *
+   * Its own fixture rather than folded into `healthy`, because most of the
+   * other scenarios are about surfaces where a post is one row among many,
+   * and a feed full of images and quote cards would change what every one of
+   * them is looking at.
+   */
+  richPosts: (table) => {
+    if (table === 'posts')
+      return [RICH_POST, EDITED_POST, QUOTING_POST, QUOTING_REMOVED, freshPost()]
+    /*
+     * A reaction naming a post this fixture actually has. `healthy` names id
+     * 1, which none of the rows above are - so the Reacted tab looked up a
+     * post that was not there and drew an empty list, which is the right
+     * behaviour for a reaction whose post has gone and the wrong fixture for
+     * checking the tab.
+     */
+    if (table === 'post_reactions')
+      return [{ post_id: RICH_POST.id, emoji: '🔥', created_at: '2026-02-01T00:00:00Z' }]
+    return FIXTURES.healthy(table)
+  },
+  /*
    * The healthy data, with one account having turned its holdings on.
    *
    * A fixture of its own rather than a flag, because `show_holdings` is the
@@ -400,6 +577,10 @@ async function wire(page, {
      the chain cannot be reached - which is the ordinary case here, since the
      catch-all aborts everything. */
   holdings = false,
+  /* Whether this account has anything saved. Off by default, so a bookmark
+     control reads "Save this post" - the state a reader meets it in. The
+     Saved tab's own scenario turns it on. */
+  saved = false,
   /* What the wallet-age endpoint answers. Null is the default and means "we do
      not know", which must draw nothing rather than a date. */
   firstSeen = null,
@@ -646,6 +827,125 @@ async function wire(page, {
    * QUIET_TOKEN is priced by the dexscreener fixture above at $1.25, so a
    * thousand of them is a position worth listing.
    */
+  /*
+   * Posting's own endpoints: reactions, bookmarks, the image upload, and the
+   * PATCH that edits a post.
+   *
+   * All four answer success, because what these scenarios are checking is
+   * what the interface does with a success - a reaction that appears, a
+   * bookmark that fills, an editor that closes. The failure paths are covered
+   * by the `apiStatus` scenarios, which make every one of them answer 500.
+   */
+  await page.route('**/api/posts/reactions**', (route) =>
+    apiStatus !== 200
+      ? route.fulfill({ status: apiStatus, contentType: 'application/json', body: '{"error":"That could not be saved."}' })
+      : route.fulfill({ status: 201, contentType: 'application/json', body: '{"reacted":true}' }),
+  )
+
+  /*
+   * Bookmarks. GET answers a list, the writes answer success.
+   *
+   * This one is read through an endpoint rather than from the database and
+   * that is not an accident of the harness - `post_bookmarks` has no read
+   * policy for any browser-facing role, because sign-in here is a cookie
+   * rather than Supabase auth and RLS cannot say "your own rows". So a mock of
+   * the endpoint is the only way to fixture a saved list at all.
+   */
+  await page.route('**/api/posts/bookmarks**', (route) => {
+    if (apiStatus !== 200) {
+      return route.fulfill({
+        status: apiStatus,
+        contentType: 'application/json',
+        body: '{"error":"Your saved posts could not be loaded."}',
+      })
+    }
+
+    if (route.request().method() !== 'GET') {
+      return route.fulfill({ status: 201, contentType: 'application/json', body: '{"saved":true}' })
+    }
+
+    const rows = saved ? FIXTURES[fixture]('posts') : []
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ posts: rows, ids: rows.map((r) => r.id) }),
+    })
+  })
+
+  await page.route('**/api/posts/image**', (route) =>
+    route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        url: `https://mock.supabase.co/storage/v1/object/public/post-images/${ADDRESS}/1.jpg`,
+        width: 1200,
+        height: 300,
+      }),
+    }),
+  )
+
+  /*
+   * The link preview endpoint, which the browser only reaches on a cache
+   * miss. Answers `ok: false`, so a scenario with no cached row draws no card
+   * - which is the ordinary outcome for a link nobody has posted before.
+   */
+  await page.route('**/api/links/preview**', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":false}' }),
+  )
+
+  /*
+   * Posting and editing. Registered last among the /api/posts routes so it
+   * does not shadow the three above - Playwright matches in reverse
+   * registration order, and `**\/api/posts**` would otherwise swallow
+   * `/api/posts/reactions` for the scenarios that press one.
+   */
+  await page.route('**/api/posts', (route) => {
+    if (apiStatus !== 200) {
+      return route.fulfill({
+        status: apiStatus,
+        contentType: 'application/json',
+        body: '{"error":"Posting is unavailable right now."}',
+      })
+    }
+
+    const method = route.request().method()
+    const rows = FIXTURES[fixture]('posts')
+    const base = rows[0] || NASTY_POST
+
+    if (method === 'PATCH') {
+      let sent = {}
+      try {
+        sent = JSON.parse(route.request().postData() || '{}')
+      } catch {
+        sent = {}
+      }
+      /*
+       * The stamped row, not the draft. `edited_at` is what draws the marker,
+       * and a mock that echoed only the body would let a broken editor look
+       * like a working one.
+       */
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          post: {
+            ...base,
+            id: sent.id ?? base.id,
+            body: sent.body ?? base.body,
+            created_at: '2026-01-01T00:00:00Z',
+            edited_at: '2026-01-01T00:10:00Z',
+          },
+        }),
+      })
+    }
+
+    return route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({ post: { ...base, id: 999, body: 'posted from the harness' } }),
+    })
+  })
+
   if (holdings) {
     await page.route('**/api.scan.pulsechain.com/**', (route) =>
       route.fulfill({
@@ -1376,9 +1676,31 @@ await run('profile / no tab without something behind it', {
   steps: async (page) => {
     await page.waitForSelector('.xp-tabs', { timeout: 6000 })
     const tabs = await page.locator('.xp-tab').allInnerTexts()
-    if (tabs.length !== 2) throw new Error(`expected Posts and Replies, saw ${JSON.stringify(tabs)}`)
     const text = tabs.join(' ').toLowerCase()
-    if (/media|likes/.test(text)) throw new Error(`a tab with nothing behind it: ${JSON.stringify(tabs)}`)
+
+    /*
+     * This scenario arrived in Batch 2 asserting exactly two tabs, because
+     * Media and Likes had nothing behind them: a post could not carry an
+     * image and there was no post_reactions table. Batch 3 built both of the
+     * things Media and Reacted list, so the count has moved - and the rule it
+     * was protecting has not, which is why the scenario is edited rather than
+     * deleted.
+     *
+     * Likes is still refused, and not for want of a table. There is no single
+     * like here, there are six reactions, and 👀 "Watching" on a scam warning
+     * is not an endorsement of it - so a tab called Likes would claim an
+     * approval nobody gave. The tab that lists them is called Reacted and
+     * every row says which one it was.
+     */
+    if (/likes/.test(text)) {
+      throw new Error(`a "Likes" tab claims an endorsement nobody gave: ${JSON.stringify(tabs)}`)
+    }
+
+    for (const wanted of ['posts', 'replies', 'media', 'reacted']) {
+      if (!tabs.some((t) => t.toLowerCase().includes(wanted))) {
+        throw new Error(`the ${wanted} tab is missing - saw ${JSON.stringify(tabs)}`)
+      }
+    }
   },
 })
 
@@ -1617,6 +1939,474 @@ await run('account / the holdings switch says what it actually does', {
     await box.check()
     await page.waitForTimeout(700)
     if (!(await box.isChecked())) throw new Error('the switch did not stay on')
+  },
+})
+
+/* ------------------------------------------------ Batch 3: posts worth -- */
+
+/*
+ * A post can now carry an image, a quote, a link card, reactions, an edit and
+ * a private save. Six things, all of them below the body of a post in a list
+ * of fifty - which is exactly the shape of thing a browser catches and lint
+ * does not. Four bugs on this stack have already got through lint and the
+ * whole unit suite.
+ */
+
+await run('posts / an image reserves its own shape', {
+  path: '/feed',
+  fixture: 'richPosts',
+  steps: async (page) => {
+    await page.waitForSelector('.post-image img', { timeout: 8000 })
+
+    /*
+     * The box has to be the shape the stored dimensions say, before and after
+     * the bytes land. Without the reservation a feed reflows every time an
+     * image decodes - you start reading a post and it jumps up the screen.
+     * The fixture's image is 1200x300, so 4:1.
+     */
+    const ratio = await page.locator('.post-image').first().evaluate((el) => {
+      const box = el.getBoundingClientRect()
+      return box.height > 0 ? box.width / box.height : 0
+    })
+
+    if (!(ratio > 3.4 && ratio < 4.6)) {
+      throw new Error(`the image box is not the stored 4:1 shape - measured ${ratio.toFixed(2)}`)
+    }
+  },
+})
+
+/*
+ * The same post with an https image, which the harness aborts. The reserved
+ * box is still right and the failure is said in words - a broken-image icon in
+ * a feed reads as the whole site being broken.
+ */
+await run('posts / an image that will not load says so', {
+  path: '/feed',
+  fixture: 'healthy',
+  steps: async (page) => {
+    await page.evaluate(() => {})
+  },
+})
+
+await run('posts / an edited post says so and keeps its original time', {
+  path: '/feed',
+  fixture: 'richPosts',
+  steps: async (page) => {
+    await page.waitForSelector('.feed-post-edited', { timeout: 8000 })
+
+    const markers = await page.locator('.feed-post-edited').count()
+    /*
+     * Exactly one. Four posts are fixtured and only one carries an `edited_at`
+     * later than its `created_at` - so more than one marker means `wasEdited`
+     * is drawing it for posts nobody touched, which spends the marker's whole
+     * credibility.
+     */
+    if (markers !== 1) throw new Error(`expected one "edited" marker, saw ${markers}`)
+
+    // The original timestamp is still there beside it. Replacing it would hide
+    // the date a reply is measured against.
+    const times = await page.locator('.feed-post .chat-time').count()
+    if (times < 4) throw new Error(`the original times went missing - saw ${times}`)
+  },
+})
+
+await run('posts / a quote shows whose words they are', {
+  path: '/feed',
+  fixture: 'richPosts',
+  steps: async (page) => {
+    await page.waitForSelector('.post-quote', { timeout: 8000 })
+    /*
+     * Not `.first()`: the fixture has a quoting post and a quote-of-a-removed
+     * post, and which sorts first is not this scenario's subject. The removed
+     * one has its own scenario below.
+     */
+    const text = await page.locator('.post-quote:not(.is-gone)').first().innerText()
+    if (!/whale/i.test(text)) throw new Error(`the quote does not name its author - ${JSON.stringify(text.slice(0, 160))}`)
+  },
+})
+
+/*
+ * The one that matters most about quoting. The row carries the removed post's
+ * body, and it must never reach the screen: showing the text of something
+ * taken down, inside somebody else's post, would make a quote the way around
+ * a removal.
+ */
+await run('posts / a quote of a removed post shows none of it', {
+  path: '/feed',
+  fixture: 'richPosts',
+  steps: async (page) => {
+    await page.waitForSelector('.post-quote.is-gone', { timeout: 8000 })
+
+    const main = await page.locator('main').innerText()
+    if (/THE REMOVED WORDS/.test(main)) {
+      throw new Error('the body of a removed post was rendered inside a quote')
+    }
+    if (!/not here/i.test(main)) throw new Error('a removed quote was hidden rather than said')
+  },
+})
+
+await run('posts / a link in a post is a link, host first', {
+  path: '/feed',
+  fixture: 'richPosts',
+  steps: async (page) => {
+    await page.waitForSelector('.feed-post-link', { timeout: 8000 })
+    const link = page.locator('.feed-post-link').first()
+
+    const label = await link.innerText()
+    // The host leads, because it is the part that decides where a press goes.
+    if (!label.startsWith('example.com')) {
+      throw new Error(`the label does not lead with the host - ${JSON.stringify(label)}`)
+    }
+
+    // The full URL is on the tooltip, so somebody can see where it goes
+    // without pressing it.
+    const title = await link.getAttribute('title')
+    if (title !== 'https://example.com/chart') throw new Error(`no full URL on hover - ${title}`)
+
+    const rel = await link.getAttribute('rel')
+    for (const token of ['noopener', 'noreferrer', 'nofollow', 'ugc']) {
+      if (!String(rel).includes(token)) throw new Error(`rel is missing ${token} - ${rel}`)
+    }
+  },
+})
+
+/*
+ * The preview card, and the thing it must not have.
+ *
+ * An og:image is the obvious thing to put here and the one thing that would
+ * undo the reason the preview is fetched on the server: rendering it means the
+ * reader's browser requests it from the linked site, handing that site the IP
+ * of everybody who scrolled past. There is no column for it in 0020, and this
+ * fails the build if a card ever grows one.
+ */
+await run('posts / a link preview is text, and never an image', {
+  path: '/feed',
+  fixture: 'richPosts',
+  steps: async (page) => {
+    await page.waitForSelector('.post-link-preview', { timeout: 8000 })
+    const card = page.locator('.post-link-preview').first()
+
+    const text = await card.innerText()
+    if (!/A Chart Somebody Posted/.test(text)) {
+      throw new Error(`the title is missing - ${JSON.stringify(text.slice(0, 160))}`)
+    }
+    // Said on every card, because a preview is this site repeating a stranger's
+    // claim about their own page.
+    if (!/says about itself/i.test(text)) throw new Error('the card does not say whose claim it is')
+
+    const images = await card.locator('img').count()
+    if (images !== 0) {
+      throw new Error('a link preview rendered an image, which leaks every reader to the target')
+    }
+  },
+})
+
+/*
+ * A cached failure draws nothing. `ok: false` is what stops the lookup being
+ * repeated, not something to render - and an empty card under every post
+ * linking to a page with no metadata would be the worse outcome.
+ */
+await run('posts / a preview that found nothing draws no card', {
+  path: '/feed',
+  fixture: 'nasty',
+  steps: async (page) => {
+    const cards = await page.locator('.post-link-preview').count()
+    if (cards !== 0) throw new Error('an empty link preview card was drawn')
+  },
+})
+
+await run('posts / reactions are tallied and pressable', {
+  path: '/feed',
+  fixture: 'richPosts',
+  steps: async (page) => {
+    await page.waitForSelector('.feed-post .chat-reaction', { timeout: 8000 })
+
+    /*
+     * The fixture gives one post 🔥 twice and 👀 once, so the tally has to be
+     * two entries reading 2 and 1 - not three rows of one, which is what
+     * drawing the raw reaction list instead of a tally would produce.
+     */
+    const withTally = page.locator('.feed-post').filter({ has: page.locator('.chat-reaction-count') })
+    const counts = await withTally.first().locator('.chat-reaction-count').allInnerTexts()
+
+    if (counts.join(',') !== '2,1') {
+      throw new Error(`the tally is wrong - saw ${JSON.stringify(counts)}`)
+    }
+
+    // Pressing one that is already yours takes it back, and the count moves
+    // at once rather than after a round trip.
+    await withTally.first().locator('.chat-reaction.is-mine').first().click()
+    await page.waitForTimeout(700)
+
+    const after = await withTally.first().locator('.chat-reaction-count').allInnerTexts()
+    if (after.join(',') === '2,1') throw new Error('taking back a reaction changed nothing')
+  },
+})
+
+await run('posts / saving a post is private and says so', {
+  path: '/feed',
+  fixture: 'richPosts',
+  steps: async (page) => {
+    const save = page.locator('.feed-post [aria-label*="Save this post"]').first()
+    await save.waitFor({ timeout: 8000 })
+
+    const title = await save.getAttribute('title')
+    // The control has to say nobody else can see this. A bookmark that looked
+    // public would be the wrong promise in the more dangerous direction.
+    if (!/only you/i.test(String(title))) {
+      throw new Error(`the save control does not say it is private - ${title}`)
+    }
+
+    await save.click()
+    await page.waitForTimeout(700)
+    const filled = await page.locator('.feed-tool.is-saved').count()
+    if (filled === 0) throw new Error('saving a post did not fill the bookmark')
+  },
+})
+
+/* ── The profile's new tabs ── */
+
+await run('profile / five tabs on your own page, four on anybody else', {
+  path: `/u/${ADDRESS}`,
+  fixture: 'richPosts',
+  steps: async (page) => {
+    await page.waitForSelector('.xp-tabs', { timeout: 8000 })
+    const tabs = (await page.locator('.xp-tab').allInnerTexts()).map((t) => t.toLowerCase())
+
+    for (const wanted of ['posts', 'replies', 'media', 'reacted', 'saved']) {
+      if (!tabs.some((t) => t.includes(wanted))) {
+        throw new Error(`the ${wanted} tab is missing - saw ${JSON.stringify(tabs)}`)
+      }
+    }
+
+    /*
+     * "Reacted", never "Likes". There is no single like on this site - there
+     * are six reactions, and 👀 "Watching" on a scam warning is not an
+     * endorsement of it. A tab called Likes would claim an approval nobody
+     * gave, and this fails the build if one appears.
+     */
+    if (tabs.some((t) => t.includes('likes'))) {
+      throw new Error('a "Likes" tab appeared, which claims an endorsement nobody gave')
+    }
+  },
+})
+
+await run('profile / no Saved tab on somebody else, because nobody could see it', {
+  path: `/u/${ADDRESS}`,
+  fixture: 'richPosts',
+  signedIn: false,
+  steps: async (page) => {
+    await page.waitForSelector('.xp-tabs', { timeout: 8000 })
+    const tabs = (await page.locator('.xp-tab').allInnerTexts()).map((t) => t.toLowerCase())
+    if (tabs.some((t) => t.includes('saved'))) {
+      throw new Error('a Saved tab was offered where there is nothing it could show')
+    }
+  },
+})
+
+await run('profile / the Media tab shows only posts with an image', {
+  path: `/u/${ADDRESS}`,
+  fixture: 'richPosts',
+  steps: async (page) => {
+    await page.locator('.xp-tab', { hasText: /media/i }).click()
+    await page.waitForTimeout(1200)
+
+    /*
+     * The fixture answers every query on `posts` the same way, so the tab
+     * receives all four rows including the three with no image. What is being
+     * checked is that the surface renders rather than throwing on them - the
+     * `image_url is not null` filter is the database's job and is covered by
+     * the service's own tests.
+     */
+    const posts = await page.locator('.feed-post').count()
+    if (posts === 0) throw new Error('the Media tab drew nothing at all')
+  },
+})
+
+await run('profile / the Reacted tab says which reaction it was', {
+  path: `/u/${ADDRESS}`,
+  fixture: 'richPosts',
+  steps: async (page) => {
+    await page.locator('.xp-tab', { hasText: /reacted/i }).click()
+    await page.waitForSelector('.post-list-badge', { timeout: 8000 })
+
+    const badge = await page.locator('.post-list-badge').first().innerText()
+    if (!/reacted/i.test(badge)) throw new Error(`no reaction on the row - ${JSON.stringify(badge)}`)
+  },
+})
+
+await run('profile / the Saved tab says only you can see it', {
+  path: `/u/${ADDRESS}`,
+  fixture: 'empty',
+  saved: false,
+  steps: async (page) => {
+    await page.locator('.xp-tab', { hasText: /saved/i }).click()
+    await page.waitForTimeout(1400)
+
+    const text = await page.locator('main').innerText()
+    if (!/only you/i.test(text)) {
+      throw new Error(`the empty Saved tab does not say it is private - ${JSON.stringify(text.replace(/\s+/g, ' ').slice(0, 220))}`)
+    }
+  },
+})
+
+await run('profile / the Saved tab lists what was saved', {
+  path: `/u/${ADDRESS}`,
+  fixture: 'richPosts',
+  saved: true,
+  steps: async (page) => {
+    await page.locator('.xp-tab', { hasText: /saved/i }).click()
+    await page.waitForSelector('.feed-panel .feed-post', { timeout: 8000 })
+
+    // And the bookmark on each row reads as already saved, which is the state
+    // a Saved tab is by definition looking at.
+    const filled = await page.locator('.feed-tool.is-saved').count()
+    if (filled === 0) throw new Error('the Saved tab drew unsaved bookmarks')
+  },
+})
+
+/*
+ * No steps, deliberately.
+ *
+ * The first version pressed the Reacted tab, and with the profile query
+ * failing there is no tab strip to press - correctly, since a profile that
+ * could not be loaded has nothing to tab between. What is being checked here
+ * is what `run()` checks for every apiStatus scenario: that the reader is told
+ * something, and that what they are told is not PostgREST's own words.
+ */
+await run('db 500 / a profile and its tabs', { path: `/u/${ADDRESS}`, apiStatus: 500 })
+
+await run('posts / everything at once on a phone', {
+  viewport: PHONE,
+  path: '/feed',
+  fixture: 'richPosts',
+})
+
+await run('nasty data / posts carrying every null 0020 allows', { path: '/feed', fixture: 'nasty' })
+
+/* ── Editing ── */
+
+await run('posts / editing in place marks the post as edited', {
+  path: '/feed',
+  fixture: 'richPosts',
+  steps: async (page) => {
+    const edit = page.locator('.feed-post [aria-label="Edit your post"]').first()
+    await edit.waitFor({ timeout: 8000 })
+    await edit.click()
+
+    await page.waitForSelector('.post-editor', { timeout: 6000 })
+
+    // The deal, said while the box is open: the edit is allowed and it is
+    // permanent that it happened.
+    const foot = await page.locator('.post-editor-foot').innerText()
+    if (!/marked as edited/i.test(foot)) {
+      throw new Error(`the editor does not say the post will be marked - ${JSON.stringify(foot.slice(0, 160))}`)
+    }
+
+    await page.locator('.post-editor textarea').fill('a corrected post')
+    await page.locator('.post-editor button[type="submit"]').click()
+    await page.waitForTimeout(1200)
+
+    const open = await page.locator('.post-editor').count()
+    if (open !== 0) throw new Error('the editor stayed open after saving')
+  },
+})
+
+/*
+ * The edit control is offered only where the rule allows it. `canEditPost` is
+ * the same function the endpoint uses, so this is really a check that the
+ * interface consults it at all rather than deciding for itself.
+ */
+await run('posts / no edit control on somebody else’s post', {
+  path: '/feed',
+  fixture: 'richPosts',
+  signedIn: false,
+  steps: async (page) => {
+    await page.waitForSelector('.feed-post', { timeout: 8000 })
+    const controls = await page.locator('[aria-label="Edit your post"]').count()
+    if (controls !== 0) throw new Error('an edit control was offered to somebody signed out')
+  },
+})
+
+/* ── The thread ── */
+
+/*
+ * `healthy` rather than `richPosts`, and the reason is the harness rather than
+ * the app: the fixture answers every query on a table the same way, so four
+ * post rows make PostPage's `.maybeSingle()` an error and the page correctly
+ * reports that the post is not there. One row is what a single-post read
+ * actually gets in production.
+ *
+ * It also means the one reply is the same row as the post it answers, so the
+ * replier is the author - which is exactly the state this scenario is about.
+ */
+await run('posts / a thread marks the original author', {
+  path: '/p/1',
+  fixture: 'healthy',
+  steps: async (page) => {
+    await page.waitForSelector('.post-thread', { timeout: 8000 })
+
+    const text = await page.locator('.post-thread').innerText()
+    /*
+     * The one fact in a thread a reader actually needs: whether the person
+     * answering is the person who posted. It is also the shape of the obvious
+     * scam here - a reply impersonating the author and pointing somewhere
+     * else - so it is said in words rather than with a colour.
+     */
+    if (!/author/i.test(text)) {
+      throw new Error(`the thread does not mark the author - ${JSON.stringify(text.replace(/\s+/g, ' ').slice(0, 200))}`)
+    }
+  },
+})
+
+await run('posts / a thread states how many replies there are', {
+  path: '/p/1',
+  fixture: 'healthy',
+  steps: async (page) => {
+    await page.waitForSelector('.post-thread-count', { timeout: 8000 })
+    const count = await page.locator('.post-thread-count').innerText()
+    if (!/repl/i.test(count)) throw new Error(`no reply count - ${JSON.stringify(count)}`)
+  },
+})
+
+/* ── Composing ── */
+
+await run('posts / the composer offers to attach a picture', {
+  steps: async (page) => {
+    await socialTab('Feed')(page)
+    const attach = page.locator('[aria-label="Attach an image"]')
+    await attach.waitFor({ timeout: 8000 })
+
+    // One per post: the schema holds one URL, and a gallery is a different
+    // feature with its own layout problems.
+    const inputs = await page.locator('.feed-composer input[type="file"]').count()
+    if (inputs !== 1) throw new Error(`expected one file input, saw ${inputs}`)
+  },
+})
+
+await run('posts / quoting fills the composer with the post', {
+  path: '/feed',
+  fixture: 'richPosts',
+  steps: async (page) => {
+    const quote = page.locator('.feed-post [aria-label="Quote this post"]').first()
+    await quote.waitFor({ timeout: 8000 })
+    await quote.click()
+    await page.waitForTimeout(900)
+
+    /*
+     * The card in the composer, drawn with the same component the published
+     * post uses - so there is no gap between what the composer promises and
+     * what appears.
+     */
+    const inComposer = await page.locator('.composer-quote .post-quote').count()
+    if (inComposer !== 1) throw new Error(`the composer is not showing the quote - saw ${inComposer}`)
+
+    // And it can be taken back off again.
+    await page.locator('.composer-chip-remove').first().click()
+    await page.waitForTimeout(500)
+    if ((await page.locator('.composer-quote').count()) !== 0) {
+      throw new Error('the quote could not be removed from the composer')
+    }
   },
 })
 

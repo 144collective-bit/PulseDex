@@ -1,10 +1,12 @@
 import { useRef, useState } from 'react'
-import { PenLine, Loader2 } from 'lucide-react'
+import { ImagePlus, Loader2, PenLine, X } from 'lucide-react'
 import { useSiweAuth } from '../../context/SiweAuthContext'
-import { createPost } from '../../services/posts'
+import { createPost, uploadPostImage } from '../../services/posts'
 import { postLength, MAX_POST_LENGTH } from '../../utils/post'
 import { useMentionPicker } from '../../hooks/useMentionPicker'
 import ChatAvatar from './ChatAvatar'
+import QuoteCard from './QuoteCard'
+import { ACCEPT_ATTRIBUTE, fileToPostImage } from '../../utils/avatarImage'
 import { formatAddress } from '../../utils/formatters'
 
 /** Show the counter once it is worth watching, not from the first letter. */
@@ -20,12 +22,33 @@ const COUNTER_APPEARS_AT = MAX_POST_LENGTH - 300
  * characters is that it can have shape. One component taking that as a prop
  * would be a component whose only real content is a conditional.
  */
-export default function PostComposer({ onPosted, parentId = null }) {
+export default function PostComposer({
+  onPosted,
+  parentId = null,
+  /* The post being quoted, if the composer was opened from one. A whole post
+     rather than an id, so the card can be drawn without another query. */
+  quoting = null,
+  onClearQuote,
+}) {
   const { isSignedIn, isBusy, signIn } = useSiweAuth()
 
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState(null)
+
+  /*
+   * The picked image, cropped and re-encoded, held until Post.
+   *
+   * Nothing is uploaded on pick: a picture somebody picked and then thought
+   * better of should not already be sitting in a public bucket, and the rest
+   * of this form works the same way. The upload happens inside `send`, before
+   * the post, so a picture that cannot be stored fails before any words are
+   * published.
+   */
+  const [image, setImage] = useState(null)
+  const [imageError, setImageError] = useState(null)
+  const [preparing, setPreparing] = useState(false)
+  const fileInput = useRef(null)
 
   const input = useRef(null)
 
@@ -40,7 +63,50 @@ export default function PostComposer({ onPosted, parentId = null }) {
 
   const length = postLength(draft)
   const overLimit = length > MAX_POST_LENGTH
-  const canSend = length > 0 && !overLimit && !sending
+  /*
+   * Text is required even with an image.
+   *
+   * `posts.body` is NOT NULL with a minimum length of 1 by 0005, so an
+   * image-only post is not something the schema allows - and rather than
+   * widen that column, this keeps the requirement, because the body is what
+   * makes a post searchable, quotable, and readable to somebody using a
+   * screen reader. A picture with no words is a post that says nothing to a
+   * third of the people who might read it.
+   */
+  const canSend = length > 0 && !overLimit && !sending && !preparing
+
+  /**
+   * Read a picked file, fit it inside the box, and hold it until Post.
+   *
+   * Everything about the picture is done here, in the browser: decoded,
+   * EXIF orientation applied, scaled to fit 1280 on the longest edge with the
+   * aspect ratio kept, and re-encoded as a JPEG. The re-encode is what strips
+   * the metadata - a phone photo carries the model, often the time, and
+   * sometimes the coordinates it was taken at, none of which anybody means to
+   * publish with a chart screenshot.
+   *
+   * Fitted rather than cropped, unlike an avatar: a post's image is the
+   * content, and a centre crop of a chart takes the axis off the bottom.
+   */
+  async function pickImage(event) {
+    const file = event.target.files?.[0]
+    // Cleared so picking the same file twice in a row fires `change` again.
+    event.target.value = ''
+    if (!file) return
+
+    setImageError(null)
+    setPreparing(true)
+
+    const result = await fileToPostImage(file)
+
+    setPreparing(false)
+    if (result.error) {
+      setImageError(result.error)
+      return
+    }
+
+    setImage(result)
+  }
 
   async function send(event) {
     event.preventDefault()
@@ -50,7 +116,24 @@ export default function PostComposer({ onPosted, parentId = null }) {
     setError(null)
 
     try {
-      const post = await createPost(draft, parentId, mention.mentions)
+      /*
+       * The image first, and awaited, so its failure is its own.
+       *
+       * A post published with a broken image beside it is worse than a
+       * picture that could not be stored and said so - and the endpoint that
+       * stores it is separate precisely so the two can fail apart. The cost is
+       * an orphan if the post then fails: a few kilobytes nothing points at,
+       * which is the cheaper of the two mistakes.
+       */
+      let stored = null
+      if (image) {
+        stored = await uploadPostImage(image)
+      }
+
+      const post = await createPost(draft, parentId, mention.mentions, {
+        quoteId: quoting?.id ?? null,
+        image: stored,
+      })
 
       /*
        * Cleared only after the post succeeds. Clearing optimistically reads
@@ -63,6 +146,11 @@ export default function PostComposer({ onPosted, parentId = null }) {
       // Nobody picked, for the next post. Otherwise an address picked here
       // rides along with whatever is written next.
       mention.reset()
+      setImage(null)
+      setImageError(null)
+      // The quote too, for the same reason: the next post is not about this
+      // one unless somebody says so again.
+      onClearQuote?.()
       if (post) onPosted(post)
     } catch (err) {
       setError(err.message)
@@ -165,16 +253,87 @@ export default function PostComposer({ onPosted, parentId = null }) {
         </ul>
       )}
 
+      {/*
+        The post being quoted, drawn as it will appear.
+        
+        Above the foot rather than under the box, so what is being written sits
+        next to what it is about - and with the same card the published post
+        uses, so there is no gap between what the composer promises and what
+        appears.
+      */}
+      {quoting && (
+        <div className="composer-quote">
+          <QuoteCard quote={quoting} />
+          <button
+            type="button"
+            className="composer-chip-remove"
+            onClick={onClearQuote}
+            aria-label="Do not quote this post"
+            title="Do not quote this post"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
+      {/*
+        The picked image, before it is uploaded.
+        
+        Shown at the shape it will be published at, which is the whole reason
+        the dimensions come back from fileToPostImage - a preview that does not
+        match the result is a preview that misleads about the one thing it is
+        for.
+      */}
+      {image && (
+        <div className="composer-image">
+          <img src={image.dataUrl} alt="" width={image.width} height={image.height} />
+          <button
+            type="button"
+            className="composer-chip-remove"
+            onClick={() => setImage(null)}
+            aria-label="Remove this image"
+            title="Remove this image"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
       <div className="feed-composer-foot">
-        {error ? (
+        {error || imageError ? (
           <span className="chat-error" role="alert">
-            {error}
+            {error || imageError}
           </span>
         ) : (
           <span className="chat-hint font-mono">
             {parentId ? 'Replies show on your profile too' : 'Posts stay on your profile'}
           </span>
         )}
+
+        {/*
+          Attaching a picture. One per post: the schema holds one URL, and a
+          gallery is a different feature with its own layout problems.
+        */}
+        <input
+          ref={fileInput}
+          type="file"
+          accept={ACCEPT_ATTRIBUTE}
+          onChange={pickImage}
+          className="visually-hidden"
+          tabIndex={-1}
+          aria-hidden="true"
+        />
+
+        <button
+          type="button"
+          className="feed-tool"
+          onClick={() => fileInput.current?.click()}
+          disabled={preparing || sending || Boolean(image)}
+          aria-label="Attach an image"
+          title={image ? 'One image per post' : 'Attach an image'}
+        >
+          {preparing ? <Loader2 size={13} className="chat-spin" /> : <ImagePlus size={13} />}
+        </button>
 
         {/*
          * Counted by the same function the server enforces with, so this
