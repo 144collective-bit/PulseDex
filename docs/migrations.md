@@ -32,6 +32,7 @@ the only way to be sure is to be able to run everything again.
 | `0017_message_reply_fk.sql` | repairs the reply foreign key | **not yet** |
 | `0018_room_admin.sql` | archiving a room, gate history | **not yet** |
 | `0019_profile_depth.sql` | a pinned post, wallet age, opt-in holdings | **not yet** |
+| `0020_posts_worth_making.sql` | images, edits, quotes, post reactions, bookmarks, link previews | **not yet** |
 
 There is no `0006`, and this file does not know why - the number is simply
 absent from `supabase/migrations/`. Left as a gap rather than renumbering,
@@ -103,6 +104,44 @@ where the column already exists it is skipped entirely - constraint included,
 silently. The column goes in with `add column if not exists`; the constraint
 goes in separately, guarded on its own name, and the name is given rather than
 inherited.
+
+**`0020_posts_worth_making.sql` is required, like the two above it.** It adds
+`image_url`, `image_w`, `image_h`, `edited_at` and `quote_id` to `posts`, and
+creates `post_reactions`, `post_bookmarks` and `link_previews`. `POST_FIELDS`
+selects every one of those columns and embeds `post_reactions`, and every read
+of a post in the app goes through that string - so without this migration the
+feed, every profile and every post page fail on the select.
+
+Three things in it are worth knowing before running it.
+
+It adds `quote_id` and its foreign key in **two statements**, which is the
+third time this file has had to say so. `add column if not exists ...
+references ...` is one statement and is skipped whole when the column already
+exists, taking the constraint with it, silently. That is what `0012` did to
+`messages.reply_to` and what `0017` exists to repair.
+
+**`post_bookmarks` has no row-level security policy at all** - not for `anon`,
+not for `authenticated`, read or write. That blank space is the entire security
+model for the table and is deliberate: with RLS enabled, an operation no policy
+permits is refused, so the anon key that ships in the bundle can do nothing
+there. Every read goes through `api/_routes/posts/bookmarks.js` with the
+service role and an address taken from the sign-in cookie.
+
+The reason it has to work that way is the one `0010` wrote down for
+`notifications`, and it is the thing most likely to be got wrong by whoever
+adds the next private feature: sign-in here is a wallet signature and a JWT
+this app sets in a cookie, **not Supabase auth**. So `auth.uid()` is null in
+every request the browser makes, and a policy saying
+`using (address = auth.uid())` would not restrict `post_bookmarks` - it would
+empty it. If somebody later adds `using (true)` to make a query work from the
+browser, they will have published every bookmark on the site.
+
+**`link_previews` deliberately has no image column.** An og:image is the
+obvious thing to put in a preview and the one thing that would undo the reason
+previews are fetched server-side: rendering it means the reader's browser
+requests it from the linked site, handing that site the IP address of everybody
+who scrolled past the post. If an image is ever wanted there, re-host it; do
+not add a column that holds somebody else's URL and hand it to an `<img>`.
 
 ## Checking one ran
 

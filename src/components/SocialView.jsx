@@ -98,6 +98,17 @@ const SURFACES = {
 }
 
 export default function SocialView({ route, onNavigate, onOpenProfile, onOpenToken }) {
+  /*
+   * Opening one post from inside the section.
+   *
+   * `onNavigate` is already the way this component moves around its own
+   * surfaces, so a quote card pressing through to `/p/<id>` is the same call
+   * every tab makes rather than a second route out to the shell.
+   */
+  const openPostHere = (id) => {
+    if (id) onNavigate({ tab: 'post', post: id })
+  }
+
   const { account, isSignedIn, signIn, isBusy } = useSiweAuth()
 
   /*
@@ -277,7 +288,9 @@ export default function SocialView({ route, onNavigate, onOpenProfile, onOpenTok
         ))}
       </nav>
 
-      {tab === 'feed' && <PublicFeed onOpenProfile={onOpenProfile} />}
+      {tab === 'feed' && (
+        <PublicFeed onOpenProfile={onOpenProfile} onOpenPost={openPostHere} />
+      )}
 
       {tab === 'discover' && (
         <DiscoverPanel
@@ -300,7 +313,12 @@ export default function SocialView({ route, onNavigate, onOpenProfile, onOpenTok
          * refetches rather than showing the previous post's replies under
          * the new one's body.
          */
-        <PostPage key={route.post} id={route.post} onOpenProfile={onOpenProfile} />
+        <PostPage
+          key={route.post}
+          id={route.post}
+          onOpenProfile={onOpenProfile}
+          onOpenPost={openPostHere}
+        />
       )}
 
       {tab === 'profile' &&

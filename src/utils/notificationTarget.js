@@ -33,24 +33,35 @@ export function notificationTarget(item) {
   }
 
   /*
-   * A reaction is on a chat message, which is addressed by room and id
-   * together. The id alone is not a location, so a row missing its room is
-   * not clickable - that happens on a deployment whose notification query
-   * predates the room embed, and drawing a dead link would be worse than
-   * drawing none.
+   * A reaction is on a chat message or, since 0020, on a post. One kind, two
+   * subjects - which is what 0010's two nullable id columns are for, and why
+   * neither a new kind nor a migration was needed to add the second.
+   *
+   * The message is tried first and the post is left to the branch below,
+   * rather than being handled here, so that there is exactly one place in this
+   * function that turns a post id into a location. A reaction carrying both
+   * ids cannot happen through either endpoint; if it ever did, it would open
+   * the message, which is the older behaviour and the safer surprise.
    */
-  if (item.kind === 'reaction') {
+  if (item.kind === 'reaction' && toId(item.messageId)) {
+    /*
+     * A message is addressed by room and id together. The id alone is not a
+     * location, so a row missing its room is not clickable - that happens on a
+     * deployment whose notification query predates the room embed, and drawing
+     * a dead link would be worse than drawing none.
+     */
     const message = toId(item.messageId)
     const room = typeof item.messageRoom === 'string' ? item.messageRoom : null
-    if (!message || !room || !isRoom(room)) return null
+    if (!room || !isRoom(room)) return null
     return { kind: 'room', where: { tab: 'rooms', room, message } }
   }
 
   /*
-   * A mention or a reply is on a post. Checked by `postId` rather than by
-   * kind, so a mention that somehow carries a message - which the schema
-   * allows, because both columns are nullable - is not drawn as a link to a
-   * post that is not there.
+   * A mention, a reply, or a reaction on a post. Checked by `postId` rather
+   * than by kind, so a mention that somehow carries a message - which the
+   * schema allows, because both columns are nullable - is not drawn as a link
+   * to a post that is not there, and so a reaction on a post needs no case of
+   * its own.
    */
   const post = toId(item.postId)
   if (post) return { kind: 'post', where: { tab: 'post', post } }

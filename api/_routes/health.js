@@ -1,5 +1,5 @@
 import { serviceClient, anonClient } from '../_lib/supabase.js'
-import { MESSAGE_FIELDS, NOTIFICATION_FIELDS, POST_FIELDS, PUBLIC_PROFILE_FIELDS, ROOM_FIELDS, CLAIM_FIELDS, FOLLOWER_FIELDS, FOLLOWEE_FIELDS } from '../../src/config/queries.js'
+import { MESSAGE_FIELDS, NOTIFICATION_FIELDS, POST_FIELDS, PUBLIC_PROFILE_FIELDS, ROOM_FIELDS, CLAIM_FIELDS, FOLLOWER_FIELDS, FOLLOWEE_FIELDS, LINK_PREVIEW_FIELDS } from '../../src/config/queries.js'
 
 /**
  * Does this deployment actually work?
@@ -126,6 +126,18 @@ export default async function handler(req, res) {
      * silently stop being drawn.
      */
     checks.push(await query(reader, 'claims-select', 'token_claims', CLAIM_FIELDS))
+    /*
+     * Added by 0020. The posts select above already covers the three image
+     * columns, `edited_at`, `quote_id` and the reactions embed - it is the
+     * same POST_FIELDS the feed uses, which is the point of this file. These
+     * two are the tables that select does not reach.
+     *
+     * `link_previews` is anon-readable because the browser reads a cached
+     * preview straight from it; `post_reactions` likewise, under the posts
+     * they sit on.
+     */
+    checks.push(await query(reader, 'post-reactions-table', 'post_reactions', 'emoji'))
+    checks.push(await query(reader, 'link-previews-select', 'link_previews', LINK_PREVIEW_FIELDS))
   }
 
   /*
@@ -171,6 +183,17 @@ export default async function handler(req, res) {
      * the embed beside it - which is the half that actually breaks.
      */
     checks.push(await query(db, 'notifications-select', 'notifications', NOTIFICATION_FIELDS))
+    /*
+     * Bookmarks, with the service role and only with it.
+     *
+     * The table has no read policy for any browser-facing role, so this check
+     * belongs here rather than above - and it failing means the Saved tab is
+     * broken while everything a visitor can see still works. Checked with the
+     * service role is also the only way to check it at all: the anon key
+     * reading this table correctly returns nothing whether the table is there
+     * or not.
+     */
+    checks.push(await query(db, 'bookmarks-table', 'post_bookmarks', 'post_id'))
   } else if (reader) {
     checks.push({ name: 'service-role', ok: true, note: 'absent: private tables not checked' })
   }

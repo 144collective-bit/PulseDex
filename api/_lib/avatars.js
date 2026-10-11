@@ -24,6 +24,20 @@ export const AVATAR_BUCKET = 'avatars'
 export const BANNER_BUCKET = 'banners'
 
 /*
+ * A third bucket, for the images attached to posts, and it is separate for a
+ * reason that is not about size limits.
+ *
+ * An avatar and a banner are one per account: storing a new one means the old
+ * one should go, which is what `storeImage` does by sweeping everything under
+ * the address first. A post's image is one of many - an account has as many as
+ * it has posts - so that sweep would delete the picture off every post the
+ * account had ever made the moment it posted another. Hence `keepPrevious`
+ * below, and hence a bucket of its own so nothing can reach these files with
+ * the avatar code's assumptions.
+ */
+export const POST_IMAGE_BUCKET = 'post-images'
+
+/*
  * Whether the bucket has been confirmed to exist on this instance.
  *
  * A serverless instance handles many requests, and asking Storage to create a
@@ -84,11 +98,37 @@ async function existingObjects(db, bucket, address) {
  * @param {{ bytes: Uint8Array, type: string, ext: string }} image
  * @returns {Promise<string>} the public URL
  */
-export async function storeImage(db, { bucket, address, image, maxBytes = MAX_AVATAR_BYTES }) {
+export async function storeImage(
+  db,
+  { bucket, address, image, maxBytes = MAX_AVATAR_BYTES, keepPrevious = false },
+) {
   await ensureBucket(db, bucket, maxBytes)
 
-  const previous = await existingObjects(db, bucket, address)
-  const path = `${address}/${Date.now()}.${image.ext}`
+  /*
+   * `keepPrevious` is what separates a profile picture from a post's image.
+   *
+   * An avatar is one per account, so storing a new one means the old one
+   * should go. A post's image is one of many, and sweeping would delete the
+   * picture off every post the account had ever made the moment it posted
+   * another. Defaulting to false keeps the three existing callers behaving
+   * exactly as they did.
+   */
+  const previous = keepPrevious ? [] : await existingObjects(db, bucket, address)
+
+  /*
+   * A random suffix as well as the timestamp.
+   *
+   * The timestamp alone is unique per account for a profile picture, which
+   * nobody changes twice in a millisecond. A post's image is not: two requests
+   * from one account can land in the same millisecond on two instances, and
+   * `upsert: false` would make the second a failed upload rather than a second
+   * image. Six hex characters is plenty for a collision nobody will ever see.
+   */
+  const stamp = keepPrevious
+    ? `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
+    : String(Date.now())
+
+  const path = `${address}/${stamp}.${image.ext}`
 
   const { error } = await db.storage
     .from(bucket)
@@ -100,6 +140,27 @@ export async function storeImage(db, { bucket, address, image, maxBytes = MAX_AV
 
   return db.storage.from(bucket).getPublicUrl(path).data.publicUrl
 }
+
+/**
+ * Store an image for a post.
+ *
+ * Named, like `storeAvatar`, so no caller has to remember which bucket post
+ * images live in or that this is the one that must not sweep.
+ *
+ * Nothing here writes a database row: the URL goes back to the browser, which
+ * sends it with the post. That is deliberate - the image is uploaded before
+ * the post exists, so there is no row to attach it to yet, and a post
+ * published without its picture is worse than a picture that could not be
+ * stored and said so.
+ */
+export const storePostImage = (db, address, image, maxBytes) =>
+  storeImage(db, {
+    bucket: POST_IMAGE_BUCKET,
+    address,
+    image,
+    maxBytes,
+    keepPrevious: true,
+  })
 
 /** The avatar case, named, because three callers say it and none of them
  *  should have to remember which bucket avatars live in. */

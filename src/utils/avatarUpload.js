@@ -32,6 +32,57 @@ export const MAX_AVATAR_BYTES = 256 * 1024
 export const MAX_BANNER_BYTES = 1024 * 1024
 
 /**
+ * The largest image accepted on a post.
+ *
+ * Larger than a banner, because a post's image is the content rather than
+ * decoration: it is fitted inside 1280 on the longest edge with the aspect
+ * ratio kept (see fileToPostImage), and a screenshot of a chart at that size
+ * is legitimately a few hundred kilobytes once the detail is in it. Two
+ * megabytes is several times what the browser's own encode produces, which is
+ * the same margin the avatar limit leaves - room for a different encoder
+ * without inviting somebody to fill a bucket a megabyte at a time.
+ */
+export const MAX_POST_IMAGE_BYTES = 2 * 1024 * 1024
+
+/**
+ * The largest edge a stored post image may claim, which is what the
+ * `image_w` / `image_h` checks in 0020 allow.
+ *
+ * The dimensions are sent by the browser alongside the bytes and are not
+ * derived from them - decoding an image on the server to measure it means an
+ * image library in a serverless function, which is a large dependency and a
+ * large attack surface for two integers. So they are a claim, and the only
+ * thing that rests on the claim is how much space the feed reserves before the
+ * picture arrives: a wrong pair makes the layout jump, which is the same thing
+ * that happens with no pair at all. Bounded so the claim cannot be absurd.
+ */
+export const MAX_POST_IMAGE_EDGE = 4096
+
+/**
+ * Are these usable dimensions for a post's image?
+ *
+ * Both present, both whole numbers, both inside the range the column allows.
+ * 0020's `posts_image_shape` constraint requires all three of url, width and
+ * height together or none, so a half-answer here has to be refused rather than
+ * stored with a null beside it.
+ *
+ * @param {unknown} width
+ * @param {unknown} height
+ */
+export function isPostImageSize(width, height) {
+  const w = Number(width)
+  const h = Number(height)
+  return (
+    Number.isInteger(w) &&
+    Number.isInteger(h) &&
+    w >= 1 &&
+    h >= 1 &&
+    w <= MAX_POST_IMAGE_EDGE &&
+    h <= MAX_POST_IMAGE_EDGE
+  )
+}
+
+/**
  * The first bytes of each format accepted, and what they really are.
  *
  * Checked because the declared type in a data URL is a claim by the sender.

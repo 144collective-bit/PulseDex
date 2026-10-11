@@ -165,6 +165,35 @@ export async function notifyReaction(db, { messageId, actor }) {
 }
 
 /**
+ * Tell somebody their post was reacted to.
+ *
+ * `kind` is 'reaction', the same value a chat reaction uses, with `post_id`
+ * set where that one sets `message_id`. No new kind, and 0010's check
+ * constraint needs no change: the two nullable id columns are exactly what
+ * lets one kind point at either thing, which is what that migration says they
+ * are for. src/utils/notificationTarget.js already reads a reaction with a
+ * post on it and opens the post.
+ *
+ * The same shape as notifyReaction above, deliberately: reads the author,
+ * refuses to tell somebody about their own reaction, and swallows everything.
+ */
+export async function notifyPostReaction(db, { postId, actor }) {
+  if (!postId || !actor) return
+
+  try {
+    const post = await db.from('posts').select('address').eq('id', postId).maybeSingle()
+    if (post.error || !post.data) return
+
+    const recipient = post.data.address
+    if (!recipient || recipient === actor) return
+
+    await raise(db, [{ recipient, kind: 'reaction', actor, post_id: postId }])
+  } catch (err) {
+    console.error('notify: post reaction failed:', err?.message || err)
+  }
+}
+
+/**
  * Insert notification rows, ignoring the ones that already exist.
  *
  * `notifications_once_idx` is what makes re-reacting, or editing a post that

@@ -8,6 +8,8 @@ import { useIsModerator } from '../../hooks/useIsModerator'
 import { useSiweAuth } from '../../context/SiweAuthContext'
 import { fetchReplyCounts } from '../../services/posts'
 import { usePostActions } from '../../hooks/usePostActions'
+import { usePostReactions } from '../../hooks/usePostReactions'
+import { useBookmarks } from '../../hooks/useBookmarks'
 
 /**
  * A list of posts, with the box to add one.
@@ -33,15 +35,58 @@ export default function FeedPanel({
      there is nothing for a post to be pinned to. */
   pinnedPostId = null,
   onTogglePin,
+  /** Opens one post's page, for a press on a quote card. */
+  onOpenPost,
+  /** Whether this list offers a Media filter. Only a profile's Media tab
+   *  passes it; the main feed shows everything. */
+  media = false,
 }) {
   const { account } = useSiweAuth()
   const isModerator = useIsModerator()
-  const { posts, status, error, add, remove, hasMore, loadingOlder, loadOlder } = useFeed({ author, authors, replies })
+  const { posts, status, error, add, replace, remove, hasMore, loadingOlder, loadOlder } = useFeed({
+    author,
+    authors,
+    replies,
+    media,
+  })
+
+  /*
+   * Reactions and saves, asked once for the whole list rather than per row.
+   *
+   * Both are the same lesson from two directions: a hook per card meant a
+   * request per card, and a page of twenty posts came to sixty requests on a
+   * browser that runs six at a time. Reactions arrive embedded with the posts
+   * so there is no request at all; saves are one.
+   */
+  const reactions = usePostReactions(posts)
+  const bookmarks = useBookmarks()
+
+  /*
+   * The post the composer is quoting, if somebody pressed Quote on one.
+   *
+   * Held here rather than in the composer, because the press happens on a card
+   * and the composer is a sibling of the list - and because clearing it after
+   * a successful post is the composer's job, which it does through the
+   * callback.
+   */
+  const [quoting, setQuoting] = useState(null)
 
   /* Removing, reporting and blocking, shared with the single-post page so
      the two cannot drift. See src/hooks/usePostActions.js. */
   const { actionError, reported, noteAlreadyReported, onRemove, onReport, onBlock } =
     usePostActions({ onRemoved: remove })
+
+  /*
+   * Quoting scrolls to the composer as well as filling it.
+   *
+   * Without it, pressing Quote on the fortieth post of a feed appears to do
+   * nothing: the composer is filled in, at the top, off screen. The press and
+   * its result have to be in the same place.
+   */
+  const onQuote = useCallback((post) => {
+    setQuoting(post)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
 
   // Which post's conversation is open, or null. One at a time: several open
   // threads turn a feed into a wall with no shape to it.
@@ -123,11 +168,17 @@ export default function FeedPanel({
       {/* On your own profile the composer belongs here as much as on the
           feed - it is your page. On anybody else's it would be a box that
           looks like a reply and is not one. */}
-      {(!author || ownProfile) && <PostComposer onPosted={add} />}
+      {(!author || ownProfile) && (
+        <PostComposer
+          onPosted={add}
+          quoting={quoting}
+          onClearQuote={() => setQuoting(null)}
+        />
+      )}
 
-      {actionError && (
+      {(actionError || reactions.error || bookmarks.error) && (
         <p className="chat-error" role="alert">
-          {actionError}
+          {actionError || reactions.error || bookmarks.error}
         </p>
       )}
 
@@ -169,6 +220,18 @@ export default function FeedPanel({
              */
             pinned={post.id === pinnedPostId}
             onTogglePin={ownProfile && !replies ? onTogglePin : undefined}
+            reactions={reactions.reactionsFor(post.id)}
+            canReact={reactions.canReact}
+            onToggleReaction={reactions.toggle}
+            saved={bookmarks.isSaved(post.id)}
+            onToggleSave={bookmarks.toggle || undefined}
+            /* Quoting is offered where there is a composer to open. On
+               somebody else's profile there is none - the box is hidden
+               there, because a post written under their name would go to the
+               feed rather than to them. */
+            onQuote={!author || ownProfile ? onQuote : undefined}
+            onOpenPost={onOpenPost}
+            onEdited={replace}
           />
 
           {openThread === post.id && (
@@ -176,9 +239,7 @@ export default function FeedPanel({
               post={post}
               isModerator={isModerator}
               onOpenProfile={onOpenProfile}
-              onRemove={onRemove}
-              onReport={onReport}
-              onBlock={onBlock}
+              onOpenPost={onOpenPost}
             />
           )}
           </div>

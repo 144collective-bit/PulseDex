@@ -6,11 +6,15 @@ import candles from './_routes/candles.js'
 import follows from './_routes/follows.js'
 import notifications from './_routes/notifications.js'
 import health from './_routes/health.js'
+import linksPreview from './_routes/links/preview.js'
 import chatBlock from './_routes/chat/block.js'
 import chatMessages from './_routes/chat/messages.js'
 import chatReactions from './_routes/chat/reactions.js'
 import chatReads from './_routes/chat/reads.js'
 import posts from './_routes/posts.js'
+import postsBookmarks from './_routes/posts/bookmarks.js'
+import postsImage from './_routes/posts/image.js'
+import postsReactions from './_routes/posts/reactions.js'
 import postsReport from './_routes/posts/report.js'
 import profile from './_routes/profile.js'
 import profileAvatar from './_routes/profile/avatar.js'
@@ -67,12 +71,16 @@ const ROUTES = {
   candles,
   follows,
   health,
+  'links/preview': linksPreview,
   'chat/block': chatBlock,
   'chat/messages': chatMessages,
   'chat/reactions': chatReactions,
   'chat/reads': chatReads,
   notifications,
   posts,
+  'posts/bookmarks': postsBookmarks,
+  'posts/image': postsImage,
+  'posts/reactions': postsReactions,
   'posts/report': postsReport,
   profile,
   'profile/avatar': profileAvatar,

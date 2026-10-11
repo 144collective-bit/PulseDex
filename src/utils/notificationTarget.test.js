@@ -106,3 +106,41 @@ describe('notificationTarget', () => {
     ).toBe('post')
   })
 })
+
+/*
+ * A reaction on a post, which 0020 made possible.
+ *
+ * One `kind` with two possible subjects: 0010 gave `notifications` two
+ * nullable id columns precisely so a kind could point at either a post or a
+ * message, which is why adding post reactions needed no new kind and no
+ * migration. Before this, the reaction branch looked only at `messageId` and
+ * returned null - so a notification about somebody reacting to your post
+ * arrived as a row with nowhere to go.
+ */
+describe('a reaction on a post', () => {
+  it('opens the post', () => {
+    expect(notificationTarget({ kind: 'reaction', postId: 42 })).toEqual({
+      kind: 'post',
+      where: { tab: 'post', post: 42 },
+    })
+  })
+
+  it('still opens the message when the reaction is on one', () => {
+    expect(
+      notificationTarget({ kind: 'reaction', messageId: 7, messageRoom: 'lounge' }),
+    ).toEqual({ kind: 'room', where: { tab: 'rooms', room: 'lounge', message: 7 } })
+  })
+
+  it('is not clickable when it names neither', () => {
+    expect(notificationTarget({ kind: 'reaction' })).toBeNull()
+    expect(notificationTarget({ kind: 'reaction', postId: null, messageId: null })).toBeNull()
+  })
+
+  /*
+   * A message with no room is still not a location, and must not quietly fall
+   * through to the post branch and open something else.
+   */
+  it('is not clickable for a message with no room, even if a post id is present', () => {
+    expect(notificationTarget({ kind: 'reaction', messageId: 7, postId: 42 })).toBeNull()
+  })
+})

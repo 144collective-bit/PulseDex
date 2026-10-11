@@ -27,7 +27,7 @@ export const FEED_STATUS = {
  * @param {{ author?: string|null }} options an address to show one person's
  *   posts, or nothing for everybody's
  */
-export function useFeed({ author = null, authors = null, replies = false } = {}) {
+export function useFeed({ author = null, authors = null, replies = false, media = false } = {}) {
   const [posts, setPosts] = useState([])
   const [status, setStatus] = useState(
     hasSupabase ? FEED_STATUS.loading : FEED_STATUS.unconfigured,
@@ -92,7 +92,7 @@ export function useFeed({ author = null, authors = null, replies = false } = {})
     setPosts([])
     setStatus(FEED_STATUS.loading)
 
-    fetchPostPage({ author: wanted, authors, replies })
+    fetchPostPage({ author: wanted, authors, replies, media })
       .then((page) => {
         if (!active) return
         merge(page.posts)
@@ -122,6 +122,16 @@ export function useFeed({ author = null, authors = null, replies = false } = {})
         // following feed must not take people who are not followed.
         if (replies ? !post.parentId : post.parentId) return
         if (authors && !authors.includes(post.address)) return
+        /*
+         * A Media tab must not take a post with no image.
+         *
+         * The subscription is every post, and the query that filled this list
+         * asked for `image_url is not null` - so without this, writing a
+         * plain post would make it appear on the Media tab of your own
+         * profile, where the next reload would remove it again. The filters
+         * on the stream have to say everything the query said.
+         */
+        if (media && !post.image) return
         merge([post])
       },
       onRemoved: (id) => {
@@ -133,7 +143,8 @@ export function useFeed({ author = null, authors = null, replies = false } = {})
       active = false
       unsubscribe()
     }
-  }, [wanted, merge, forget])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wanted, authorsKey, replies, media, merge, forget])
 
   /**
    * Fetch the page before the oldest post held.
@@ -150,7 +161,7 @@ export function useFeed({ author = null, authors = null, replies = false } = {})
 
     setLoadingOlder(true)
     try {
-      const page = await fetchPostPage({ author: wanted, authors, replies, before })
+      const page = await fetchPostPage({ author: wanted, authors, replies, media, before })
       merge(page.posts)
       setHasMore(page.hasMore)
     } catch (err) {
@@ -170,6 +181,15 @@ export function useFeed({ author = null, authors = null, replies = false } = {})
     /** Show a post this browser just published, without waiting for the feed
      *  to bring it back around. */
     add: useCallback((post) => merge([post]), [merge]),
+    /**
+     * Put a changed post back in place of itself.
+     *
+     * The same merge, named for what it is used for. `merge` is keyed by id
+     * and the sort is on `created_at`, which an edit does not touch - so an
+     * edited post stays exactly where it was in the list rather than jumping
+     * to the top, which is what it should do: the post was not re-published.
+     */
+    replace: useCallback((post) => merge([post]), [merge]),
     remove: forget,
   }
 }

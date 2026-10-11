@@ -49,6 +49,9 @@ export default function ProfileHeader({
      tab that does nothing when pressed is how a tab strip teaches people it
      is decoration. */
   showTabs = true,
+  /** How many posts this account has saved. Only ever its own - the Saved
+   *  tab exists only on your own page. */
+  savedCount = null,
 }) {
   const { counts, following, canFollow, busy, error, toggle } = useFollow(address)
 
@@ -280,6 +283,38 @@ export default function ProfileHeader({
           <Tab id="replies" current={tab} onSelect={onTab} count={replyCount}>
             Replies
           </Tab>
+          {/* Batch 3 delivers the thing this tab lists, which is why it
+              appears now and was deliberately absent before: a tab that is
+              empty on every profile in the app reads as a broken feature
+              rather than an unbuilt one. */}
+          <Tab id="media" current={tab} onSelect={onTab} count={null}>
+            Media
+          </Tab>
+          {/*
+            "Reacted", not "Likes".
+            
+            There is no single like on this site - there are six reactions,
+            and 👀 "Watching" on a scam warning is not an endorsement of it.
+            A tab called Likes would be claiming an approval nobody gave, so
+            it is named for what it actually lists and each row says which
+            reaction it was.
+          */}
+          <Tab id="reacted" current={tab} onSelect={onTab} count={null}>
+            Reacted
+          </Tab>
+          {/*
+            Only on your own page, because only you can see it.
+            
+            `post_bookmarks` has no read policy for any browser-facing role -
+            see 0020 - so there is nothing for this tab to show on anybody
+            else's profile, and offering it would be offering a tab that is
+            always empty for a reason nobody could discover.
+          */}
+          {isMine && (
+            <Tab id="saved" current={tab} onSelect={onTab} count={savedCount}>
+              Saved
+            </Tab>
+          )}
         </nav>
       )}
     </header>

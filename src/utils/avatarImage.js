@@ -23,6 +23,15 @@ const OUTPUT_SIZE = 256
 const BANNER_WIDTH = 1200
 const BANNER_HEIGHT = 400
 
+/**
+ * The box a post's image is fitted inside.
+ *
+ * Fitted, not cropped - see fileToPostImage. 1280 is enough for a chart
+ * screenshot to stay readable, which is most of what gets posted here, and
+ * small enough that the result is tens of kilobytes rather than hundreds.
+ */
+const POST_MAX_EDGE = 1280
+
 /** Rejected before decoding - the browser should not be asked to parse a 40MB file. */
 const MAX_INPUT_BYTES = 8 * 1024 * 1024
 
@@ -38,7 +47,7 @@ export const ACCEPT_ATTRIBUTE = ACCEPTED.join(',')
  * photo that is too large, an image the browser cannot decode.
  */
 export async function fileToAvatarDataUrl(file) {
-  return fileToCroppedDataUrl(file, { width: OUTPUT_SIZE, height: OUTPUT_SIZE })
+  return decodeAndDraw(file, { fit: 'cover', width: OUTPUT_SIZE, height: OUTPUT_SIZE })
 }
 
 /**
@@ -47,7 +56,8 @@ export async function fileToAvatarDataUrl(file) {
  * at 84 pixels.
  */
 export async function fileToBannerDataUrl(file) {
-  return fileToCroppedDataUrl(file, {
+  return decodeAndDraw(file, {
+    fit: 'cover',
     width: BANNER_WIDTH,
     height: BANNER_HEIGHT,
     quality: 0.82,
@@ -55,14 +65,42 @@ export async function fileToBannerDataUrl(file) {
 }
 
 /**
- * Decode a picked file, crop it to fill the target box, and re-encode.
+ * An image fitted inside a box, for a post.
  *
- * Cover rather than contain: the crop takes the largest centred region of the
- * source with the target's aspect ratio, so the result always fills its frame.
- * Letterboxing instead would mean bars whose colour is somebody else's choice
- * showing through a layout that did not ask for them.
+ * Contain rather than cover, which is the opposite of what an avatar and a
+ * banner do, and the difference is what the image is for. An avatar fills a
+ * known frame, so cropping to fill it is right. A post's image is the content:
+ * most of what gets posted here is a screenshot of a chart, and a centre crop
+ * of one takes the axis off the bottom and the pair name off the top. So the
+ * whole picture is kept and the layout is told what shape it is - hence the
+ * dimensions coming back, which get stored so the feed can reserve the right
+ * box before the bytes arrive.
+ *
+ * An image already smaller than the box is left at its own size rather than
+ * scaled up, which would only add bytes and blur.
+ *
+ * Resolves to `{ dataUrl, width, height }` or `{ error }`.
  */
-async function fileToCroppedDataUrl(file, { width, height, quality = 0.85 }) {
+export async function fileToPostImage(file) {
+  return decodeAndDraw(file, { fit: 'contain', maxEdge: POST_MAX_EDGE, quality: 0.85 })
+}
+
+/**
+ * Decode a picked file, draw it into the target box, and re-encode.
+ *
+ * 'cover' takes the largest centred region of the source with the target's
+ * aspect ratio, so the result fills its frame - letterboxing instead would
+ * mean bars whose colour is somebody else's choice showing through a layout
+ * that did not ask for them. 'contain' scales the whole image down to fit
+ * inside `maxEdge` and reports the size it ended up.
+ *
+ * This function used to take `width`, `height` and `quality` and use none of
+ * them: the canvas was hardcoded to OUTPUT_SIZE square and the quality to
+ * 0.85, so every banner was a 256x256 JPEG stretched across a 1200x400 box.
+ * Three unused-parameter lint warnings said so and were read as noise. They
+ * are the whole bug.
+ */
+async function decodeAndDraw(file, { fit, width, height, maxEdge, quality = 0.85 }) {
   if (!file) return { error: 'No file selected.' }
 
   if (!ACCEPTED.includes(file.type)) {
@@ -75,38 +113,109 @@ async function fileToCroppedDataUrl(file, { width, height, quality = 0.85 }) {
 
   let bitmap
   try {
-    bitmap = await createImageBitmap(file)
+    /*
+     * `imageOrientation: 'from-image'` applies the EXIF rotation tag while
+     * decoding, and it has to be asked for - the default leaves it alone.
+     *
+     * This matters precisely because the canvas re-encode strips EXIF: a phone
+     * photo is stored as landscape bytes plus "rotate 90", so discarding the
+     * tag without applying it first is what turns every portrait photo
+     * sideways. Stripping metadata is the feature; applying orientation before
+     * stripping it is what makes the feature not break the picture.
+     */
+    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
   } catch {
-    return { error: 'That image could not be read. It may be corrupt.' }
+    /*
+     * Not every browser accepts the options argument. Rather than lose the
+     * decode entirely, try again without it - a possibly-sideways photo beats
+     * refusing the upload.
+     */
+    try {
+      bitmap = await createImageBitmap(file)
+    } catch {
+      return { error: 'That image could not be read. It may be corrupt.' }
+    }
   }
 
   try {
-    // Centre crop to a square so portraits and landscapes both fill the frame
-    // rather than being squashed.
-    const edge = Math.min(bitmap.width, bitmap.height)
-    const sx = (bitmap.width - edge) / 2
-    const sy = (bitmap.height - edge) / 2
+    const box = targetBox(bitmap, { fit, width, height, maxEdge })
 
     const canvas = document.createElement('canvas')
-    canvas.width = OUTPUT_SIZE
-    canvas.height = OUTPUT_SIZE
+    canvas.width = box.canvasWidth
+    canvas.height = box.canvasHeight
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return { error: 'Your browser could not process that image.' }
 
-    ctx.drawImage(bitmap, sx, sy, edge, edge, 0, 0, OUTPUT_SIZE, OUTPUT_SIZE)
+    ctx.drawImage(
+      bitmap,
+      box.sx,
+      box.sy,
+      box.sWidth,
+      box.sHeight,
+      0,
+      0,
+      box.canvasWidth,
+      box.canvasHeight,
+    )
 
     // JPEG rather than PNG: a photo re-encoded as PNG can be several hundred
     // kilobytes, which is a meaningful slice of the storage quota.
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+    const dataUrl = canvas.toDataURL('image/jpeg', quality)
 
     if (!dataUrl.startsWith('data:image/')) {
       return { error: 'That image could not be processed.' }
     }
 
-    return { dataUrl }
+    return { dataUrl, width: canvas.width, height: canvas.height }
   } finally {
     bitmap.close?.()
+  }
+}
+
+/**
+ * Which part of the source goes where on the canvas.
+ *
+ * Pulled out as a pure function of numbers so the arithmetic can be checked
+ * without a canvas, a bitmap or a browser - see avatarImage.test.js. It is the
+ * half of the bug above that was wrong, and arithmetic that only a browser can
+ * exercise is arithmetic nothing checks.
+ *
+ * @param {{ width: number, height: number }} source
+ */
+export function targetBox(source, { fit, width, height, maxEdge }) {
+  const sw = Math.max(1, source.width)
+  const sh = Math.max(1, source.height)
+
+  if (fit === 'contain') {
+    // Never scaled up: an image smaller than the box keeps its own size, since
+    // enlarging it only adds bytes and blur.
+    const scale = Math.min(1, maxEdge / Math.max(sw, sh))
+    return {
+      sx: 0,
+      sy: 0,
+      sWidth: sw,
+      sHeight: sh,
+      canvasWidth: Math.max(1, Math.round(sw * scale)),
+      canvasHeight: Math.max(1, Math.round(sh * scale)),
+    }
+  }
+
+  // Cover: the largest centred region of the source with the target's aspect
+  // ratio, scaled to fill the canvas exactly.
+  const targetRatio = width / height
+  const sourceRatio = sw / sh
+
+  const sWidth = sourceRatio > targetRatio ? sh * targetRatio : sw
+  const sHeight = sourceRatio > targetRatio ? sh : sw / targetRatio
+
+  return {
+    sx: (sw - sWidth) / 2,
+    sy: (sh - sHeight) / 2,
+    sWidth,
+    sHeight,
+    canvasWidth: width,
+    canvasHeight: height,
   }
 }
 
