@@ -76,7 +76,15 @@ export async function fetchModerationLog({ address = null, post = null, limit = 
     throw new Error(payload.error || 'The audit trail could not be loaded.')
   }
 
-  const payload = await res.json()
+  /*
+   * The parse can throw where the status check cannot see it: a deployment
+   * with no API answers 200 with a page in it, and a raw "Unexpected token
+   * '<'" in the panel tells a moderator nothing. Same lesson as fetchMutes.
+   */
+  const payload = await res.json().catch(() => {
+    throw new Error('The audit trail could not be loaded.')
+  })
+
   return Array.isArray(payload.entries) ? payload.entries : []
 }
 
@@ -96,7 +104,10 @@ export async function fetchReportQueue() {
     throw new Error(payload.error || 'The report queue could not be loaded.')
   }
 
-  const payload = await res.json()
+  const payload = await res.json().catch(() => {
+    throw new Error('The report queue could not be loaded.')
+  })
+
   return Array.isArray(payload.reports) ? payload.reports : []
 }
 

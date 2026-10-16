@@ -41,11 +41,26 @@ export function useMutes() {
     }
 
     let alive = true
-    fetchMutes().then(({ addresses: muted, muted: rows }) => {
-      if (!alive) return
-      setAddresses(muted)
-      setPeople(rows)
-    })
+    fetchMutes()
+      .then(({ addresses: muted, muted: rows }) => {
+        if (!alive) return
+        setAddresses(muted)
+        setPeople(rows)
+      })
+      /*
+       * Swallowed, and nothing drawn about it - the same call `useBookmarks`
+       * makes, and a page load has to be console-clean (see fetchMutes, where
+       * logging here failed three surfaces in CI).
+       *
+       * The direction is worth being explicit about, because it is the wrong
+       * one: a mute list that fails to load means the feed shows posts
+       * somebody asked not to see. The alternative is a banner over the feed
+       * because a private endpoint was briefly unavailable, which is worse -
+       * and a reader who cannot see the feed cannot mute anybody either. It is
+       * refetched on the next mount rather than cached, so the window is one
+       * page view.
+       */
+      .catch(() => {})
 
     return () => {
       alive = false
@@ -80,16 +95,24 @@ export function useMutes() {
 
       try {
         await setMuted({ address: key, on })
+
         /*
          * The list of people is refetched rather than patched, and only on the
          * way in. Muting from a post card has a handle and a picture to hand;
          * muting from a mention or a notification may have neither, and a row
          * in the settings list with nothing on it but an address is a row
          * nobody can act on. Unmuting needs no refetch - the row is gone.
+         *
+         * The refetch has its OWN catch, outside the one below, and that is
+         * not tidiness. `fetchMutes` throws now, so a failure here would be
+         * caught by the outer handler, which reverts the mute - undoing on
+         * screen a mute the endpoint has already saved, and reporting it as
+         * failed. The write is what the reader asked for; the handles are
+         * decoration on a list they are not looking at yet.
          */
         if (on) {
-          const { muted: rows } = await fetchMutes()
-          setPeople(rows)
+          const refreshed = await fetchMutes().catch(() => null)
+          if (refreshed) setPeople(refreshed.muted)
         } else {
           setPeople((current) => current.filter((row) => row.address !== key))
         }

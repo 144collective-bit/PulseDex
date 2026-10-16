@@ -25,33 +25,48 @@
  * settings list wants rows with handles and pictures so somebody can recognise
  * who they muted six weeks ago.
  *
- * A failure reads as an empty list rather than throwing. The direction matters
- * and is worth being explicit about: it fails toward showing posts a reader
- * asked not to see, which is the wrong direction - but the alternative is a
- * feed that will not load at all because a private endpoint was briefly
- * unavailable, and a reader who cannot see the feed cannot mute anybody
- * either. The failure is logged where it can be seen.
+ * **Throws on failure, and writes nothing to the console.** Both halves of
+ * that are deliberate and the second one was a bug first.
+ *
+ * It throws rather than returning an empty list because a caller that cannot
+ * tell "nobody is muted" from "we could not find out" will quietly show posts
+ * somebody asked not to see. `useMutes` decides what to do about it, which is
+ * the same split `fetchBookmarks` and `useBookmarks` use.
+ *
+ * It is silent because a page load has to be console-clean - that is a
+ * contract, enforced by scripts/smoke-browser.mjs, which treats any console
+ * error during a load as a failed surface. The first version of this logged,
+ * and failed three surfaces in CI: a static preview has no API, so
+ * `/api/mutes` is answered with index.html, `res.json()` throws on the
+ * doctype, and every page holding a feed printed an error. The lesson is
+ * general rather than about previews: a 200 from this origin is not a promise
+ * of JSON.
  *
  * @returns {Promise<{ addresses: Set<string>, muted: object[] }>}
+ * @throws when the list could not be read
  */
 export async function fetchMutes() {
-  try {
-    const res = await fetch('/api/mutes', { credentials: 'same-origin' })
+  const res = await fetch('/api/mutes', { credentials: 'same-origin' })
 
-    // 401 is "not signed in", which is not a failure - a reader who has not
-    // signed in has no mute list, and saying so here keeps it off the console.
-    if (res.status === 401) return { addresses: new Set(), muted: [] }
+  // 401 is "not signed in", which is not a failure - a reader who has not
+  // signed in has no mute list, and that is an answer rather than an error.
+  if (res.status === 401) return { addresses: new Set(), muted: [] }
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  if (!res.ok) throw new Error(`Your muted list could not be loaded (HTTP ${res.status}).`)
 
-    const payload = await res.json()
-    return {
-      addresses: new Set((payload.addresses || []).map((a) => String(a).toLowerCase())),
-      muted: Array.isArray(payload.muted) ? payload.muted : [],
-    }
-  } catch (err) {
-    console.error('mutes: could not be loaded:', err.message)
-    return { addresses: new Set(), muted: [] }
+  /*
+   * The parse is inside the throw path too. A response that is not JSON is
+   * exactly what a deployment with no API returns - 200, with a page in it -
+   * and `res.json()` rejecting with a parse error is the one failure mode a
+   * status check cannot see.
+   */
+  const payload = await res.json().catch(() => {
+    throw new Error('Your muted list could not be loaded.')
+  })
+
+  return {
+    addresses: new Set((payload.addresses || []).map((a) => String(a).toLowerCase())),
+    muted: Array.isArray(payload.muted) ? payload.muted : [],
   }
 }
 
