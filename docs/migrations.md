@@ -199,6 +199,56 @@ running a migration rather than later, on the first report after a deploy. The
 two foreign keys 0021 creates itself are named explicitly, which is the lesson
 from having had to do this twice.
 
+**`0022_feed_quality.sql` is optional**, and is the first file here that is —
+every one from 0018 on has said the opposite, so the difference is worth
+stating. Nothing Batch 6 selects depends on a column it adds, because it adds
+none: ranking is computed from rows the app already reads. What is in it is one
+repair and two indexes.
+
+The repair: **`posts.parent_id` probably has no foreign key.** 0008 created the
+column and the key in one statement —
+
+```sql
+alter table public.posts
+  add column if not exists parent_id bigint references public.posts(id)
+  on delete cascade;
+```
+
+— which is the trap this file has now described four times. `add column if not
+exists` is one statement and the `references` clause is part of it, so on a
+database where the column already existed the whole thing was skipped, the
+constraint included, silently. It is what 0012 did to `messages.reply_to` and
+what 0017 exists to repair.
+
+Nobody had found out whether it survived, because nothing in the app had ever
+asked PostgREST to traverse it: replies are read with `eq('parent_id', id)`,
+which is a column filter and needs no key. Two things make it worth repairing
+anyway. Without the key, a hard delete of a parent leaves its replies pointing
+at an id that is not there — the `on delete cascade` was meant to take a thread
+with its post. And it is the difference between `parent_id` being a
+relationship and being a number that looks like one.
+
+The repair **soft-deletes orphans before adding the constraint**, rather than
+removing them. If the key went missing and a parent was hard-deleted since,
+there are rows pointing at nothing and `add constraint` fails on them. Those
+rows are somebody's writing, and a migration that silently deletes posts to
+make a constraint fit is a migration nobody should run — so they are stamped
+`deleted_at`, which takes them out of every read in the app and leaves them
+recoverable by hand, and then their `parent_id` is nulled so the key can be
+added. `add constraint ... not valid` would have skipped all of this and is the
+wrong tool: it would leave the orphans in place and the constraint asserting
+something untrue of its own table.
+
+Note that it tests row existence and not `deleted_at`: a reply whose parent was
+*soft*-deleted is not an orphan and is not touched.
+
+The two indexes serve `api/_routes/me/affinity.js`, which reads four of this
+reader's own row-sets on every cold load of a ranked feed. Neither changes a
+result; they change sequential scans into lookups. They are here rather than in
+the migrations that created those tables because until ranking existed nothing
+read them this way — `post_reactions` was only ever read by post, never by
+reactor.
+
 ## Checking one ran
 
 Each file ends with a query that says whether it worked, without deploying

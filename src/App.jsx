@@ -561,6 +561,14 @@ function MainApp() {
             onNavigate={openSocial}
             onOpenProfile={openProfile}
             onOpenToken={openToken}
+            /*
+             * The screener's pairs, passed down rather than fetched again.
+             *
+             * One request for the whole app: Trending ranks on the same
+             * figures the screener is showing, and a second fetch would be the
+             * same data twice and two different answers while they disagreed.
+             */
+            pairs={topPairs}
           />
         )}
 

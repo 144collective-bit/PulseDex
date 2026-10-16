@@ -10,8 +10,8 @@ held only in a conversation is a plan that gets re-litigated every time.
 
 ## Where this stands
 
-Roughly 7,150 lines across 37 components in `src/components/social/`, and
-eighteen tables. Migrations `0001` through `0021`.
+Roughly 7,500 lines across 38 components in `src/components/social/`, and
+eighteen tables. Migrations `0001` through `0022`.
 
 | table | holds |
 | --- | --- |
@@ -46,12 +46,15 @@ nobody is told about, a report queue with the audit trail beside it, auto-hide
 behind a wallet-age gate, and a posting allowance the account can see before it
 bites.
 
-**What the first version of this section said was missing — notifications,
-mentions, unread state, search — now exists, and so does everything Batches 2,
-3 and 5 asked for.** What is left is Batch 6: the feed is reverse-chronological
-with no ranking. Moderation is no longer one human reading a queue with no
-record of what they did, though the moderator list is still an environment
-variable — see the note under Batch 5.
+**Every batch on this roadmap is now built.** Notifications, mentions, unread
+state and search — the things the first version of this section said were
+missing — all exist, and so does everything Batches 2, 3, 5 and 6 asked for.
+
+What remains is not a batch but a list of known limits, each recorded where it
+lives: the moderator list is still an environment variable (Batch 5), a hide is
+visibility and never containment (Batch 5), the gated engagement term is inert
+until wallet ages accumulate (Batch 6), and a public track record — the "called
+it" badge — still needs a trade-history index this app does not have (Batch 2).
 The one thing deferred out of a finished batch is a public track record (the
 "called it" badge), which needs a trade-history index this app does not have —
 see Batch 2.
@@ -369,11 +372,88 @@ said so would turn the endpoint into a way of probing how close a post is to
 the threshold, which is the reconnaissance step of the brigading the gate
 exists to make expensive. The author is told, on their own post.
 
-### Batch 6 — feed quality
+### Batch 6 — feed quality  ← done
 
-- "For you" is reverse-chronological today; give it ranking
-- Follow suggestions that react to behaviour
-- Trending inside the app
+This batch reverses two decisions this codebase had written down, so both
+reversals are recorded rather than quietly applied.
+
+`src/services/discover.js` said: "there is no engagement signal worth ranking
+on yet, and inventing one would be a recommendation nobody asked for dressed up
+as a discovery feature", and "recency rather than popularity, deliberately — a
+most-followed list on a site this young is a list of whoever arrived first, and
+putting it on the discovery page is how that becomes permanent." The first
+premise is gone: reactions, bookmarks, replies and follows all exist now. The
+second is not reversed at all — see the suggestions item, which reads no
+popularity signal.
+
+The hazard that shaped every decision here, and which does not apply to a
+general social network:
+
+> **A feed ranked on engagement, on a site about which tokens to buy, is a pump
+> amplifier.** Whoever can manufacture reactions gets their token in front of
+> everybody, and an account here is a wallet address, which is free. "Most
+> engaged" and "most promoted" are the same list.
+
+- **"For you" is ranked on affinity first.** The primary signal is what *this
+  reader* has reacted to, replied to, bookmarked and followed — which cannot be
+  bought, because it is not a score about the post but a record of the reader's
+  own behaviour, and the only person who can move it is them. A thousand bought
+  reactions do not make a post rank for somebody who has never engaged with its
+  author. Engagement is a second, **gated** term, for cold start: only
+  engagement from wallets over a month old counts, reusing `FRESH_WALLET_DAYS`
+  from Batch 2 and the same economics as Batch 5's auto-hide. Three rules keep
+  it honest: the gate is on who *engages* and never on who *posts* (penalising
+  young authors would entrench whoever arrived first); recency is the spine
+  rather than a tiebreak, so a day-old post with every signal still loses to a
+  fresh bare one; and every post can say why it is where it is. The whole thing
+  is one press from chronological and the choice is remembered — a ranking
+  nobody can inspect or refuse is one they have to take on trust, and this one
+  decides which claims about money get read first. Signed out means
+  chronological, always, because affinity is the primary signal and a
+  signed-out reader has none.
+- **Suggestions from behaviour, not popularity.** Two signals, both about the
+  reader: accounts whose posts they read and never followed (a fact they have
+  already demonstrated, not a prediction), and the follow graph one step out
+  (a guess, capped below the weakest direct signal). A candidate's own follower
+  count is not read at all — that is exactly the signal that makes early
+  accounts permanent. Nobody muted is ever suggested. A reader with no history
+  gets no suggestions and the "recently active" list underneath, which is what
+  a new account actually needs.
+- **Trending is ranked on-chain, with social as context.** The last hour's
+  volume against each pair's own daily average — acceleration, not size, so a
+  small token can appear and a large one is not there by default. Trading moves
+  the list; posting about a token does not, because a trending list built from
+  mentions is a pump button. Room activity is attached beside each row and
+  never ranked on, and the disagreement between the two columns is the useful
+  part: a token moving hard with an empty room is something nobody has noticed,
+  and a busy room around a token doing nothing is a conversation about a token
+  that is not moving. A single blended score would have destroyed exactly that.
+
+Three things worth knowing.
+
+**The trending computation was already here**, inline and untested, in
+`src/dashboard/modules/market/Trending.jsx`. It was extracted to
+`src/utils/trending.js` and reused rather than reimplemented — two trending
+definitions in one app is a number that disagrees with itself depending on
+which page you are on — and it gained tests it did not have, including the one
+that matters: a pool created an hour ago has almost no daily volume, so without
+the volume and liquidity floors its ratio is enormous and the top of the list
+is permanently whatever was deployed most recently.
+
+**The gated engagement term is inert on a young deployment.**
+`profiles.first_seen_at` is filled in lazily when somebody opens a profile, so
+most engagers' wallet ages are unknown — and an unknown age deliberately does
+not count. Until ages accumulate the feed is ranked on affinity and recency
+alone, which is the order it had before ranking existed. That is the right
+direction to fail in.
+
+**`posts.parent_id` probably has no foreign key**, and 0022 repairs it. 0008
+created the column and its key in one `add column if not exists ... references`
+statement — the same trap 0017 repaired on `messages.reply_to`, skipped whole
+on any database where the column already existed. Nothing in the app had ever
+asked PostgREST to traverse that relationship, so nobody had found out. The
+affinity endpoint wanted the embed and deliberately does two queries instead,
+so the feed does not depend on the repair having been run.
 
 ---
 

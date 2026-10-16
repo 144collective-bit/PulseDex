@@ -3782,3 +3782,187 @@ button.notif-excerpt {
   color: var(--text-muted);
   font-style: italic;
 }
+
+/* ── The order of the feed, and why ── */
+
+/*
+ * The switch between ranked and newest-first.
+ *
+ * Above the list and plainly worded rather than an icon: this control decides
+ * which claims about money a reader sees first, and one they cannot find is
+ * one they cannot refuse.
+ */
+.feed-order {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-md, 10px);
+  background: rgba(255, 255, 255, 0.02);
+  font-size: 12px;
+}
+
+.feed-order-label {
+  font-weight: 600;
+}
+
+.feed-order-switch {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent, #7dd3fc);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* The method, in full, once. Not a tooltip: a ranking somebody has to hover to
+   understand is one they will not. */
+.feed-order-note {
+  flex: 1 1 100%;
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+/*
+ * Why one post is where it is.
+ *
+ * Muted and small. It has to be readable before the post and must not compete
+ * with it - the line's job is to answer a question, not to recommend.
+ */
+.feed-post-why {
+  margin: 0 0 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.01em;
+}
+
+/* Why a suggested person is being suggested. Quieter than the bio, which is
+   their own words, and below it for the same reason. */
+.person-note {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+/* ── Trending: what is moving, and who is discussing it ── */
+
+.trending-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/*
+ * The method, stated above the list.
+ *
+ * Not a tooltip. The whole defensibility of a list like this on a site about
+ * which tokens to buy is that a reader can tell what it measures, and a
+ * method they have to hover to find is one they will not read.
+ */
+.trending-note,
+.trending-foot {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.trending-foot {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--ch-hairline);
+}
+
+.trending-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.trending-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-md, 10px);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.trending-main {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.trending-symbol {
+  font-weight: 600;
+}
+
+/* The ratio, which is the thing the list is ordered by, so it leads. */
+.trending-rate {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent, #7dd3fc);
+  font-size: 12px;
+}
+
+/* The absolute figure beside it: the ratio alone cannot tell a $6k hour from
+   a $6m one, and that is the difference between a curiosity and a trade. */
+.trending-volume {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+/*
+ * The social column, visibly separate from the figures that decide the order.
+ * It is context, and a reader has to be able to see that it is not what put
+ * the row where it is.
+ */
+.trending-social {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  margin-right: 10px;
+  padding: 3px 8px;
+  border: 1px solid var(--ch-hairline);
+  border-radius: 999px;
+  background: none;
+  color: var(--text-secondary, var(--text-muted));
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+/* No room at all, which is not the same as a silent one and must not read as
+   a zero. */
+.trending-social.is-quiet {
+  border-style: dashed;
+  color: var(--text-muted);
+  cursor: default;
+}

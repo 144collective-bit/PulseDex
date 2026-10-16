@@ -20,7 +20,21 @@ import { formatAddress } from '../../utils/formatters'
  * this row does not display. Twenty people came to sixty requests, and a
  * browser runs six at a time. The list asks once now, for everybody.
  */
-export default function PersonCard({ profile, onOpenProfile, following, canFollow, busy, onToggle }) {
+export default function PersonCard({
+  profile,
+  onOpenProfile,
+  following,
+  canFollow,
+  busy,
+  onToggle,
+  /*
+   * Why this row is being shown, when something chose it rather than listing
+   * it. Absent on the plain lists - "Recently active" explains itself from its
+   * own heading - and present on a suggestion, where the site is telling
+   * somebody to do something and owes them a reason.
+   */
+  note = null,
+}) {
 
   return (
     <div className="person-card">
@@ -45,6 +59,10 @@ export default function PersonCard({ profile, onOpenProfile, following, canFollo
           {/* One line, clipped. A bio is up to 300 characters and this is a
               list - the full thing is on the page this row opens. */}
           {profile.bio && <span className="person-bio">{profile.bio}</span>}
+          {/* Below the bio, because the bio is what this person says about
+              themselves and the note is what we say about them. In that
+              order, not the other way round. */}
+          {note && <span className="person-note">{note}</span>}
         </span>
       </button>
 

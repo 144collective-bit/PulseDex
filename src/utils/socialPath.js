@@ -39,6 +39,12 @@ const PATHS = {
    * be the thing worth avoiding.
    */
   '/moderation': 'moderation',
+  /*
+   * What is trading unusually fast, with how much each token is being talked
+   * about beside it. A path rather than only a tab, so a reader can send
+   * somebody the list.
+   */
+  '/trending': 'trending',
 }
 
 /** `/r`, `/r/lounge`, `/r/group-whales`, `/r/token-0x...` */

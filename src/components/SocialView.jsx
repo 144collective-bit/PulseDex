@@ -5,6 +5,7 @@ import {
   Compass,
   LogIn,
   MessageSquare,
+  Flame,
   MessagesSquare,
   Rss,
   ShieldAlert,
@@ -21,10 +22,11 @@ import PostPage from './social/PostPage'
 import ShareButton from './social/ShareButton'
 import RoomAdmin from './social/RoomAdmin'
 import ModerationPanel from './social/ModerationPanel'
+import TrendingPanel from './social/TrendingPanel'
 import { useSiweAuth } from '../context/SiweAuthContext'
 import { useRoomUnread } from '../hooks/useRoomUnread'
 import { useGroups } from '../hooks/useGroups'
-import { DEFAULT_ROOM, findRoom, isGroupRoom, roomToken, tokenRoomLabel } from '../config/rooms'
+import { DEFAULT_ROOM, findRoom, isGroupRoom, roomToken, tokenRoom, tokenRoomLabel } from '../config/rooms'
 import '../styles/social.css'
 
 /**
@@ -66,6 +68,21 @@ const TABS = [
     name: 'Discover',
     icon: Compass,
     lede: 'Find people worth following.',
+  },
+  /*
+   * Trending, in the row rather than hidden behind a link, and last.
+   *
+   * In the row because it is about the site rather than about you, which is
+   * what the three above have in common. Last because it is the only one that
+   * is about tokens rather than people - somebody in the social section is
+   * usually here for the people, and this is the door back out to what is
+   * moving.
+   */
+  {
+    id: 'trending',
+    name: 'Trending',
+    icon: Flame,
+    lede: 'Pairs running above their own normal rate, and whether anybody is discussing them.',
   },
 ]
 
@@ -113,7 +130,7 @@ const SURFACES = {
   },
 }
 
-export default function SocialView({ route, onNavigate, onOpenProfile, onOpenToken }) {
+export default function SocialView({ route, onNavigate, onOpenProfile, onOpenToken, pairs }) {
   /*
    * Opening one post from inside the section.
    *
@@ -321,6 +338,27 @@ export default function SocialView({ route, onNavigate, onOpenProfile, onOpenTok
 
       {tab === 'notifications' && (
         <NotificationsPanel onOpenProfile={onOpenProfile} onOpen={onNavigate} />
+      )}
+
+      {tab === 'trending' && (
+        <TrendingPanel
+          pairs={pairs}
+          onOpenToken={onOpenToken}
+          /*
+           * A token's room, by the same slug the screener uses for it, so a
+           * press here lands exactly where pressing through from the token
+           * page would.
+           *
+           * The null check is `tokenRoom`'s: it returns null for anything that
+           * is not an address, and navigating to `room: null` would put
+           * somebody in the default room with no explanation. The same guard
+           * `openTokenRoom` in App.jsx applies.
+           */
+          onOpenRoom={(address) => {
+            const slug = tokenRoom(address)
+            if (slug) onNavigate?.({ tab: 'rooms', room: slug })
+          }}
+        />
       )}
 
       {tab === 'moderation' && (

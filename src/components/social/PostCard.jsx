@@ -96,6 +96,14 @@ export default function PostCard({
   onMute,
   /** Hiding, which is a moderator's. Absent for everybody else. */
   onToggleHide,
+  /*
+   * Why this post is where it is, when something other than time put it there.
+   *
+   * Null for most posts, and then nothing is drawn - a label on every row
+   * would be noise, and "because it is recent" explains nothing. Built in
+   * src/utils/feedRank.js so the sentence and the score cannot drift apart.
+   */
+  rankReason = null,
 }) {
   const { account } = useSiweAuth()
   const [editing, setEditing] = useState(false)
@@ -170,6 +178,13 @@ export default function PostCard({
       </button>
 
       <div className="feed-post-body">
+        {/*
+          Above the author, not below the post. Somebody scanning a ranked feed
+          is asking "why am I being shown this" before they read it, and an
+          answer underneath has already been overtaken by the question.
+        */}
+        {rankReason && <p className="feed-post-why">{rankReason}</p>}
+
         <header className="feed-post-meta font-mono">
           <button
             type="button"
