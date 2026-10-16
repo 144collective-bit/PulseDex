@@ -27,7 +27,27 @@ export const FEED_STATUS = {
  * @param {{ author?: string|null }} options an address to show one person's
  *   posts, or nothing for everybody's
  */
-export function useFeed({ author = null, authors = null, replies = false, media = false } = {}) {
+export function useFeed({
+  author = null,
+  authors = null,
+  replies = false,
+  media = false,
+  /*
+   * Who is reading, so their own hidden posts come back to them. Null for a
+   * signed-out reader, who sees no hidden post at all.
+   */
+  viewer = null,
+  /** A moderator reviewing, who sees every hidden post. */
+  showHidden = false,
+  /*
+   * Addresses this reader has muted. A Set from useMutes, or null.
+   *
+   * Passed down to the query rather than filtered here, because `fetchPostPage`
+   * is where the paging arithmetic lives - see `withoutMuted` there for why
+   * the filtering itself is in the browser and not the database.
+   */
+  muted = null,
+} = {}) {
   const [posts, setPosts] = useState([])
   const [status, setStatus] = useState(
     hasSupabase ? FEED_STATUS.loading : FEED_STATUS.unconfigured,
@@ -58,6 +78,15 @@ export function useFeed({ author = null, authors = null, replies = false, media 
    * actually changes.
    */
   const authorsKey = authors ? authors.join(',') : ''
+
+  /*
+   * The same trick for the mute set, and it is needed for the same reason: a
+   * Set is a new object on every render of whatever holds it, so depending on
+   * it directly would tear down the subscription and refetch the feed
+   * continuously. Sorted, so two sets with the same members in a different
+   * insertion order are one key rather than two.
+   */
+  const mutedKey = muted ? [...muted].sort().join(',') : ''
 
   const merge = useCallback((incoming) => {
     const next = byId.current
@@ -92,7 +121,7 @@ export function useFeed({ author = null, authors = null, replies = false, media 
     setPosts([])
     setStatus(FEED_STATUS.loading)
 
-    fetchPostPage({ author: wanted, authors, replies, media })
+    fetchPostPage({ author: wanted, authors, replies, media, viewer, showHidden, muted })
       .then((page) => {
         if (!active) return
         merge(page.posts)
@@ -132,6 +161,16 @@ export function useFeed({ author = null, authors = null, replies = false, media 
          * on the stream have to say everything the query said.
          */
         if (media && !post.image) return
+        /*
+         * And a reader must not be handed a post by somebody they muted.
+         *
+         * The stream has to say everything the query said, which is the rule
+         * the three filters above were each added for - and this is the one
+         * where getting it wrong is not cosmetic: a muted account's post
+         * appearing live, in a feed that had none of theirs in it, would read
+         * as the mute having quietly stopped working.
+         */
+        if (muted && muted.has((post.address || '').toLowerCase())) return
         merge([post])
       },
       onRemoved: (id) => {
@@ -144,7 +183,7 @@ export function useFeed({ author = null, authors = null, replies = false, media 
       unsubscribe()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wanted, authorsKey, replies, media, merge, forget])
+  }, [wanted, authorsKey, replies, media, viewer, showHidden, mutedKey, merge, forget])
 
   /**
    * Fetch the page before the oldest post held.
@@ -161,7 +200,16 @@ export function useFeed({ author = null, authors = null, replies = false, media 
 
     setLoadingOlder(true)
     try {
-      const page = await fetchPostPage({ author: wanted, authors, replies, media, before })
+      const page = await fetchPostPage({
+        author: wanted,
+        authors,
+        replies,
+        media,
+        before,
+        viewer,
+        showHidden,
+        muted,
+      })
       merge(page.posts)
       setHasMore(page.hasMore)
     } catch (err) {
@@ -169,7 +217,7 @@ export function useFeed({ author = null, authors = null, replies = false, media 
     } finally {
       setLoadingOlder(false)
     }
-  }, [wanted, authorsKey, replies, hasMore, loadingOlder, merge])
+  }, [wanted, authorsKey, replies, hasMore, loadingOlder, viewer, showHidden, mutedKey, merge])
 
   return {
     posts,

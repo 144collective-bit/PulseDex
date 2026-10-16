@@ -194,6 +194,32 @@ export default async function handler(req, res) {
      * or not.
      */
     checks.push(await query(db, 'bookmarks-table', 'post_bookmarks', 'post_id'))
+
+    /*
+     * 0021's two tables, both private for the same reason as the ones above
+     * and both checked here for the same reason: the anon key reading either
+     * correctly returns nothing whether the table exists or not, so the
+     * service role is the only thing that can tell the difference.
+     *
+     * A failure on `muted` means the mute control throws for everybody who
+     * presses it. A failure on `moderation_log` means every moderator action
+     * still works and none of them is being recorded - which is the quieter
+     * and worse of the two, because nothing on screen would say so. That is
+     * the whole reason it is probed rather than trusted.
+     */
+    checks.push(await query(db, 'muted-table', 'muted', 'address'))
+    checks.push(await query(db, 'moderation-log-table', 'moderation_log', 'id, action'))
+
+    /*
+     * The hidden columns, read through `posts` rather than assumed.
+     *
+     * POST_FIELDS names them, so a deployment whose 0021 has not been run has
+     * a feed that will not load at all - and this is what turns that into
+     * "this column is missing" rather than a blank page with no reason given.
+     * The same mechanism that was missing when the reply foreign key went
+     * astray.
+     */
+    checks.push(await query(db, 'posts-hidden-columns', 'posts', 'id, hidden_at, hidden_by'))
   } else if (reader) {
     checks.push({ name: 'service-role', ok: true, note: 'absent: private tables not checked' })
   }

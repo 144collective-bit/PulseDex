@@ -2,6 +2,7 @@ import { SESSION_COOKIE, getCookie, readSession } from '../../_lib/session.js'
 import { isSameOrigin, rateLimit } from '../../_lib/guard.js'
 import { serviceClient } from '../../_lib/supabase.js'
 import { parseAdminAddresses, isAdminAddress } from '../../../src/utils/chatAdmin.js'
+import { maybeAutoHide } from '../../_lib/moderation.js'
 
 /**
  * Telling a moderator about a post.
@@ -15,10 +16,25 @@ import { parseAdminAddresses, isAdminAddress } from '../../../src/utils/chatAdmi
  *
  * POST files a report. GET returns the queue, to a moderator only.
  *
- * Nothing here acts on a report. Removing a post is api/posts.js, blocking an
- * account is api/chat/block.js, and both are decisions a person makes after
- * reading it. An endpoint that hid a post at some threshold of reports would
- * be a brigading tool wearing a safety feature's name.
+ * Removing a post is still api/posts.js and blocking an account is still
+ * api/chat/block.js, and both remain decisions a person makes after reading.
+ *
+ * What this file does now do, and said for a while that it never would, is
+ * hide a post automatically. The sentence it used to carry is worth keeping
+ * because it is still true: "an endpoint that hid a post at some threshold of
+ * reports would be a brigading tool wearing a safety feature's name." A count
+ * of reports measures how many people disliked a post, and on a site about
+ * which tokens to buy, "several people dislike this" is the ordinary condition
+ * of anything worth saying.
+ *
+ * So the gate is not a count. It is DISTINCT reporters whose wallets the chain
+ * first saw more than a month ago - see shouldAutoHide in
+ * src/utils/autoHide.js, which has a test per branch and the argument in full.
+ * That is not unforgeable, and it is not meant to be: it moves the cost from
+ * three clicks to three wallets with a month of history each, which is what
+ * stops the cheap version of the attack. What it triggers is reversible,
+ * temporary, logged with the count that caused it, and never hides the post
+ * from its own author.
  */
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store')
@@ -40,14 +56,16 @@ export default async function handler(req, res) {
   const db = serviceClient()
   if (!db) return res.status(503).json({ error: 'Reporting is not configured on this deployment.' })
 
-  if (req.method === 'POST') return file(req, res, db, address)
+  if (req.method === 'POST') {
+    return file(req, res, db, address, parseAdminAddresses(process.env.ADMIN_ADDRESSES))
+  }
   if (req.method === 'GET') return queue(res, db, address)
 
   res.setHeader('Allow', 'GET, POST')
   return res.status(405).json({ error: 'Method not allowed' })
 }
 
-async function file(req, res, db, reporter) {
+async function file(req, res, db, reporter, admins) {
   /*
    * Limited, because a report costs a moderator's attention rather than a row.
    * Ten in ten minutes is more than anybody reports honestly and few enough
@@ -92,7 +110,18 @@ async function file(req, res, db, reporter) {
      * they pressed the button and the post is reported. Telling them it was
      * already reported invites the reading that the first one was ignored.
      */
-    if (error.code === '23505') return res.status(200).json({ id, reported: true })
+    if (error.code === '23505') {
+      /*
+       * Still re-checked, although this report added nothing. A post can have
+       * crossed the threshold since the last report was filed - a reporter's
+       * wallet age is looked up lazily, so three accounts that did not qualify
+       * yesterday may all qualify today - and the alternative is a post that
+       * stays visible until somebody who has not already reported it happens
+       * along.
+       */
+      await maybeAutoHide(db, id, admins)
+      return res.status(200).json({ id, reported: true })
+    }
 
     // 23503 is the foreign key: no such post. Same 404 a removed post gets
     // from api/posts.js, for the same reason - this should not become a way
@@ -102,6 +131,21 @@ async function file(req, res, db, reporter) {
     console.error('report: the insert failed:', error.message)
     return res.status(503).json({ error: 'That could not be reported.' })
   }
+
+  /*
+   * Awaited rather than left running, because a serverless function stops
+   * executing when it answers: work started and not awaited here would be
+   * killed partway through, which for this one means a post updated with no
+   * log entry written.
+   *
+   * The response does NOT say whether anything was hidden, and that is
+   * deliberate. Telling a reporter "your report hid this" turns the endpoint
+   * into a way of probing how close a post is to the threshold, which is the
+   * reconnaissance step of exactly the brigading the gate exists to make
+   * expensive. The author is told, on their own post, which is the person who
+   * needs to know.
+   */
+  await maybeAutoHide(db, id, admins)
 
   return res.status(201).json({ id, reported: true })
 }
@@ -121,7 +165,17 @@ async function queue(res, db, address) {
    */
   const { data, error } = await db
     .from('post_reports')
-    .select('id, post_id, reporter, reason, created_at, posts ( id, address, body, deleted_at )')
+    /*
+     * `hidden_at` and `hidden_by` ride along so the queue can say what has
+     * already been done about a report. Without them a moderator reading the
+     * queue cannot tell a post nobody has looked at from one the system
+     * hid an hour ago - and the second kind is the one that needs reading
+     * first, because it is already out of everybody's feed.
+     */
+    .select(
+      'id, post_id, reporter, reason, created_at, ' +
+        'posts ( id, address, body, deleted_at, hidden_at, hidden_by )',
+    )
     .order('created_at', { ascending: false })
     .limit(100)
 
@@ -143,6 +197,11 @@ async function queue(res, db, address) {
             address: row.posts.address,
             body: row.posts.body,
             removed: Boolean(row.posts.deleted_at),
+            hiddenAt: row.posts.hidden_at,
+            // Null with `hiddenAt` set means the system hid it. The pair is
+            // what src/utils/moderationLog.js and the hidden banner both read
+            // to tell an automatic hide from a moderator's.
+            hiddenBy: row.posts.hidden_by,
           }
         : null,
     })),

@@ -3607,3 +3607,178 @@ button.notif-excerpt {
   text-transform: uppercase;
   color: var(--text-muted);
 }
+
+/* ── Hidden pending review ── */
+
+/*
+ * The notice on a post that has been taken out of the feed.
+ *
+ * Amber rather than red. Red is what this codebase uses for something that
+ * failed or was refused, and a hide is neither - it is reversible, temporary,
+ * and most often the system being cautious rather than anybody being judged.
+ * The author reads this on their own post, which is reason enough not to
+ * shout at them.
+ */
+.feed-post-hidden {
+  margin: 0 0 8px;
+  padding: 7px 10px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-left-width: 3px;
+  border-radius: var(--radius-md, 10px);
+  background: rgba(245, 158, 11, 0.07);
+  color: var(--text-secondary, var(--text-muted));
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/*
+ * When the notice is all there is - a stranger's view of a hidden post.
+ *
+ * Centred and quieter, because it is standing in for the post rather than
+ * commenting on it. The card keeps its shape: a reply underneath still has
+ * something to be a reply to.
+ */
+.feed-post-hidden.is-only-notice {
+  margin: 0;
+  text-align: center;
+  font-style: italic;
+}
+
+/* ── Moderation ── */
+
+.moderation-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.moderation-switch {
+  display: flex;
+  gap: 4px;
+}
+
+.moderation-report {
+  padding: 10px 12px;
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-md, 10px);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.moderation-report-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+}
+
+/* What has already been done to the post, which changes what is being asked.
+   Not a colour of its own: it is a fact about the row, not a warning. */
+.moderation-flag {
+  padding: 1px 6px;
+  border: 1px solid var(--ch-hairline);
+  border-radius: 999px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+/*
+ * The reporter's words, quoted and set apart from the post's.
+ *
+ * The indent is the whole point: two blocks of somebody else's text stacked
+ * with nothing between them is a moderator reading an accusation as though it
+ * were the thing accused.
+ */
+.moderation-reason {
+  margin: 8px 0 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--ch-hairline);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.moderation-body {
+  margin: 8px 0 0;
+  /* A reported post is often exactly the kind that is one long word. */
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.moderation-body.is-gone {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.moderation-report-tools {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.moderation-log {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/*
+ * One line per entry, wrapping rather than truncating.
+ *
+ * A log read when somebody is working out what happened is a log where the
+ * ends of the sentences matter - an ellipsis here would hide the part that
+ * says how many accounts reported it.
+ */
+.moderation-log-entry {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--ch-hairline);
+  font-size: 12px;
+}
+
+.moderation-log-said {
+  flex: 1 1 60%;
+}
+
+.moderation-log-subject {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ── The muted list, in profile settings ── */
+
+.profile-muted-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-muted-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--ch-hairline);
+  border-radius: var(--radius-sm, 6px);
+  font-size: 12px;
+}
+
+/* An inbox row whose post has been hidden: the note stands in for the words. */
+.notif-excerpt.is-withheld {
+  color: var(--text-muted);
+  font-style: italic;
+}

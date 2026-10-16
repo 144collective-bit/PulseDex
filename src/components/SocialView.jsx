@@ -7,6 +7,7 @@ import {
   MessageSquare,
   MessagesSquare,
   Rss,
+  ShieldAlert,
   UserRound,
 } from 'lucide-react'
 import RoomList from './social/RoomList'
@@ -19,6 +20,7 @@ import ProfilePage from './social/ProfilePage'
 import PostPage from './social/PostPage'
 import ShareButton from './social/ShareButton'
 import RoomAdmin from './social/RoomAdmin'
+import ModerationPanel from './social/ModerationPanel'
 import { useSiweAuth } from '../context/SiweAuthContext'
 import { useRoomUnread } from '../hooks/useRoomUnread'
 import { useGroups } from '../hooks/useGroups'
@@ -94,6 +96,20 @@ const SURFACES = {
     name: 'Post',
     icon: MessageSquare,
     lede: 'A post and its replies.',
+  },
+  /*
+   * The moderation panel, at /moderation.
+   *
+   * Described here with the others rather than special-cased, although almost
+   * nobody can use it: the panel itself decides what a non-moderator sees, and
+   * a header that was missing for them would be a second place that has to
+   * know who moderates. The lede says what it is for rather than who it is
+   * for, which is what a moderator arriving from a link needs.
+   */
+  moderation: {
+    name: 'Moderation',
+    icon: ShieldAlert,
+    lede: 'What has been reported, and what was done about it.',
   },
 }
 
@@ -305,6 +321,10 @@ export default function SocialView({ route, onNavigate, onOpenProfile, onOpenTok
 
       {tab === 'notifications' && (
         <NotificationsPanel onOpenProfile={onOpenProfile} onOpen={onNavigate} />
+      )}
+
+      {tab === 'moderation' && (
+        <ModerationPanel onOpenProfile={onOpenProfile} onOpenPost={openPostHere} />
       )}
 
       {tab === 'post' && route?.post && (

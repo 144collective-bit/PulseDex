@@ -8,6 +8,7 @@ import { usePostReactions } from '../../hooks/usePostReactions'
 import { usePostActions } from '../../hooks/usePostActions'
 import { useBookmarks } from '../../hooks/useBookmarks'
 import { formatAddress } from '../../utils/formatters'
+import { setPostHidden } from '../../services/moderation'
 
 /**
  * The conversation under one post.
@@ -46,6 +47,24 @@ export default function PostThread({
   onOpenProfile,
   isModerator,
   onOpenPost,
+  /*
+   * Mute and hide, passed down rather than taken from hooks here.
+   *
+   * Both parents already hold them, and a `useMutes` of its own would mean a
+   * request to /api/mutes every time anybody expands a thread - which is the
+   * per-row-request pattern this file's own reaction and bookmark comments
+   * exist to warn about. Taking them as props costs two lines at each call
+   * site and nothing at runtime.
+   *
+   * It matters here specifically: a reply is exactly the kind of thing that
+   * gets reported, and a mute reached only from a top-level post would mean
+   * the one account somebody most wants out of their feed is the one they
+   * cannot mute from where they met it.
+   *
+   * Hiding is NOT taken as a prop, though - see `onToggleHide` below, which
+   * this component owns because it owns the list the hidden reply is in.
+   */
+  onMute,
 }) {
   const { account, isSignedIn } = useSiweAuth()
 
@@ -74,6 +93,41 @@ export default function PostThread({
     usePostActions({
       onRemoved: (id) => setReplies((current) => current.filter((r) => r.id !== id)),
     })
+
+  /*
+   * Hiding a reply, owned here rather than passed in.
+   *
+   * The parents' handlers replace a post in the list THEY hold, and a reply is
+   * not in either of those lists - it is in this component's own state. A
+   * prop would have updated nothing on screen, which is the silent kind of
+   * wrong: the endpoint would take the hide and the reply would sit there
+   * looking untouched until a reload.
+   *
+   * Without this a moderator reading a reported reply in a thread would have
+   * only Remove - the permanent answer this batch exists to stop being the
+   * only one.
+   */
+  const onToggleHide = async (id, on) => {
+    try {
+      await setPostHidden({ id, on })
+      setReplies((current) =>
+        current.map((r) =>
+          r.id === id
+            ? {
+                ...r,
+                hiddenAt: on ? new Date().toISOString() : null,
+                // A person did this, so the notice says a moderator read it
+                // rather than that a threshold fired.
+                hiddenBy: on ? account?.toLowerCase() || null : null,
+              }
+            : r,
+        ),
+      )
+    } catch {
+      // Left as it was. The panel at /moderation reports failures properly,
+      // and that is where somebody doing this deliberately is working.
+    }
+  }
 
   useEffect(() => {
     let active = true
@@ -197,6 +251,8 @@ export default function PostThread({
                 reactions={reactions.reactionsFor(reply.id)}
                 canReact={reactions.canReact}
                 onToggleReaction={reactions.toggle}
+                onMute={onMute}
+                onToggleHide={onToggleHide}
                 saved={bookmarks.isSaved(reply.id)}
                 onToggleSave={bookmarks.toggle || undefined}
                 onOpenPost={onOpenPost}

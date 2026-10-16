@@ -2,6 +2,7 @@ import { SESSION_COOKIE, getCookie, readSession } from '../../_lib/session.js'
 import { isSameOrigin } from '../../_lib/guard.js'
 import { serviceClient } from '../../_lib/supabase.js'
 import { removeAvatar } from '../../_lib/avatars.js'
+import { logAction } from '../../_lib/moderation.js'
 import {
   parseAdminAddresses,
   isAdminAddress,
@@ -56,7 +57,7 @@ export default async function handler(req, res) {
   if (!db) return res.status(503).json({ error: 'Chat is not configured on this deployment.' })
 
   if (req.method === 'POST') return block(req, res, db, moderator)
-  if (req.method === 'DELETE') return unblock(req, res, db)
+  if (req.method === 'DELETE') return unblock(req, res, db, moderator)
 
   res.setHeader('Allow', 'POST, DELETE')
   return res.status(405).json({ error: 'Method not allowed' })
@@ -97,16 +98,40 @@ async function block(req, res, db, moderator) {
    * moderator told "that could not be saved" would reasonably try again,
    * having already stopped the account posting.
    */
+  let picturesRemoved = true
   try {
     await removeAvatar(db, address)
   } catch (err) {
     console.error('block: avatar removal failed:', err.message)
+    picturesRemoved = false
+  }
+
+  /*
+   * Two entries, because two things were done. The block and the removal of
+   * the account's pictures are separate decisions with separate reasons - the
+   * comment at the top of this file argues the second one at length - and a
+   * log that recorded them as one would leave somebody reading it later unable
+   * to tell whether the avatar going missing was deliberate.
+   *
+   * The second entry is skipped when the removal failed, which is the reason
+   * `picturesRemoved` exists: an audit trail that claims an action that
+   * errored is worse than one with a gap.
+   */
+  await logAction(db, {
+    actor: moderator,
+    action: 'block',
+    subjectAddress: address,
+    note: reason || null,
+  })
+
+  if (picturesRemoved) {
+    await logAction(db, { actor: moderator, action: 'remove_images', subjectAddress: address })
   }
 
   return res.status(200).json({ address, blocked: true })
 }
 
-async function unblock(req, res, db) {
+async function unblock(req, res, db, moderator) {
   // Query string rather than a body, for the same reason the removal endpoint
   // does it: the dev server's shim only parses a body for POST and PUT, so a
   // DELETE body would work on Vercel and fail locally.
@@ -119,6 +144,8 @@ async function unblock(req, res, db) {
     console.error('block: removal failed:', error.message)
     return res.status(503).json({ error: 'That could not be saved.' })
   }
+
+  await logAction(db, { actor: moderator, action: 'unblock', subjectAddress: address })
 
   return res.status(200).json({ address, blocked: false })
 }

@@ -143,6 +143,62 @@ requests it from the linked site, handing that site the IP address of everybody
 who scrolled past the post. If an image is ever wanted there, re-host it; do
 not add a column that holds somebody else's URL and hand it to an `<img>`.
 
+**`0021_safety_at_scale.sql` is required, like the three above it.** It adds
+`hidden_at` and `hidden_by` to `posts`, and creates `muted` and
+`moderation_log`. `POST_FIELDS` selects both new columns, and every read of a
+post goes through that string - so without this migration the feed, every
+profile and every post page fail on the select, exactly as they would without
+0020.
+
+Four things in it are worth knowing before running it.
+
+**A hide is a visibility measure and never a containment one.** This is the
+thing most likely to be misread from the column name, so the migration says it
+and so does every file that touches it. The anon read policy on `posts` is
+`using (deleted_at is null)` and is deliberately **not** narrowed to
+`hidden_at is null`. It cannot be: row-level security has no identity to
+compare against here, so a policy that hid these rows would hide them from
+their own author too - and an author who is not told their post is pending
+review has simply had it disappear. So a hidden post still comes back from the
+database, and what implements the hide is the query filter in
+`src/services/posts.js` plus what the interface draws. Anybody determined
+enough to read the database with the anon key can still see it. If a post needs
+to be genuinely unreadable, that is `deleted_at`, which the policy does
+enforce.
+
+**`muted` and `moderation_log` have no row-level security policy at all** -
+not for `anon`, not for `authenticated`, read or write. The same blank space as
+`post_bookmarks` and `blocked`, for two different reasons worth separating.
+`muted` is private because "who I cannot stand" is a list about the reader
+rather than about the people on it, and a site where accounts are wallet
+addresses publishing it would publish a graph of who refuses to read whom.
+`moderation_log` is private because it is a list of actions taken against named
+addresses with a moderator's note attached, which a select policy would publish
+to everybody including the people in it.
+
+**`moderation_log` has no foreign keys**, which is not an oversight. A
+`references posts(id) on delete cascade` would mean a hard delete of a post
+erased the record that somebody removed it - precisely the record worth
+keeping. The log has to outlive what it describes. For the same reason `actor`
+does not reference `profiles`: a moderator is an address in an environment
+variable and may never have posted, and a log entry that could not be written
+because the actor had no profile row is a log with holes exactly where somebody
+was moderating without posting.
+
+It is also **append-only by discipline rather than by constraint**. The service
+role can update and delete anything, so nothing in the schema makes the table
+immutable. What keeps it append-only is that exactly one module writes it -
+`logAction` in `api/_lib/moderation.js` - and that module only inserts.
+
+Finally, it **asserts a foreign key name it did not create**:
+`post_reports_reporter_fkey`, declared inline by 0005 and therefore named by
+Postgres rather than by us. Auto-hide reads a post's reporters with each
+reporter's `first_seen_at` attached, which needs that name in the select. The
+migration raises if it is absent, so the assumption fails while somebody is
+running a migration rather than later, on the first report after a deploy. The
+two foreign keys 0021 creates itself are named explicitly, which is the lesson
+from having had to do this twice.
+
 ## Checking one ran
 
 Each file ends with a query that says whether it worked, without deploying

@@ -8,6 +8,8 @@ import ChatAvatar from './ChatAvatar'
 import QuoteCard from './QuoteCard'
 import { ACCEPT_ATTRIBUTE, fileToPostImage } from '../../utils/avatarImage'
 import { formatAddress } from '../../utils/formatters'
+import { useRateUsage } from '../../hooks/useRateUsage'
+import { resetLabel, usageLabel } from '../../utils/rateUsage'
 
 /** Show the counter once it is worth watching, not from the first letter. */
 const COUNTER_APPEARS_AT = MAX_POST_LENGTH - 300
@@ -31,6 +33,16 @@ export default function PostComposer({
   onClearQuote,
 }) {
   const { isSignedIn, isBusy, signIn } = useSiweAuth()
+
+  /*
+   * How much of the posting allowance is left.
+   *
+   * The limits have been enforced since the chat shipped and have never been
+   * shown, so the first anybody knew about one was being refused mid-sentence
+   * by a number they had never seen - which reads as the site being broken
+   * rather than as a rule being applied. This is that number, before it bites.
+   */
+  const usage = useRateUsage({ kind: 'posts' })
 
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
@@ -73,7 +85,25 @@ export default function PostComposer({
    * screen reader. A picture with no words is a post that says nothing to a
    * third of the people who might read it.
    */
-  const canSend = length > 0 && !overLimit && !sending && !preparing
+  /*
+   * The window closest to refusing, or null before the fetch answers.
+   *
+   * Declared with `canSend` rather than beside the markup, because both are
+   * read during render and the button's disabled state depends on it.
+   */
+  const tight = usage.usage?.tightest || null
+
+  /*
+   * `blocked` disables the button as well as showing the line.
+   *
+   * Not a permission check - the endpoint counts rows in the database and
+   * refuses regardless of what the browser believes. What it saves is the
+   * worst version of this interaction: writing two thousand characters,
+   * pressing Post, and being told no. The limit is enforced there; this is
+   * what makes it legible here.
+   */
+  const canSend =
+    length > 0 && !overLimit && !sending && !preparing && !usage.usage?.blocked
 
   /**
    * Read a picked file, fit it inside the box, and hold it until Post.
@@ -151,6 +181,13 @@ export default function PostComposer({
       // The quote too, for the same reason: the next post is not about this
       // one unless somebody says so again.
       onClearQuote?.()
+      /*
+       * Counted locally rather than refetched. Somebody writing their third
+       * post in a minute needs the line to say so before they write a fourth,
+       * and a round trip to find that out is a round trip during which they
+       * have already written it.
+       */
+      usage.record()
       if (post) onPosted(post)
     } catch (err) {
       setError(err.message)
@@ -342,6 +379,24 @@ export default function PostComposer({
         {length >= COUNTER_APPEARS_AT && (
           <span className={`chat-count font-mono ${overLimit ? 'over' : ''}`}>
             {length} / {MAX_POST_LENGTH}
+          </span>
+        )}
+
+        {/*
+          The allowance, shown only once it is worth watching - the same rule
+          the character counter follows just above, and for the same reason. "0
+          of 3 a minute" on an empty composer is a rule nobody asked about,
+          displayed where it reads as a warning.
+
+          The tightest window rather than all of them: which one binds changes
+          with how somebody is posting, and `rateUsage` already picks it.
+         */}
+        {tight && (tight.used > 0 || usage.usage?.blocked) && (
+          <span className={`chat-count font-mono ${usage.usage?.blocked ? 'over' : ''}`}>
+            {usageLabel(tight)}
+            {/* Only when there is no room, because a countdown on a limit
+                nobody is near is a timer that invites being watched. */}
+            {resetLabel(tight.resetsInMs) ? ` — more in ${resetLabel(tight.resetsInMs)}` : ''}
           </span>
         )}
 

@@ -43,6 +43,23 @@ export default function QuoteCard({ quote, onOpenPost, onOpenProfile }) {
     )
   }
 
+  /*
+   * A hidden post, said rather than drawn - and said differently from a
+   * removed one, because the two are different facts and a hide is reversible.
+   *
+   * This card is the one place a post is rendered without going through
+   * PostCard, which is what made it the way around a hide: the body was in a
+   * card on a surface nobody thought of as a way of reading a post.
+   */
+  if (quote.hidden) {
+    return (
+      <p className="post-quote is-gone">
+        <AlertTriangle size={13} />
+        <span>That post is hidden while a moderator reads it.</span>
+      </p>
+    )
+  }
+
   const written = Date.parse(quote.createdAt)
   const name = quote.handle || formatAddress(quote.address)
 
