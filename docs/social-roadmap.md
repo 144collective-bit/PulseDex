@@ -10,13 +10,13 @@ held only in a conversation is a plan that gets re-litigated every time.
 
 ## Where this stands
 
-Roughly 6,650 lines across 36 components in `src/components/social/`, and
-sixteen tables. Migrations `0001` through `0020`.
+Roughly 7,150 lines across 37 components in `src/components/social/`, and
+eighteen tables. Migrations `0001` through `0021`.
 
 | table | holds |
 | --- | --- |
 | `profiles` | handle, avatar (preset id or uploaded url), banner, bio, links, pinned post, wallet age, the holdings switch |
-| `posts` | the feed, its replies via `parent_id`, quotes via `quote_id`, one image, and `edited_at` |
+| `posts` | the feed, its replies via `parent_id`, quotes via `quote_id`, one image, `edited_at`, and `hidden_at` / `hidden_by` |
 | `post_mentions` | who a post names, as rows rather than as text to parse |
 | `post_reactions` | emoji, per address per post |
 | `post_bookmarks` | **private** — no read policy for any browser-facing role |
@@ -31,6 +31,8 @@ sixteen tables. Migrations `0001` through `0020`.
 | `token_claims` | the dev claim, revocable, with an audit row |
 | `blocked` | moderator action against an address |
 | `post_reports` | what readers have flagged |
+| `muted` | **private** — who one reader has chosen not to see; no read policy |
+| `moderation_log` | **private** — every moderator action, append-only, no foreign keys |
 
 Working today: posting with an image, replying in a real thread, quoting,
 reacting, saving privately, editing inside a five-minute window, following,
@@ -38,13 +40,18 @@ mentions with an autocomplete, an inbox with unread counts that opens what each
 notification is about, link previews fetched server-side, chat rooms with
 realtime and per-room unread counts, a room per token reachable from its page,
 the dev claim, groups and holders-only rooms, search within a room, a URL for
-every surface, and profiles with a pinned post, five tabs, browsable follower
-lists, wallet age, and holdings when the account asks for them.
+every surface, profiles with a pinned post, five tabs, browsable follower
+lists, wallet age, and holdings when the account asks for them, muting that
+nobody is told about, a report queue with the audit trail beside it, auto-hide
+behind a wallet-age gate, and a posting allowance the account can see before it
+bites.
 
 **What the first version of this section said was missing — notifications,
-mentions, unread state, search — now exists, and so does everything Batch 3
-asked for.** What is left is the two batches below: moderation is still one
-human reading a queue, and the feed is reverse-chronological with no ranking.
+mentions, unread state, search — now exists, and so does everything Batches 2,
+3 and 5 asked for.** What is left is Batch 6: the feed is reverse-chronological
+with no ranking. Moderation is no longer one human reading a queue with no
+record of what they did, though the moderator list is still an environment
+variable — see the note under Batch 5.
 The one thing deferred out of a finished batch is a public track record (the
 "called it" badge), which needs a trade-history index this app does not have —
 see Batch 2.
@@ -303,16 +310,64 @@ moment rooms stopped being five fixed strings. It covers unread state and
 threads, a room per token, the dev claim, groups, and holders-only rooms — all
 of which shipped in the chat batches.
 
-### Batch 5 — safety that scales past one person
+### Batch 5 — safety that scales past one person  ← done
 
-Moderation is currently one human reading reports.
+Moderation was one human reading reports, with no record of what they did and
+no way for a reader to opt out of somebody without a moderator being involved.
 
-- Mute, which is a reader's own choice, distinct from block, which is a
-  moderator's
-- A report queue with a review view, not a table nobody opens
-- Auto-hide past a report threshold, pending review — reversible
-- Per-account rate limits the account can actually see
-- An audit trail for every moderator action
+- **Mute**, which is a reader's own choice, distinct from block, which is a
+  moderator's. The muted account is never told and loses nothing. `muted` has
+  no read policy, so the list goes through `api/_routes/mutes.js` — "who I
+  cannot stand" is a list about the reader, and a site where accounts are
+  wallet addresses publishing it would publish who refuses to read whom. It is
+  listed back in profile settings with an Unmute beside each row, because a
+  setting nothing on the site ever mentions again has no other way of being
+  found.
+- **A report queue with a review view** at `/moderation`, with the audit trail
+  on the next tab. The two are one screen on purpose: the reason a queue goes
+  unopened is that opening it says nothing about what was already handled, so
+  every visit starts by re-reading last week's reports. Each row says whether
+  the post has been removed, hidden automatically, or hidden by a person,
+  because that changes what is being asked.
+- **Auto-hide, gated against brigading.** The roadmap asked for a report
+  threshold, and `api/_routes/posts/report.js` had said since it was written
+  that "an endpoint that hid a post at some threshold of reports would be a
+  brigading tool wearing a safety feature's name". That is true of a plain
+  count, which is why this is not one: the gate is three **distinct** reporters
+  whose wallets the chain first saw more than a month ago (`FRESH_WALLET_DAYS`,
+  reused from Batch 2 rather than given a number of its own). It moves the cost
+  from three clicks to three aged wallets. A reporter whose wallet age is
+  unknown does not count, because "we have not looked it up" must not read as
+  "old enough". Every branch is tested in `src/utils/autoHide.test.js`.
+- **Per-account rate limits the account can see.** The limits have been
+  enforced since the chat shipped and were never shown, so the first anybody
+  knew about one was being refused mid-sentence by a number they had never
+  seen. The composer now says "2 of 3 a minute" once it is worth watching, and
+  at the limit it disables Post and counts down — the endpoint still decides,
+  but nobody writes two thousand characters to be told no.
+- **An audit trail for every moderator action.** `moderation_log`, written by
+  exactly one module, covering blocks, unblocks, hides, unhides, auto-hides,
+  removals, picture removals, claim revocations, room archives and gate
+  changes. Each row renders as a sentence, and an auto-hide carries the count
+  the system saw at the time rather than one recounted later.
+
+Three things this batch deliberately did not do.
+
+**A hide is a visibility measure and never a containment one.** Row-level
+security has no identity here, so a policy that hid these rows would hide them
+from their own author — who has to be told. A hidden post therefore still comes
+back from the database, and the hide is implemented by the query filter and the
+interface. For something that must be unreadable, remove it.
+
+**The moderator list is still an environment variable.** A roles table is still
+a week of work for a problem this site does not have. What changed is that the
+actions it authorises are now recorded; `src/utils/chatAdmin.js` has said since
+it was written that there was no audit of who removed what, and there is now.
+
+**Nothing tells a reporter whether their report hid anything.** A response that
+said so would turn the endpoint into a way of probing how close a post is to
+the threshold, which is the reconnaissance step of the brigading the gate
+exists to make expensive. The author is told, on their own post.
 
 ### Batch 6 — feed quality
 

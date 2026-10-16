@@ -104,7 +104,17 @@ export const POST_MENTIONS =
  * two levels and a denial of service at twenty.
  */
 export const POST_QUOTE =
-  'quote:posts!posts_quote_fkey ( id, address, body, created_at, deleted_at, image_url, profiles!posts_address_fkey ( handle ) )'
+  'quote:posts!posts_quote_fkey ( id, address, body, created_at, deleted_at, ' +
+  /*
+   * `hidden_at` rides along for the reason `deleted_at` does, and it was a
+   * leak until it did: a quote card draws the quoted post's body directly
+   * rather than through PostCard, so without this column a post taken out of
+   * the feed stayed perfectly readable through anybody who had quoted it.
+   * Found by re-reading the diff, not by a test - the body was there, in a
+   * card, on a surface nobody thought of as a way of reading a post.
+   */
+  'hidden_at, ' +
+  'image_url, profiles!posts_address_fkey ( handle ) )'
 
 /**
  * A post, as the feed and the profile read one.
@@ -128,6 +138,25 @@ export const POST_QUOTE =
 export const POST_FIELDS =
   'id, address, body, created_at, edited_at, parent_id, quote_id, ' +
   'image_url, image_w, image_h, ' +
+  /*
+   * Added by 0021, and read by the browser although nothing in the browser is
+   * what enforces a hide.
+   *
+   * 0021 says this at length and it is the thing most likely to be misread
+   * from the column name: the anon read policy on `posts` is
+   * `using (deleted_at is null)` and is deliberately NOT narrowed to
+   * `hidden_at is null`. It cannot be - row level security has no identity
+   * here, so a policy hiding these rows would hide them from their own author,
+   * and an author not told their post is pending review has simply had it
+   * vanish. So a hidden post still comes back, and these two columns are what
+   * let the query filter and the interface do the hiding.
+   *
+   * Both, not just the first. `hidden_by` null with `hidden_at` set is the
+   * system's doing and an address is a moderator's, and the author is told
+   * different things in the two cases - see hiddenNotice in
+   * src/utils/autoHide.js.
+   */
+  'hidden_at, hidden_by, ' +
   `${POST_AUTHOR}, ${POST_MENTIONS}, ${POST_QUOTE}, post_reactions ( emoji, address )`
 
 /**
@@ -145,6 +174,15 @@ export const POST_FIELDS =
 export const POST_WRITE_FIELDS =
   'id, address, body, created_at, edited_at, parent_id, quote_id, ' +
   'image_url, image_w, image_h, ' +
+  /*
+   * The hidden columns ride along here too, which looks unnecessary - a post
+   * that was just published is never hidden - and is not. The edit path
+   * returns this shape, the edit window is five minutes, and a post can be
+   * auto-hidden inside five minutes. Without these the card rebuilt from an
+   * edit's response would lose its pending-review notice, and the author
+   * would conclude the hide had been lifted.
+   */
+  'hidden_at, hidden_by, ' +
   `${POST_AUTHOR}, ${POST_MENTIONS}, ${POST_QUOTE}`
 
 /**
@@ -184,6 +222,13 @@ export const LINK_PREVIEW_FIELDS = 'url_hash, url, title, description, site_name
  * project has shipped before. `posts` and `messages` are each reached once
  * and need no hint.
  *
+ * `posts.hidden_at` is read so the excerpt can be withheld, and this is the
+ * case it exists for rather than a consistency sweep: an inbox row about a
+ * mention is somebody else's post shown to the person they named. If that post
+ * is abuse and has been hidden, the one reader who would still see the words
+ * is the person it was aimed at - which is the opposite of what hiding it was
+ * for.
+ *
  * `messages ( room )` is what lets a reaction open the message it is about.
  * A message is addressed as `/r/<room>#m<id>`, and the id alone does not say
  * which room - so without this the inbox knows what happened and cannot show
@@ -194,7 +239,7 @@ export const LINK_PREVIEW_FIELDS = 'url_hash, url, title, description, site_name
 export const NOTIFICATION_FIELDS = `
   id, kind, created_at, read_at, post_id, message_id,
   profiles!notifications_actor_fkey ( address, handle, avatar_id, avatar_url ),
-  posts ( id, body, parent_id ),
+  posts ( id, body, parent_id, hidden_at ),
   messages ( id, room )
 `
 

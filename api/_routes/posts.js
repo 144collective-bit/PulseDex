@@ -14,6 +14,7 @@ import { resolveMentions, recordMentions, notifyReply } from '../_lib/notify.js'
 import { canEditPost, EDIT_REFUSED } from '../../src/utils/postEdit.js'
 import { isPostImageSize } from '../../src/utils/avatarUpload.js'
 import { POST_IMAGE_BUCKET } from '../_lib/avatars.js'
+import { logAction } from '../_lib/moderation.js'
 
 /**
  * Publishing and removing posts.
@@ -363,6 +364,26 @@ async function remove(req, res) {
   if (error) {
     console.error('posts: the removal failed:', error.message)
     return res.status(503).json({ error: 'That post could not be removed.' })
+  }
+
+  /*
+   * Logged only when a moderator did it, not when somebody deleted their own
+   * post. The audit trail exists so power exercised over other people is
+   * visible; filling it with every author tidying their own timeline would
+   * make the entries that matter unfindable, and would also turn it into a
+   * record of what ordinary accounts have thought better of saying.
+   *
+   * After the update, and awaited: an entry written before an update that then
+   * failed is a record of something that did not happen, and work not awaited
+   * in a serverless function is killed when the response goes out.
+   */
+  if (!mine && moderator) {
+    await logAction(db, {
+      actor: address,
+      action: 'remove_post',
+      subjectPostId: id,
+      subjectAddress: existing.data.address || null,
+    })
   }
 
   return res.status(200).json({ id, removed: true })

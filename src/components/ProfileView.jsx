@@ -26,6 +26,8 @@ import {
 } from '../services/profile'
 import { MAX_LINKS, normaliseLink } from '../utils/profileFields'
 import { hasSupabase } from '../config/supabase'
+import { useMutes } from '../hooks/useMutes'
+import { formatAddress } from '../utils/formatters'
 
 function ToggleSwitch({ checked, onChange }) {
   return (
@@ -206,6 +208,15 @@ export default function ProfileView({ onOpenPublicProfile }) {
    * tab has turned it off. Somebody who turns it on and walks away has
    * published - and has been told so, which is the other half of it.
    */
+  /*
+   * The mute list, held here so the form can offer a way out of it.
+   *
+   * One request for the whole list, like every other set in this app - and the
+   * only place it is drawn with names and pictures, which is why the hook
+   * returns both shapes.
+   */
+  const mutes = useMutes()
+
   const [holdingsPublic, setHoldingsPublic] = useState(false)
   const [holdingsBusy, setHoldingsBusy] = useState(false)
   const [holdingsError, setHoldingsError] = useState('')
@@ -778,6 +789,51 @@ export default function ProfileView({ onOpenPublicProfile }) {
                         </p>
                       )}
                     </div>
+                  </FormField>
+                )}
+
+                {/*
+                  Who this reader has muted, listed where they can undo it.
+
+                  Here rather than on a screen of its own, because a mute is
+                  invisible by design: nothing on the site ever mentions it
+                  again, the muted account is never told, and the posts simply
+                  stop arriving. That is what makes it the right tool - and it
+                  means a mute somebody set six weeks ago and forgot has no
+                  other way of being found. A control with no way back is not a
+                  preference, it is a trap.
+
+                  Not behind `canPublish`. Muting needs no handle and no
+                  profile worth publishing; somebody who has only ever read the
+                  site is exactly who mutes first.
+                */}
+                {mutes.people.length > 0 && (
+                  <FormField
+                    label="Muted accounts"
+                    hint="Only you can see this list · they are not told"
+                  >
+                    <ul className="profile-muted-list">
+                      {mutes.people.map((person) => (
+                        <li key={person.address} className="profile-muted-row">
+                          <span className="font-mono" title={person.address}>
+                            {person.handle || formatAddress(person.address)}
+                          </span>
+                          <button
+                            type="button"
+                            className="xp-button"
+                            onClick={() => mutes.toggle?.(person.address, false)}
+                          >
+                            Unmute
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+
+                    {mutes.error && (
+                      <p className="chat-error" role="alert">
+                        {mutes.error}
+                      </p>
+                    )}
                   </FormField>
                 )}
 

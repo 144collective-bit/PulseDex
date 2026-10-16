@@ -15,6 +15,7 @@ import { serviceClient } from '../../_lib/supabase.js'
 import { findDeployer } from '../../_lib/deployer.js'
 import { isAdminAddress, parseAdminAddresses } from '../../../src/utils/chatAdmin.js'
 import { asAddress, claimMessage } from '../../../src/utils/deployer.js'
+import { logAction } from '../../_lib/moderation.js'
 
 /**
  * PulseChain, read-only, for checking signatures.
@@ -302,6 +303,22 @@ async function revoke(req, res, db, address) {
   // moderator acting on a claim somebody already withdrew should be told it
   // is gone, not shown a failure.
   if (!data) return res.status(404).json({ error: 'No live claim on that token.' })
+
+  /*
+   * Logged although `token_claims` already records the revocation with its
+   * reason, for the reason the gate change gives: that row answers "what
+   * happened to this claim" and this one answers "what has this moderator
+   * done", and the second question has nowhere else to look.
+   *
+   * The reason is copied into the note. It is a moderator's note about a
+   * person in both places, and both are moderator-only reads.
+   */
+  await logAction(db, {
+    actor: address,
+    action: 'revoke_claim',
+    subjectAddress: data.address || null,
+    note: reason,
+  })
 
   return res.status(200).json({ revoked: data.token_address })
 }

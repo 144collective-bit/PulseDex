@@ -12,6 +12,7 @@ import {
   LONGEST_WINDOW_MS,
 } from '../../../src/utils/chatRate.js'
 import { MESSAGE_WRITE_FIELDS } from '../../../src/config/queries.js'
+import { logAction } from '../../_lib/moderation.js'
 
 /**
  * Posting and removing chat messages.
@@ -530,6 +531,22 @@ async function remove(req, res) {
    */
   const dev = moderator ? false : await runsThisRoom(db, address, id)
 
+  /*
+   * Read before the update, and only when somebody is removing a message that
+   * may not be theirs - which is the one case the audit trail is for. An
+   * author tidying their own messages is not power exercised over anybody, and
+   * logging it would both bury the entries that matter and keep a record of
+   * what ordinary accounts thought better of saying.
+   *
+   * The room and the author, not the body: the log says what was done to whom
+   * and the message itself is still there, soft-deleted, for anybody with the
+   * service role to read.
+   */
+  const subject =
+    moderator || dev
+      ? await db.from('messages').select('room, address').eq('id', id).maybeSingle()
+      : null
+
   let update = db
     .from('messages')
     .update({ deleted_at: new Date().toISOString() })
@@ -559,6 +576,26 @@ async function remove(req, res) {
    * in full anyway.
    */
   if (!removed.data.length && !moderator) return res.status(404).json({ error: 'Not found.' })
+
+  /*
+   * Logged only when something was actually removed and it was not the
+   * remover's own. A moderator who presses delete on a message that was
+   * already gone gets success, above, and writing an entry for it would put
+   * an action in the trail that did not happen.
+   *
+   * The message id is deliberately not recorded. 0021's `subject_post_id` is
+   * posts, and an id in a table this log has no foreign key to is not
+   * something anybody reading the trail could go and look at - so the room is
+   * what gets recorded, which is where somebody would go to look.
+   */
+  if (removed.data.length > 0 && subject?.data && subject.data.address !== address) {
+    await logAction(db, {
+      actor: address,
+      action: 'remove_message',
+      subjectRoom: subject.data.room || null,
+      subjectAddress: subject.data.address || null,
+    })
+  }
 
   return res.status(200).json({ id, removed: removed.data.length > 0 })
 }

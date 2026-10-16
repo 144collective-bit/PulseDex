@@ -156,6 +156,35 @@ const NASTY_POST = {
   image_h: null,
   quote: null,
   post_reactions: null,
+  /* Null in both, which is every row written before 0021 and every post that
+     has never been hidden - which is almost all of them, forever. */
+  hidden_at: null,
+  hidden_by: null,
+}
+
+/*
+ * A post the system hid, and one a moderator did.
+ *
+ * Two rather than one, because the author is told different things: a hide
+ * with no `hidden_by` is the threshold having fired and is described as
+ * waiting for a moderator to read it, and one with an address is a moderator
+ * who already has. A single fixture would have tested half of hiddenNotice.
+ */
+const AUTO_HIDDEN_POST = {
+  ...NASTY_POST,
+  id: 11,
+  body: 'reported by three established accounts',
+  created_at: '2026-01-01T00:00:00Z',
+  profiles: { handle: 'degen', avatar_id: null, avatar_url: null },
+  hidden_at: '2026-02-01T00:00:00Z',
+  hidden_by: null,
+}
+
+const MOD_HIDDEN_POST = {
+  ...AUTO_HIDDEN_POST,
+  id: 12,
+  body: 'a moderator read this one',
+  hidden_by: '0x' + '9'.repeat(40),
 }
 
 /*
@@ -240,6 +269,9 @@ const QUOTING_POST = {
     body: 'the original claim',
     created_at: '2026-01-01T00:00:00Z',
     deleted_at: null,
+    // Null, which is every row written before 0021 and every post that has
+    // never been hidden.
+    hidden_at: null,
     image_url: null,
     profiles: { handle: 'whale' },
   },
@@ -259,10 +291,38 @@ const QUOTING_REMOVED = {
     body: 'THE REMOVED WORDS',
     created_at: '2026-01-01T00:00:00Z',
     deleted_at: '2026-02-01T00:00:00Z',
+    hidden_at: null,
     image_url: null,
     profiles: { handle: 'whale' },
   },
 }
+/*
+ * A post quoting one that has been hidden.
+ *
+ * The same shape as QUOTING_REMOVED and for the same reason, one step along: a
+ * quote card is the one place a post is drawn WITHOUT going through PostCard,
+ * so the body in this row is the way around a hide if the card does not check.
+ * It was, until the diff was re-read - there was no test that would have
+ * caught it, because nobody thinks of a quote card as a way of reading a post.
+ */
+const QUOTING_HIDDEN = {
+  ...QUOTING_POST,
+  id: 6,
+  body: 'somebody said this',
+  quote_id: 13,
+  quote: {
+    id: 13,
+    address: FRIEND,
+    // Present in the row, and must never reach the screen.
+    body: 'THE HIDDEN WORDS',
+    created_at: '2026-01-01T00:00:00Z',
+    deleted_at: null,
+    hidden_at: '2026-02-01T00:00:00Z',
+    image_url: null,
+    profiles: { handle: 'whale' },
+  },
+}
+
 const NASTY_MESSAGE = {
   id: 1,
   address: ADDRESS,
@@ -552,6 +612,77 @@ const FIXTURES = {
     return FIXTURES.healthy(table)
   },
   /*
+   * A post by somebody other than the reader.
+   *
+   * Needed because every other fixture's posts are written by ADDRESS, which
+   * is also who the harness signs in as - so a reader looking at them is
+   * looking at their own, and every control that exists only on other
+   * people's posts is correctly absent. Mute is one of those, and so is
+   * report and block, which is why this is a fixture rather than a flag.
+   */
+  strangerPosts: (table) => {
+    if (table === 'posts')
+      return [{ ...RICH_POST, id: 21, address: FRIEND, profiles: { handle: 'whale', avatar_id: null, avatar_url: null } }]
+    if (table === 'post_reactions') return []
+    return FIXTURES.healthy(table)
+  },
+  /*
+   * Two hidden posts and nothing else.
+   *
+   * Its own fixture rather than rows added to `richPosts`, because what has to
+   * be checked is what a page made ENTIRELY of hidden posts does - a feed with
+   * one hidden post among four would pass whether the notice rendered or not,
+   * since there would be plenty of other posts on screen to satisfy a
+   * selector.
+   *
+   * The profile row is pinned to post 1, which this fixture does not have, so
+   * the pin resolves to nothing. That is deliberate: it keeps the pinned card
+   * out of the way of a count of posts on screen.
+   */
+  hiddenPosts: (table) => {
+    if (table === 'posts') return [AUTO_HIDDEN_POST, MOD_HIDDEN_POST]
+    if (table === 'post_reactions') return []
+    return FIXTURES.healthy(table)
+  },
+  /*
+   * The inbox, with the mention it is about having been hidden.
+   *
+   * The case worth a scenario of its own: an inbox row about a mention is
+   * somebody else's post shown to the person they named, so if that post is
+   * abuse and has been hidden, the one reader who would still see the words is
+   * the person it was aimed at.
+   *
+   * Only the notifications mock reads this name - the tables fall through to
+   * `healthy` - because the row comes from an endpoint rather than the
+   * database.
+   */
+  hiddenMention: (table) => FIXTURES.healthy(table),
+  /*
+   * A post quoting a hidden one, and nothing else.
+   *
+   * On its own rather than added to `richPosts`, so a selector cannot be
+   * satisfied by some other post's text while the quote leaks underneath it.
+   */
+  quotingHidden: (table) => {
+    if (table === 'posts') return [QUOTING_HIDDEN]
+    if (table === 'post_reactions') return []
+    return FIXTURES.healthy(table)
+  },
+  /*
+   * One hidden post, for the single-post page.
+   *
+   * `hiddenPosts` has two, and the fixture answers every query on a table the
+   * same way - so `fetchPost`'s `.maybeSingle()` gets two rows back and
+   * correctly errors, which the page draws as "that post is not here". The
+   * same trap the Batch 3 thread scenarios hit. One row is what a page asking
+   * for one post needs.
+   */
+  oneHiddenPost: (table) => {
+    if (table === 'posts') return [AUTO_HIDDEN_POST]
+    if (table === 'post_reactions') return []
+    return FIXTURES.healthy(table)
+  },
+  /*
    * The healthy data, with one account having turned its holdings on.
    *
    * A fixture of its own rather than a flag, because `show_holdings` is the
@@ -584,6 +715,37 @@ async function wire(page, {
   /* What the wallet-age endpoint answers. Null is the default and means "we do
      not know", which must draw nothing rather than a date. */
   firstSeen = null,
+  /*
+   * Whether /api/auth/me says this account moderates.
+   *
+   * Off by default, and every scenario that does not ask for it is therefore
+   * checking what an ordinary reader sees - which is the view that matters
+   * most and the one it would be easiest to stop testing by making this true
+   * everywhere.
+   */
+  moderator = false,
+  /* Who this reader has muted. Empty by default, so a mute control reads as
+     the invitation it is rather than as a list. */
+  muted = [],
+  /*
+   * How many posts this account has already made inside the rate window.
+   *
+   * Zero by default, which draws no usage line at all - the state anybody who
+   * is not near a limit should be in, and the one a counter nobody asked for
+   * would spoil.
+   */
+  postsUsed = 0,
+  /*
+   * The limits endpoint failing on its own.
+   *
+   * Its own flag rather than riding on `apiStatus`, which is not a
+   * convenience: `apiStatus` also takes the database down, so the feed is
+   * correctly in its error state and there is no composer to check. The
+   * failure worth testing is the narrow one - everything works and this one
+   * endpoint does not - because that is the case where a composer refusing to
+   * open would be a worse outcome than a missing line.
+   */
+  limitsDown = false,
 } = {}) {
   // Nothing leaves localhost, so the run says the same thing everywhere.
   await page.route('**/*', (route) =>
@@ -662,8 +824,110 @@ async function wire(page, {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ address: signedIn ? ADDRESS : null }),
+      /*
+       * `isAdmin` is what useIsModerator reads, and it is only ever true when
+       * a scenario asks for it. The moderator list is an environment variable
+       * on the server, so this endpoint is the only thing that can say.
+       */
+      body: JSON.stringify({ address: signedIn ? ADDRESS : null, isAdmin: moderator }),
     })
+  )
+
+  /*
+   * The mute list, read through an endpoint for the reason bookmarks are:
+   * `muted` has no read policy for any browser-facing role, because sign-in
+   * here is a cookie this app sets rather than Supabase auth. A mock of the
+   * endpoint is the only way to fixture a mute at all.
+   */
+  await page.route('**/api/mutes**', (route) => {
+    if (route.request().method() !== 'GET') {
+      return apiStatus !== 200
+        ? route.fulfill({ status: apiStatus, contentType: 'application/json', body: '{"error":"That could not be saved."}' })
+        : route.fulfill({ status: 201, contentType: 'application/json', body: '{"muted":true}' })
+    }
+
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        addresses: muted,
+        muted: muted.map((address) => ({
+          address,
+          handle: address === FRIEND ? 'whale' : null,
+          avatarId: null,
+          avatarUrl: null,
+          mutedAt: '2026-02-01T00:00:00Z',
+        })),
+      }),
+    })
+  })
+
+  /*
+   * This account's own posting allowance.
+   *
+   * The timestamps are computed per call rather than written down, for the
+   * reason `freshPost` is: a hardcoded date would fall out of the one-minute
+   * window partway through the matrix, and a fixture whose validity expires
+   * mid-run is a flake that looks like a bug.
+   */
+  await page.route('**/api/me/limits**', (route) =>
+    limitsDown
+      ? route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"Your limits could not be loaded."}' })
+      : route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        posts: Array.from({ length: postsUsed }, (_, i) => Date.now() - (i + 1) * 1000),
+        messages: [],
+          limits: null,
+        }),
+      }),
+  )
+
+  await page.route('**/api/moderation/hide**', (route) =>
+    apiStatus !== 200
+      ? route.fulfill({ status: apiStatus, contentType: 'application/json', body: '{"error":"That could not be saved."}' })
+      : route.fulfill({ status: 200, contentType: 'application/json', body: '{"hidden":true}' }),
+  )
+
+  /*
+   * The audit trail. Moderator-only on the server, so it answers 404 when the
+   * scenario has not asked for a moderator - which is what the panel's
+   * "nothing here" state is drawn from.
+   */
+  await page.route('**/api/moderation/log**', (route) =>
+    !moderator
+      ? route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"Not found."}' })
+      : route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            entries: [
+              {
+                id: 2,
+                at: '2026-02-01T10:00:00Z',
+                actor: null,
+                action: 'auto_hide_post',
+                subject_address: ADDRESS,
+                subject_post_id: 11,
+                subject_room: null,
+                note: null,
+                evidence: 3,
+              },
+              {
+                id: 1,
+                at: '2026-02-01T09:00:00Z',
+                actor: '0x' + '9'.repeat(40),
+                action: 'block',
+                subject_address: FRIEND,
+                subject_post_id: null,
+                subject_room: null,
+                note: 'posting a fake contract address',
+                evidence: null,
+              },
+            ],
+          }),
+        }),
   )
   /*
    * The inbox, which unlike everything else social is read through an
@@ -690,7 +954,20 @@ async function wire(page, {
               post_id: 7,
               message_id: null,
               profiles: fixture === 'nasty' ? null : { address: ADDRESS, handle: 'degen', avatar_id: null, avatar_url: null },
-              posts: fixture === 'nasty' ? { id: 7, body: 'A'.repeat(40000), parent_id: null } : { id: 7, body: 'gm', parent_id: null },
+              /*
+               * `hidden_at` rides along because 0021 added it to the embed and
+               * `excerptOf` reads it. The hidden case has its own fixture
+               * below - this is the ordinary row, where it is null.
+               */
+              posts:
+                fixture === 'nasty'
+                  ? { id: 7, body: 'A'.repeat(40000), parent_id: null, hidden_at: null }
+                  : {
+                      id: 7,
+                      body: fixture === 'hiddenMention' ? 'WORDS AIMED AT SOMEBODY' : 'gm',
+                      parent_id: null,
+                      hidden_at: fixture === 'hiddenMention' ? '2026-02-01T00:00:00Z' : null,
+                    },
             },
             {
               id: 2,
@@ -872,6 +1149,71 @@ async function wire(page, {
     })
   })
 
+  /*
+   * The report queue and the act of filing one.
+   *
+   * GET is moderator-only on the server, so it answers 404 otherwise - which
+   * is what the panel's "nothing here" state is built from, and what a
+   * stranger guessing /moderation actually gets.
+   *
+   * Registered before the `**\/api/posts` route below, which matters: Playwright
+   * matches in REVERSE registration order, so the later route wins. That one
+   * is an exact path and would not shadow this - but the three routes above
+   * are here in this order for exactly that reason, and a fourth that quietly
+   * relied on a pattern not overlapping would be the next thing to break.
+   */
+  await page.route('**/api/posts/report**', (route) => {
+    if (route.request().method() !== 'GET') {
+      return apiStatus !== 200
+        ? route.fulfill({ status: apiStatus, contentType: 'application/json', body: '{"error":"That could not be reported."}' })
+        : route.fulfill({ status: 201, contentType: 'application/json', body: '{"reported":true}' })
+    }
+
+    if (!moderator) {
+      return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"Not found."}' })
+    }
+
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        reports: [
+          {
+            id: 1,
+            postId: AUTO_HIDDEN_POST.id,
+            reporter: FRIEND,
+            reason: 'this is a scam',
+            createdAt: '2026-02-01T10:00:00Z',
+            post: {
+              id: AUTO_HIDDEN_POST.id,
+              address: ADDRESS,
+              body: AUTO_HIDDEN_POST.body,
+              removed: false,
+              hiddenAt: AUTO_HIDDEN_POST.hidden_at,
+              // Null, so the row says the system hid it rather than a person.
+              hiddenBy: null,
+            },
+          },
+          {
+            /*
+             * A report on a post that has since been removed. The queue keeps
+             * it deliberately - a row that vanished once somebody dealt with
+             * it would leave a moderator wondering what the report had been
+             * about - so the panel has to draw it without a body and without
+             * offering to hide something that is already gone.
+             */
+            id: 2,
+            postId: 99,
+            reporter: ADDRESS,
+            reason: null,
+            createdAt: '2026-02-01T09:00:00Z',
+            post: { id: 99, address: FRIEND, body: 'gone', removed: true, hiddenAt: null, hiddenBy: null },
+          },
+        ],
+      }),
+    })
+  })
+
   await page.route('**/api/posts/image**', (route) =>
     route.fulfill({
       status: 201,
@@ -1012,6 +1354,14 @@ async function run(name, { viewport = DESKTOP, path = '/', steps, ...opts } = {}
      * asserted on directly below, by what the page ends up showing.
      */
     if (opts.apiStatus && opts.apiStatus !== 200 && /Failed to load resource/i.test(t)) return
+    /*
+     * The same allowance for a scenario that takes one endpoint down rather
+     * than all of them. `limitsDown` answers 503 on purpose, and the browser
+     * logs a line for it whatever the app does next - which is the fixture
+     * talking. What the app does is asserted on directly, by the composer
+     * still opening.
+     */
+    if (opts.limitsDown && /Failed to load resource/i.test(t)) return
     // The console line dbError writes for whoever is debugging. Wanted.
     if (/^load |^search |^find |failed:/i.test(t)) return
     errors.push(`CONSOLE: ${t.slice(0, 180)}`)
@@ -3222,6 +3572,531 @@ await run('history / back out of a profile', {
     await page.waitForTimeout(900)
     await page.goForward()
     await page.waitForTimeout(1200)
+  },
+})
+
+/* ------------------------------------------------- safety at scale -- */
+
+/*
+ * Batch 5. Mute, hide pending review, the audit trail, and a visible rate
+ * limit.
+ *
+ * Every one of these is a rule about what somebody may do to somebody else, so
+ * the scenarios come in pairs wherever a rule has two sides: what the author
+ * of a hidden post sees against what a stranger sees, what a moderator is
+ * offered against what a reader is, what the panel says to each.
+ */
+
+await run('feed / a hidden post tells its author it is still there', {
+  path: '/feed',
+  fixture: 'hiddenPosts',
+  steps: async (page) => {
+    await page.waitForSelector('.feed-post', { timeout: 8000 })
+
+    const notice = await page.locator('.feed-post-hidden').first().innerText()
+
+    // The author's three facts: it exists, nobody else sees it, it is not gone.
+    if (!/not been deleted/i.test(notice)) {
+      throw new Error(`the author is not told the post survives - ${JSON.stringify(notice)}`)
+    }
+    if (!/can still see it/i.test(notice)) {
+      throw new Error(`the author is not told why they can see it - ${JSON.stringify(notice)}`)
+    }
+
+    /*
+     * And the post itself is still drawn for them, under the notice.
+     *
+     * Read off the whole list rather than the first card: both fixture posts
+     * carry the same `created_at`, so the sort falls through to id descending
+     * and the first card is whichever has the higher id. Asserting on
+     * `.first()` was testing the sort order, not the hide.
+     */
+    const bodies = await page.locator('.feed-post').allInnerTexts()
+    if (!/reported by three established accounts/.test(bodies.join(' | '))) {
+      throw new Error('the author cannot see their own hidden post')
+    }
+  },
+})
+
+/*
+ * The other half. Signed out is the cleanest way to be a stranger here - the
+ * fixture's posts are all written by ADDRESS, so a signed-in reader is their
+ * author.
+ */
+await run('feed / a stranger is told something is withheld, not that nothing exists', {
+  path: '/feed',
+  fixture: 'hiddenPosts',
+  signedIn: false,
+  steps: async (page) => {
+    await page.waitForTimeout(1600)
+
+    const text = await page.locator('main').innerText()
+
+    /*
+     * Nothing from the post's body. This is the assertion that would catch a
+     * hide drawn as a banner above a post still perfectly readable underneath
+     * it, which is the obvious way to get this wrong.
+     */
+    if (/reported by three established accounts/.test(text)) {
+      throw new Error('a stranger can read a hidden post')
+    }
+
+    const notices = await page.locator('.feed-post-hidden').count()
+    if (notices === 0) {
+      /*
+       * Not an assertion that the card is there - it is an assertion that the
+       * post did not silently vanish. A reply to a post that disappeared
+       * answers nothing, and somebody following a link would conclude it never
+       * existed.
+       */
+      throw new Error('a hidden post vanished rather than saying it is withheld')
+    }
+  },
+})
+
+// Neither sentence may name the reporters or how many there were: a hidden
+// post must not become a way for its author to work out who reported it.
+await run('feed / the notice never says who reported it or how many', {
+  path: '/feed',
+  fixture: 'hiddenPosts',
+  steps: async (page) => {
+    await page.waitForSelector('.feed-post-hidden', { timeout: 8000 })
+
+    for (const notice of await page.locator('.feed-post-hidden').allInnerTexts()) {
+      if (/\d/.test(notice)) throw new Error(`the notice counts the reports - ${JSON.stringify(notice)}`)
+      if (/0x/i.test(notice)) throw new Error(`the notice names an address - ${JSON.stringify(notice)}`)
+    }
+  },
+})
+
+// A moderator's hide and the system's read differently, which is the whole
+// reason `hidden_by` is nullable rather than a boolean.
+await run('feed / a moderator’s hide reads differently from the system’s', {
+  path: '/feed',
+  fixture: 'hiddenPosts',
+  steps: async (page) => {
+    await page.waitForSelector('.feed-post-hidden', { timeout: 8000 })
+
+    const notices = (await page.locator('.feed-post-hidden').allInnerTexts()).join(' | ')
+
+    if (!/moderator has hidden/i.test(notices)) {
+      throw new Error(`no notice names a moderator - ${JSON.stringify(notices.slice(0, 240))}`)
+    }
+    if (!/automatically/i.test(notices)) {
+      throw new Error(`no notice says the system did it - ${JSON.stringify(notices.slice(0, 240))}`)
+    }
+  },
+})
+
+await run('feed / an ordinary reader is offered mute and not hide', {
+  path: '/feed',
+  fixture: 'strangerPosts',
+  steps: async (page) => {
+    await page.waitForSelector('.feed-post', { timeout: 8000 })
+
+    const mute = await page.locator('[aria-label="Mute this author"]').count()
+    if (mute === 0) throw new Error('a signed-in reader is not offered mute')
+
+    /*
+     * And not the moderator's control. `moderator` is off in this scenario, so
+     * a hide button here would mean the control is drawn from something other
+     * than the answer /api/auth/me gave - which is how a button that 404s on
+     * press gets shipped.
+     */
+    const hide = await page.locator('[aria-label*="Hide this post"]').count()
+    if (hide > 0) throw new Error('a reader who does not moderate is offered the hide control')
+  },
+})
+
+await run('feed / signing out takes the mute control with it', {
+  path: '/feed',
+  fixture: 'strangerPosts',
+  signedIn: false,
+  steps: async (page) => {
+    await page.waitForTimeout(1600)
+
+    const mute = await page.locator('[aria-label="Mute this author"]').count()
+    if (mute > 0) throw new Error('a signed-out reader is offered a mute that is stored per account')
+  },
+})
+
+/*
+ * A muted account's posts leave the feed.
+ *
+ * The fixture answers every query on `posts` identically, so every post is by
+ * ADDRESS - muting ADDRESS therefore empties the feed, which is a blunt check
+ * and the only one this harness can make honestly. What it proves is that the
+ * filter runs at all and reads the right column.
+ */
+await run('feed / a muted account’s posts do not arrive', {
+  path: '/feed',
+  fixture: 'richPosts',
+  muted: [ADDRESS],
+  steps: async (page) => {
+    await page.waitForTimeout(1800)
+
+    const text = await page.locator('main').innerText()
+    if (/a chart and a link/.test(text)) {
+      throw new Error('a muted account’s post is still in the feed')
+    }
+  },
+})
+
+/*
+ * And a profile is NOT filtered.
+ *
+ * The decision worth having a scenario for: visiting somebody's page after
+ * muting them and finding it empty reads as the account having been deleted. A
+ * mute means "keep them out of my feed", and deliberately opening their page
+ * is not that.
+ */
+await run('profile / muting somebody does not empty their page', {
+  path: `/u/${ADDRESS}`,
+  fixture: 'richPosts',
+  muted: [ADDRESS],
+  steps: async (page) => {
+    await page.waitForSelector('.feed-post', { timeout: 8000 })
+
+    const posts = await page.locator('.feed-post').count()
+    if (posts === 0) {
+      throw new Error('a muted account’s own profile came back empty')
+    }
+  },
+})
+
+await run('account / the muted list offers a way back', {
+  fixture: 'healthy',
+  muted: [FRIEND],
+  steps: async (page) => {
+    /*
+     * Through the account menu, like the holdings switch. The settings form is
+     * a tab rather than a path - there is no URL for it - so a scenario about
+     * it has to get there the way a person does.
+     */
+    await accountMenu('Profile settings')(page)
+    await page.waitForSelector('.profile-muted-list', { timeout: 8000 })
+
+    const text = await page.locator('.profile-muted-list').innerText()
+
+    /*
+     * A mute is invisible by design - nothing on the site mentions it again
+     * and the muted account is never told - so a mute set weeks ago and
+     * forgotten has no other way of being found. A control with no way back is
+     * not a preference, it is a trap.
+     */
+    // The handle, so somebody can recognise who they muted six weeks ago - an
+    // address alone is a row nobody can act on.
+    if (!/whale/i.test(text)) {
+      throw new Error(`the muted list does not name who was muted - ${JSON.stringify(text.slice(0, 200))}`)
+    }
+    if (!/unmute/i.test(text)) {
+      throw new Error('the muted list offers no way to undo a mute')
+    }
+
+    await page.locator('.profile-muted-row button').first().click()
+    await page.waitForTimeout(800)
+
+    // The row goes, which is the only confirmation an invisible setting can
+    // give that it was changed.
+    const rows = await page.locator('.profile-muted-row').count()
+    if (rows > 0) throw new Error('unmuting left the row in the list')
+  },
+})
+
+await run('moderation / a stranger is told nothing is here', {
+  path: '/moderation',
+  fixture: 'healthy',
+  steps: async (page) => {
+    await page.waitForTimeout(1500)
+
+    const text = await page.locator('main').innerText()
+
+    // And it does not confirm what is behind it, matching the 404 the
+    // endpoints give rather than the 403 they could.
+    if (/report queue|audit trail/i.test(text)) {
+      throw new Error(`the panel describes itself to somebody who cannot use it - ${JSON.stringify(text.replace(/\s+/g, ' ').slice(0, 200))}`)
+    }
+    if (!/not available|nothing here/i.test(text)) {
+      throw new Error(`no refusal on /moderation for a non-moderator - ${JSON.stringify(text.replace(/\s+/g, ' ').slice(0, 200))}`)
+    }
+  },
+})
+
+await run('moderation / the queue says what has already been done', {
+  path: '/moderation',
+  fixture: 'healthy',
+  moderator: true,
+  steps: async (page) => {
+    await page.waitForSelector('.moderation-report', { timeout: 8000 })
+
+    const text = await page.locator('.moderation-panel').innerText()
+
+    // The reporter's words, marked as theirs rather than as the site's note.
+    if (!/this is a scam/.test(text)) throw new Error('the queue drops the reason given')
+
+    /*
+     * The state of the post, which changes what a moderator is being asked: a
+     * post the system hid an hour ago needs reading now, and a removed one
+     * needs nothing.
+     */
+    if (!/hidden automatically/i.test(text)) {
+      throw new Error(`the queue does not say the post was already hidden - ${JSON.stringify(text.replace(/\s+/g, ' ').slice(0, 300))}`)
+    }
+    if (!/removed/i.test(text)) {
+      throw new Error('the queue does not mark a report whose post has gone')
+    }
+  },
+})
+
+/*
+ * The queue keeps a report whose post was removed, and must not offer to hide
+ * something that is already gone.
+ */
+await run('moderation / nothing is offered on a post already removed', {
+  path: '/moderation',
+  fixture: 'healthy',
+  moderator: true,
+  steps: async (page) => {
+    await page.waitForSelector('.moderation-report', { timeout: 8000 })
+
+    const gone = page.locator('.moderation-report').filter({ has: page.locator('.is-gone') })
+    if ((await gone.count()) === 0) throw new Error('no report for a removed post was drawn')
+
+    const tools = await gone.first().locator('.moderation-report-tools button').count()
+    if (tools > 0) {
+      throw new Error('the panel offers to act on a post that has been removed')
+    }
+  },
+})
+
+await run('moderation / the audit trail reads as sentences', {
+  path: '/moderation',
+  fixture: 'healthy',
+  moderator: true,
+  steps: async (page) => {
+    await page.locator('.moderation-switch .xp-tab', { hasText: /what was done/i }).click()
+    await page.waitForSelector('.moderation-log-entry', { timeout: 8000 })
+
+    const text = await page.locator('.moderation-log').innerText()
+
+    /*
+     * A row saying "auto_hide_post" beside an id is a row somebody has to
+     * decode, and this list is read when somebody is already trying to work
+     * out what happened.
+     */
+    if (/auto_hide_post|hide_post|\bblock\b(?!ed)/.test(text)) {
+      throw new Error(`the log shows raw action names - ${JSON.stringify(text.replace(/\s+/g, ' ').slice(0, 240))}`)
+    }
+
+    // The basis for an automatic hide, which is what makes it reviewable.
+    if (!/3 established accounts/i.test(text)) {
+      throw new Error(`the log does not say what the system saw - ${JSON.stringify(text.replace(/\s+/g, ' ').slice(0, 240))}`)
+    }
+
+    // And the system is named as the system, not as a blank.
+    if (!/the system/i.test(text)) {
+      throw new Error('an automatic hide is not attributed to the system')
+    }
+  },
+})
+
+await run('moderation / a moderator can hide from the feed itself', {
+  path: '/feed',
+  fixture: 'richPosts',
+  moderator: true,
+  steps: async (page) => {
+    await page.waitForSelector('.feed-post', { timeout: 8000 })
+
+    const hide = page.locator('[aria-label="Hide this post pending review"]').first()
+    if ((await hide.count()) === 0) throw new Error('a moderator is not offered the hide control')
+
+    await hide.click()
+    await page.waitForSelector('.feed-post-hidden', { timeout: 8000 })
+
+    // The notice names a moderator, because one did it - the pair of columns
+    // is what distinguishes this from the threshold firing.
+    const notices = (await page.locator('.feed-post-hidden').allInnerTexts()).join(' | ')
+    if (!/moderator has hidden/i.test(notices)) {
+      throw new Error(`a moderator's own hide is described as automatic - ${JSON.stringify(notices.slice(0, 240))}`)
+    }
+  },
+})
+
+/*
+ * The usage line, and the state it must NOT appear in.
+ *
+ * Nothing posted means nothing drawn: "0 of 3 a minute" on an empty composer
+ * is a rule nobody asked about, displayed where it reads as a warning.
+ */
+await run('composer / says nothing about limits to somebody nowhere near one', {
+  path: '/feed',
+  fixture: 'healthy',
+  postsUsed: 0,
+  steps: async (page) => {
+    await page.waitForSelector('.feed-composer', { timeout: 8000 })
+    await page.waitForTimeout(900)
+
+    const text = await page.locator('.feed-composer').innerText()
+    if (/a minute|an hour/i.test(text)) {
+      throw new Error(`the composer warns about a limit nobody is near - ${JSON.stringify(text.replace(/\s+/g, ' ').slice(0, 200))}`)
+    }
+  },
+})
+
+await run('composer / shows the allowance once it is worth watching', {
+  path: '/feed',
+  fixture: 'healthy',
+  postsUsed: 2,
+  steps: async (page) => {
+    await page.waitForSelector('.feed-composer', { timeout: 8000 })
+    await page.waitForTimeout(1200)
+
+    const text = await page.locator('.feed-composer').innerText()
+    if (!/2 of 3 a minute/i.test(text)) {
+      throw new Error(`the composer does not say how much room is left - ${JSON.stringify(text.replace(/\s+/g, ' ').slice(0, 200))}`)
+    }
+  },
+})
+
+/*
+ * At the limit the button is off and the countdown is on.
+ *
+ * Not a permission check - the endpoint counts rows and refuses regardless of
+ * what the browser believes. What it saves is the worst version of this
+ * interaction: writing two thousand characters, pressing Post, and being told
+ * no.
+ */
+await run('composer / refuses before the words are written, not after', {
+  path: '/feed',
+  fixture: 'healthy',
+  postsUsed: 3,
+  steps: async (page) => {
+    await page.waitForSelector('.feed-composer', { timeout: 8000 })
+    await page.waitForTimeout(1200)
+
+    await page.locator('.feed-input').fill('a fourth post inside the same minute')
+    await page.waitForTimeout(400)
+
+    const send = page.locator('.feed-composer .chat-send')
+    if (!(await send.isDisabled())) {
+      throw new Error('the composer offers to publish a post the endpoint would refuse')
+    }
+
+    // And it says when there will be room, because "try again later" is not an
+    // answer somebody can act on.
+    const text = await page.locator('.feed-composer').innerText()
+    if (!/more in \d+s/i.test(text)) {
+      throw new Error(`no countdown at the limit - ${JSON.stringify(text.replace(/\s+/g, ' ').slice(0, 200))}`)
+    }
+  },
+})
+
+/*
+ * The limits endpoint failing must not take the composer with it.
+ *
+ * This one endpoint only, not `apiStatus: 500` - that takes the database with
+ * it, so the feed is correctly in its error state and there is no composer to
+ * check at all. The narrow failure is the one worth a scenario: a composer
+ * that would not open because a usage line could not be fetched would be a
+ * worse outcome than no line.
+ */
+await run('composer / still works when the limits endpoint is down', {
+  path: '/feed',
+  fixture: 'healthy',
+  limitsDown: true,
+  steps: async (page) => {
+    await page.waitForSelector('.feed-composer', { timeout: 8000 })
+
+    await page.locator('.feed-input').fill('something worth saying')
+    await page.waitForTimeout(400)
+
+    const send = page.locator('.feed-composer .chat-send')
+    if (await send.isDisabled()) {
+      throw new Error('a failed usage fetch disabled the composer')
+    }
+  },
+})
+
+/*
+ * The leak a quote card was.
+ *
+ * Signed out, because the author of a hidden post is told about it on their
+ * own post and a quote card has no idea who is reading - the card says
+ * withheld to everybody, which is what this checks.
+ */
+await run('feed / a quote is not the way around a hide', {
+  path: '/feed',
+  fixture: 'quotingHidden',
+  signedIn: false,
+  steps: async (page) => {
+    await page.waitForTimeout(1600)
+
+    const text = await page.locator('main').innerText()
+
+    if (/THE HIDDEN WORDS/.test(text)) {
+      throw new Error('a hidden post is readable inside a quote card')
+    }
+
+    /*
+     * And said rather than dropped, like a removed quote: no card at all would
+     * make the quoting post look as though it had always been only those
+     * words, which turns a hide into a quiet rewrite of whoever quoted it.
+     */
+    const gone = await page.locator('.post-quote.is-gone').count()
+    if (gone === 0) throw new Error('the quote card vanished rather than saying it is withheld')
+
+    if (!/hidden/i.test(text)) {
+      throw new Error(`the quote card does not say the post is hidden - ${JSON.stringify(text.replace(/\s+/g, ' ').slice(0, 220))}`)
+    }
+  },
+})
+
+await run('notifications / a hidden post is not quoted back at the person it named', {
+  path: '/notifications',
+  fixture: 'hiddenMention',
+  steps: async (page) => {
+    await page.waitForTimeout(1600)
+
+    const text = await page.locator('main').innerText()
+
+    if (/WORDS AIMED AT SOMEBODY/.test(text)) {
+      throw new Error('a hidden post is quoted in the inbox of the person it mentioned')
+    }
+
+    /*
+     * And the row stays, saying why. One that disappeared when its post was
+     * hidden would take with it the only record that anything happened - and
+     * one that went blank would read as a mention of nothing.
+     */
+    if (!/hidden while a moderator/i.test(text)) {
+      throw new Error(`the inbox row does not say why there are no words - ${JSON.stringify(text.replace(/\s+/g, ' ').slice(0, 240))}`)
+    }
+  },
+})
+
+/*
+ * A post page for a hidden post, signed out.
+ *
+ * This is the surface a link in a notification or a shared URL lands on, and
+ * the one where getting it wrong is most visible: a stranger following a link
+ * to a hidden post must find out that something is being withheld rather than
+ * that the post never existed.
+ */
+await run('direct / a hidden post’s own page withholds it rather than 404ing', {
+  path: '/p/11',
+  fixture: 'oneHiddenPost',
+  signedIn: false,
+  steps: async (page) => {
+    await page.waitForTimeout(1600)
+
+    const text = await page.locator('main').innerText()
+
+    if (/reported by three established accounts/.test(text)) {
+      throw new Error('a hidden post is readable on its own page by a stranger')
+    }
+    if (!/hidden/i.test(text)) {
+      throw new Error(`the post page says nothing about the post being withheld - ${JSON.stringify(text.replace(/\s+/g, ' ').slice(0, 220))}`)
+    }
   },
 })
 

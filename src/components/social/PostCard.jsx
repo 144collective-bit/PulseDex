@@ -2,6 +2,8 @@ import { useState } from 'react'
 import {
   Ban,
   Bookmark,
+  Eye,
+  EyeOff,
   Flag,
   MessageCircle,
   Pencil,
@@ -9,6 +11,7 @@ import {
   PinOff,
   Quote,
   Trash2,
+  VolumeX,
 } from 'lucide-react'
 import ChatAvatar from './ChatAvatar'
 import LinkPreviewCard from './LinkPreviewCard'
@@ -21,6 +24,7 @@ import ShareButton from './ShareButton'
 import { tallyReactions } from '../../services/chat'
 import { useLinkPreview } from '../../hooks/useLinkPreview'
 import { canEditPost, wasEdited } from '../../utils/postEdit'
+import { hiddenNotice } from '../../utils/autoHide'
 import { formatAddress, formatTimeAgo } from '../../utils/formatters'
 import { useSiweAuth } from '../../context/SiweAuthContext'
 
@@ -82,6 +86,16 @@ export default function PostCard({
   onOpenPost,
   /** Replaces the post in whatever list holds it, after an edit. */
   onEdited,
+  /*
+   * Muting, which is the reader's own control and not a moderator's.
+   *
+   * Absent on your own post and when signed out. Passed in rather than taken
+   * from a hook here for the reason `saved` is: a hook per card is a request
+   * per card, and twenty cards came to sixty requests once already.
+   */
+  onMute,
+  /** Hiding, which is a moderator's. Absent for everybody else. */
+  onToggleHide,
 }) {
   const { account } = useSiweAuth()
   const [editing, setEditing] = useState(false)
@@ -114,6 +128,29 @@ export default function PostCard({
    * which is most of them, and asks for nothing in that case.
    */
   const preview = useLinkPreview(post.body)
+
+  /*
+   * A post taken out of the feed pending review.
+   *
+   * Three readers, two renderings. The author and a moderator see the post
+   * with a notice above it, because the author has to know it is still there
+   * and a moderator has to be able to read the thing they are deciding about.
+   * Anybody else sees the notice instead of the post.
+   *
+   * A stranger gets a notice at all, rather than the card being absent, and
+   * that is the choice worth defending: a post that simply vanished from a
+   * thread leaves a reply answering nothing, and somebody following a link to
+   * it would conclude it had never existed. "Something is being withheld" is
+   * more honest than silence, and it is the same reason a removed quote says
+   * so instead of disappearing.
+   *
+   * Reached here at all because row level security cannot do it - see 0021:
+   * there is no identity for a policy to compare against, so a policy that
+   * hid these rows would hide them from their own author too.
+   */
+  const hidden = Boolean(post.hiddenAt)
+  const maySeeHidden = isOwn || isModerator
+  const notice = hidden ? hiddenNotice(post, isOwn) : null
 
   return (
     <article className="feed-post">
@@ -173,7 +210,16 @@ export default function PostCard({
           )}
         </header>
 
-        {editing ? (
+        {/*
+          The notice, above the post rather than below it. Somebody scrolling
+          past has to know what they are looking at before they read it, and a
+          line underneath would be read as a comment on the post.
+        */}
+        {notice && (
+          <p className={`feed-post-hidden ${maySeeHidden ? '' : 'is-only-notice'}`}>{notice}</p>
+        )}
+
+        {hidden && !maySeeHidden ? null : editing ? (
           <PostEditor
             post={post}
             onSaved={(updated) => {
@@ -329,10 +375,19 @@ export default function PostCard({
           {/*
            * Reporting is offered on everyone else's posts and not on your own,
            * which is not a permission check - the endpoint would take it - but
-           * an answer to "what would this even mean". Nothing is done with a
-           * report automatically: it goes to a queue a person reads. A
-           * threshold that hid a post would be a brigading tool wearing a
-           * safety feature's name.
+           * an answer to "what would this even mean".
+           *
+           * This used to say that nothing happens automatically, and that a
+           * threshold which hid a post would be a brigading tool wearing a
+           * safety feature's name. The second half is still true and is the
+           * reason the threshold that now exists is not a count of reports:
+           * it is distinct reporters whose wallets are over a month old, so
+           * the cost of arranging a hide is three aged wallets rather than
+           * three clicks. See src/utils/autoHide.js, which argues it in full.
+           *
+           * Nothing here says how close a post is to that line, deliberately.
+           * A control that reported progress toward a hide would be the
+           * reconnaissance step of the attack it exists to make expensive.
            */}
           {!isOwn && (
             <button
@@ -343,6 +398,50 @@ export default function PostCard({
               title="Report this post"
             >
               <Flag size={12} />
+            </button>
+          )}
+
+          {/*
+            Mute, beside report and before the moderator controls, because it
+            belongs to the reader rather than to the site. The distinction is
+            the whole feature: a report asks somebody else to act, and this
+            acts, for one person, immediately and invisibly.
+
+            The muted account is never told. Nothing in the label hints
+            otherwise either - "stop seeing" rather than "silence", because
+            nobody is being silenced.
+          */}
+          {onMute && !isOwn && (
+            <button
+              type="button"
+              className="feed-tool"
+              onClick={() => onMute(post.address)}
+              aria-label="Mute this author"
+              title="Stop seeing posts from this account — they are not told"
+            >
+              <VolumeX size={12} />
+            </button>
+          )}
+
+          {/*
+            Hide and unhide, one control that says which it will do. The
+            reversibility is the point of having it: removal is permanent
+            enough that the honest answer to anything borderline was to do
+            nothing, and this is the one a moderator can afford to get wrong.
+          */}
+          {onToggleHide && (
+            <button
+              type="button"
+              className={`feed-tool ${hidden ? 'is-pinned' : ''}`}
+              onClick={() => onToggleHide(post.id, !hidden)}
+              aria-label={hidden ? 'Put this post back' : 'Hide this post pending review'}
+              title={
+                hidden
+                  ? 'Put this post back in the feed'
+                  : 'Take this out of the feed — reversible, and the author is told'
+              }
+            >
+              {hidden ? <Eye size={12} /> : <EyeOff size={12} />}
             </button>
           )}
 

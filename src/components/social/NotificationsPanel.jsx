@@ -170,6 +170,21 @@ export default function NotificationsPanel({ onOpenProfile, onOpen }) {
                   ) : (
                     <p className="notif-excerpt">{item.excerpt}</p>
                   ))}
+
+                {/*
+                  A hidden post is said rather than left blank.
+
+                  `excerptOf` returns null for one, so without this the row
+                  would read as a mention of nothing - and the reader, who is
+                  the person that post named, would have no idea why. Said, it
+                  explains both the absence and that somebody is dealing with
+                  it.
+                */}
+                {item.hidden && (
+                  <p className="notif-excerpt is-withheld">
+                    That post is hidden while a moderator reads it.
+                  </p>
+                )}
               </div>
 
               <time className="notif-when" dateTime={item.createdAt || undefined}>

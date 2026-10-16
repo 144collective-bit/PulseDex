@@ -79,13 +79,34 @@ function toNotification(row) {
       avatarId: row.profiles?.avatar_id || null,
       avatarUrl: row.profiles?.avatar_url || null,
     },
-    /*
-     * A line of the post this is about, when there is one.
-     *
-     * Trimmed here rather than in CSS so the row is the same height whatever
-     * somebody wrote - a notification about a two-thousand-character post
-     * should not be a two-thousand-character notification.
-     */
-    excerpt: row.posts?.body ? row.posts.body.slice(0, 140) : null,
+    /** Whether the post this is about has been taken out of the feed. The row
+     *  still opens; what it does not do is quote the words. */
+    hidden: Boolean(row.posts?.hidden_at),
+    /** A line of the post this is about, when there is one and it may be
+     *  quoted. See excerptOf. */
+    excerpt: excerptOf(row.posts),
   }
+}
+
+/**
+ * A line of the post a notification is about, or null.
+ *
+ * Null for a hidden post, and that is the case this function exists for rather
+ * than the trimming. An inbox row about a mention is somebody else's post
+ * shown to the person they named: if that post is abuse and has been hidden,
+ * the one reader who would still see the words is the person it was aimed at,
+ * which is the opposite of what hiding it was for.
+ *
+ * The row stays. It still says somebody mentioned you and it still opens the
+ * post, where the notice explains itself - a notification that disappeared
+ * when its post was hidden would take with it the only record that anything
+ * happened.
+ *
+ * Trimmed here rather than in CSS so the row is the same height whatever
+ * somebody wrote: a notification about a two-thousand-character post should
+ * not be a two-thousand-character notification.
+ */
+function excerptOf(post) {
+  if (!post?.body || post.hidden_at) return null
+  return post.body.slice(0, 140)
 }

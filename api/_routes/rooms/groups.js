@@ -6,6 +6,7 @@ import { isAdminAddress, parseAdminAddresses } from '../../../src/utils/chatAdmi
 import { groupSlug } from '../../../src/config/rooms.js'
 import { asAddress } from '../../../src/utils/deployer.js'
 import { toBaseUnits } from '../../../src/utils/gate.js'
+import { logAction } from '../../_lib/moderation.js'
 
 /**
  * Making a group, changing what it requires, and taking it down.
@@ -274,6 +275,26 @@ async function editGroup(req, res, db, address) {
     return res.status(503).json({ error: 'That could not be saved.' })
   }
 
+  /*
+   * A second record, and not a duplicate of the first.
+   *
+   * `room_gate_changes` holds what the gate became, which is what answers
+   * "why can I no longer post here". This holds that a moderator changed it,
+   * in the one list that also holds their blocks and removals - which is what
+   * answers "what has this moderator been doing". The two tables overlap by
+   * one fact and are read by different questions.
+   *
+   * Swallowed on failure, unlike the gate row above, and the asymmetry is
+   * deliberate: that one is refused because the audit IS the valuable thing
+   * there, and the gate change has already happened by the time this runs.
+   */
+  await logAction(db, {
+    actor: address,
+    action: 'edit_room_gate',
+    subjectRoom: slug,
+    note: gate.gate_symbol ? `gate: ${gate.gate_symbol}` : 'gate removed',
+  })
+
   return res.status(200).json({ group: updated.data })
 }
 
@@ -318,6 +339,8 @@ async function archiveGroup(req, res, db, address) {
   if (!updated.data || updated.data.length === 0) {
     return res.status(404).json({ error: 'Not found.' })
   }
+
+  await logAction(db, { actor: address, action: 'archive_room', subjectRoom: slug })
 
   return res.status(200).json({ ok: true, slug })
 }

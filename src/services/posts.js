@@ -73,6 +73,18 @@ function toPost(row) {
     reactions: Array.isArray(row.post_reactions)
       ? row.post_reactions.filter((r) => r && r.emoji && r.address)
       : [],
+    /*
+     * When this post was taken out of the feed pending review, or null.
+     *
+     * Carried on every post although most readers never see a hidden one,
+     * because the author does and has to be told. See hiddenNotice in
+     * src/utils/autoHide.js for what each party is told and why neither
+     * sentence names the reporters.
+     */
+    hiddenAt: row.hidden_at || null,
+    /** The moderator who hid it, or null when the system did. The pair is
+     *  what distinguishes an automatic hide from a reviewed one. */
+    hiddenBy: row.hidden_by || null,
   }
 }
 
@@ -103,9 +115,21 @@ function readQuote(quote) {
 
   if (quote.deleted_at) return { id: quote.id, removed: true }
 
+  /*
+   * A hidden post reads as withheld here, for everybody including its author.
+   *
+   * No per-reader branch, deliberately: a quote card has no idea who is
+   * looking, and giving it one would mean the author of a hidden post seeing
+   * their own words inside a stranger's post while the stranger sees a notice.
+   * The author is told about the hide where it matters - on their own post,
+   * on their own timeline, with the sentence that says it still exists.
+   */
+  if (quote.hidden_at) return { id: quote.id, removed: false, hidden: true }
+
   return {
     id: quote.id,
     removed: false,
+    hidden: false,
     address: quote.address,
     body: quote.body,
     createdAt: quote.created_at,
@@ -131,6 +155,9 @@ export async function fetchPostPage({
   limit = PAGE_SIZE,
   replies = false,
   media = false,
+  viewer = null,
+  showHidden = false,
+  muted = null,
 } = {}) {
   if (!hasSupabase) return { posts: [], hasMore: false }
 
@@ -168,6 +195,8 @@ export async function fetchPostPage({
   if (author) query = query.eq('address', author.toLowerCase())
   if (authors) query = query.in('address', authors.map((a) => a.toLowerCase()))
 
+  query = withoutHidden(query, { viewer, showHidden })
+
   // Exclusive, so the post the cursor came from is not returned again. An
   // inclusive bound would refetch the same page forever, and the merge would
   // hide it by absorbing the duplicate.
@@ -177,7 +206,78 @@ export async function fetchPostPage({
   if (error) throw dbError(error, 'load the feed')
 
   const rows = data || []
-  return { posts: rows.map(toPost), hasMore: hasMoreBefore(rows, limit) }
+
+  return {
+    posts: withoutMuted(rows.map(toPost), muted),
+    /*
+     * Computed from the rows the database returned, before the mute filter.
+     *
+     * That is the part worth stating: a page with three muted authors in it
+     * comes back as seventeen posts, and `hasMore` has to answer "is there
+     * another page" rather than "did this one come back full". Deriving it
+     * after the filter would stop the feed at the first page where enough
+     * muted accounts happened to land, which is a feed that ends early for
+     * exactly the people who have muted the most.
+     */
+    hasMore: hasMoreBefore(rows, limit),
+  }
+}
+
+/**
+ * Keep hidden posts out, except from the people who must see them.
+ *
+ * Three cases, and the middle one is the whole shape of the feature:
+ *
+ * - A moderator reviewing the queue sees everything, hidden included.
+ * - A signed-in reader sees unhidden posts plus their OWN hidden ones, so an
+ *   author finds their post where they left it, with a notice on it, rather
+ *   than finding it gone.
+ * - Everybody else sees unhidden posts.
+ *
+ * Expressed in the query rather than after it, so paging stays honest - a
+ * filter applied to the rows would make a page of hidden posts come back
+ * empty while claiming there is more.
+ *
+ * The address goes into an `or` filter, which is a string PostgREST parses, so
+ * it is validated to forty hex digits first. A value from `viewer` that was
+ * not an address would otherwise be text injected into a filter expression -
+ * the one place in this file where that is possible.
+ */
+function withoutHidden(query, { viewer, showHidden }) {
+  if (showHidden) return query
+
+  const mine = typeof viewer === 'string' ? viewer.trim().toLowerCase() : ''
+  if (!/^0x[0-9a-f]{40}$/.test(mine)) return query.is('hidden_at', null)
+
+  return query.or(`hidden_at.is.null,address.eq.${mine}`)
+}
+
+/**
+ * Drop posts by accounts this reader has muted.
+ *
+ * After the query rather than in it, deliberately. The mute list is private -
+ * it has no read policy at all, so the browser holds it in memory and the
+ * database cannot be asked to filter on it without sending the whole list in
+ * every request, which would put "who I refuse to read" in a query string on
+ * every page of the feed.
+ *
+ * The cost is the short page explained above, and it is the right trade: a
+ * mute is a reader's own preference and nobody else's business, including the
+ * database's request log.
+ *
+ * A quote by a muted author is left alone. A mute means "do not show me this
+ * person's posts", and blanking a quote inside somebody else's post would
+ * leave that post unreadable - the muted account is still visible when
+ * somebody the reader follows chose to quote them, which is what they asked
+ * for by following them.
+ */
+function withoutMuted(posts, muted) {
+  if (!muted) return posts
+
+  const set = muted instanceof Set ? muted : new Set(muted)
+  if (set.size === 0) return posts
+
+  return posts.filter((post) => !set.has((post.address || '').toLowerCase()))
 }
 
 /**
@@ -247,8 +347,19 @@ export function subscribeToPosts({ author = null, onPost, onRemoved }) {
       if (post) onPost(post)
     })
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'posts' }, (payload) => {
-      // `deleted_at` is the only column anything ever changes, so an update is
-      // a removal until there is something else it could be.
+      /*
+       * An update is only a removal when `deleted_at` says so. It was once the
+       * only column anything changed; 0020 added `edited_at` and 0021 added
+       * the hidden pair, so the check is now load-bearing rather than
+       * documentation.
+       *
+       * A hide arriving here is deliberately not acted on. The reader may be
+       * the author, who must keep seeing it, and this callback does not know
+       * who is reading - so a post hidden while somebody is scrolling stays on
+       * their screen until the next load. That is the honest version of
+       * "visibility, not containment": the hide takes effect on every fetch
+       * and not inside a session already in progress.
+       */
       if (payload.new.deleted_at) onRemoved(payload.new.id)
     })
     .subscribe()

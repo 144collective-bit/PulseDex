@@ -10,6 +10,8 @@ import { fetchReplyCounts } from '../../services/posts'
 import { usePostActions } from '../../hooks/usePostActions'
 import { usePostReactions } from '../../hooks/usePostReactions'
 import { useBookmarks } from '../../hooks/useBookmarks'
+import { useMutes } from '../../hooks/useMutes'
+import { setPostHidden } from '../../services/moderation'
 
 /**
  * A list of posts, with the box to add one.
@@ -43,11 +45,35 @@ export default function FeedPanel({
 }) {
   const { account } = useSiweAuth()
   const isModerator = useIsModerator()
+  const isModeratorView = isModerator
+
+  /*
+   * The mute set, asked once for the whole list - the same lesson as
+   * reactions and saves.
+   *
+   * Applied as a filter on the feed and NOT on a profile. Visiting somebody's
+   * page after muting them and finding it empty would read as the account
+   * having been deleted; a mute means "keep them out of my feed", and
+   * deliberately opening their page is not that. `author` is the test, because
+   * it is set on exactly the surfaces that are one person's.
+   */
+  const mutes = useMutes()
+  const mutedHere = author ? null : mutes.addresses
+
   const { posts, status, error, add, replace, remove, hasMore, loadingOlder, loadOlder } = useFeed({
     author,
     authors,
     replies,
     media,
+    /*
+     * Who is reading, so their own hidden posts come back to them - an author
+     * who is not told their post is pending review has simply had it vanish.
+     * A moderator sees every hidden post, which is what makes the queue
+     * reviewable from the feed as well as from the panel.
+     */
+    viewer: account || null,
+    showHidden: isModeratorView,
+    muted: mutedHere,
   })
 
   /*
@@ -87,6 +113,41 @@ export default function FeedPanel({
     setQuoting(post)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
+
+  /*
+   * Hiding, for a moderator, from the feed rather than only from the panel.
+   *
+   * The post is replaced from what is already on screen rather than refetched,
+   * which is the one place this differs from ModerationPanel - that panel
+   * reloads so the audit trail beside it cannot disagree with the state. Here
+   * there is no log on screen to disagree with, and a feed that refetched
+   * itself on every hide would lose the reader's place.
+   */
+  const onToggleHide = useCallback(
+    async (id, on) => {
+      const post = posts.find((row) => row.id === id)
+      try {
+        await setPostHidden({ id, on })
+        if (post) {
+          replace({
+            ...post,
+            hiddenAt: on ? new Date().toISOString() : null,
+            // The address, because a moderator did this. The pair is what
+            // tells the author a person read it rather than a threshold.
+            hiddenBy: on ? account || null : null,
+          })
+        }
+      } catch {
+        /*
+         * Swallowed, and the post left as it was. The alternative is an error
+         * banner over a feed for a control only a handful of accounts can see
+         * - and the panel at /moderation reports failures properly, which is
+         * where somebody doing this deliberately is working.
+         */
+      }
+    },
+    [posts, replace, account],
+  )
 
   // Which post's conversation is open, or null. One at a time: several open
   // threads turn a feed into a wall with no shape to it.
@@ -232,6 +293,13 @@ export default function FeedPanel({
             onQuote={!author || ownProfile ? onQuote : undefined}
             onOpenPost={onOpenPost}
             onEdited={replace}
+            /*
+             * Muting, offered on everybody else's posts. Absent when signed
+             * out, because the list is stored per account - `toggle` is null
+             * then, and the control simply is not drawn.
+             */
+            onMute={mutes.toggle ? (address) => mutes.toggle(address, true) : undefined}
+            onToggleHide={isModeratorView ? onToggleHide : undefined}
           />
 
           {openThread === post.id && (
@@ -240,6 +308,10 @@ export default function FeedPanel({
               isModerator={isModerator}
               onOpenProfile={onOpenProfile}
               onOpenPost={onOpenPost}
+              onMute={mutes.toggle ? (address) => mutes.toggle(address, true) : undefined}
+              /* No `onToggleHide`: the thread owns one, because it owns the
+                 list a hidden reply is in. This component's handler replaces a
+                 post in the feed, and a reply is not in the feed. */
             />
           )}
           </div>

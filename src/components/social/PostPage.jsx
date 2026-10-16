@@ -7,6 +7,8 @@ import { usePostActions } from '../../hooks/usePostActions'
 import { usePostReactions } from '../../hooks/usePostReactions'
 import { useBookmarks } from '../../hooks/useBookmarks'
 import { useIsModerator } from '../../hooks/useIsModerator'
+import { useMutes } from '../../hooks/useMutes'
+import { setPostHidden } from '../../services/moderation'
 import { useSiweAuth } from '../../context/SiweAuthContext'
 
 /**
@@ -30,6 +32,41 @@ import { useSiweAuth } from '../../context/SiweAuthContext'
 export default function PostPage({ id, onOpenProfile, onOpenPost }) {
   const { account } = useSiweAuth()
   const isModerator = useIsModerator()
+  const mutes = useMutes()
+
+  /*
+   * Hiding, offered here because this is where the report queue's "Open it"
+   * lands - a moderator reading the post they are deciding about should be
+   * able to act on it without going back.
+   *
+   * The post is replaced in place rather than refetched, which this page can
+   * do because it holds exactly one.
+   */
+  const onToggleHide = async (id, on) => {
+    try {
+      await setPostHidden({ id, on })
+      setPost((current) =>
+        current && current.id === id
+          ? {
+              ...current,
+              hiddenAt: on ? new Date().toISOString() : null,
+              /*
+               * `account` rather than the lowercased `mine`, which is declared
+               * further down this component past an early return. Reading it
+               * from here would work - this closure only runs after a click -
+               * and is the exact shape that once threw "cannot access before
+               * initialization" in RoomPanel.jsx, past lint, the suite and the
+               * build. Lowercased here instead.
+               */
+              hiddenBy: on ? account?.toLowerCase() || null : null,
+            }
+          : current,
+      )
+    } catch {
+      // Left as it was. The panel at /moderation reports failures properly,
+      // and that is where somebody doing this deliberately is working.
+    }
+  }
 
   const [post, setPost] = useState(null)
   const [status, setStatus] = useState('loading')
@@ -137,6 +174,8 @@ export default function PostPage({ id, onOpenProfile, onOpenPost }) {
           /* Edited in place: this page holds the one post, so it replaces it
              rather than merging into a list. */
           onEdited={setPost}
+          onMute={mutes.toggle ? (address) => mutes.toggle(address, true) : undefined}
+          onToggleHide={isModerator ? onToggleHide : undefined}
         />
 
         <PostThread
@@ -144,6 +183,10 @@ export default function PostPage({ id, onOpenProfile, onOpenPost }) {
           isModerator={isModerator}
           onOpenProfile={onOpenProfile}
           onOpenPost={onOpenPost}
+          onMute={mutes.toggle ? (address) => mutes.toggle(address, true) : undefined}
+          /* No `onToggleHide`, for the same reason as in the feed: this page's
+             handler replaces the one post it holds, and a reply is not that
+             post. The thread owns its own. */
         />
       </div>
     </div>

@@ -27,6 +27,18 @@ const PATHS = {
   '/me': 'profile',
   '/discover': 'discover',
   '/notifications': 'notifications',
+  /*
+   * The moderation surface. A path rather than a tab in the shell, because a
+   * moderator reading a report needs to be able to send somebody else the
+   * link - and because the shell draws tabs for everybody, which this is not.
+   *
+   * It is listed here for all readers and not only moderators. Nothing is
+   * gained by making the path itself a secret: what it draws comes from two
+   * endpoints that answer 404 to anybody else, so a stranger who guesses the
+   * URL gets an empty panel saying so. Treating the path as the control would
+   * be the thing worth avoiding.
+   */
+  '/moderation': 'moderation',
 }
 
 /** `/r`, `/r/lounge`, `/r/group-whales`, `/r/token-0x...` */
