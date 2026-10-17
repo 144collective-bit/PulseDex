@@ -102,3 +102,38 @@ export async function fetchActiveProfiles({ limit = 20, sample = 120 } = {}) {
   const byAddress = new Map((data || []).map((row) => [row.address, toProfile(row)]))
   return addresses.map((address) => byAddress.get(address)).filter(Boolean)
 }
+
+/**
+ * These accounts' profiles, by address.
+ *
+ * Extracted from `fetchActiveProfiles`, which was doing it inline, because
+ * follow suggestions need the same thing from a different starting point: that
+ * one has recent posters and this one has scored candidates, and both end with
+ * "now fetch the profiles for these addresses and keep my order".
+ *
+ * The order is restored on the way out. `in` returns rows in whatever order
+ * the database finds them, so a caller that had ranked its addresses would
+ * otherwise get a list in no particular order and nobody would be able to say
+ * why it was wrong. The same bug `fetchActiveProfiles` already guards against.
+ *
+ * @param {string[]} addresses
+ * @returns {Promise<object[]>} profiles, in the order asked for, missing rows
+ *   dropped rather than filled in
+ */
+export async function fetchProfilesByAddress(addresses) {
+  const wanted = [
+    ...new Set((addresses || []).filter(Boolean).map((a) => a.toLowerCase())),
+  ].slice(0, 100)
+
+  if (!hasSupabase || wanted.length === 0) return []
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select(PROFILE_FIELDS)
+    .in('address', wanted)
+
+  if (error) throw dbError(error, 'load profiles')
+
+  const byAddress = new Map((data || []).map((row) => [row.address, toProfile(row)]))
+  return wanted.map((address) => byAddress.get(address)).filter(Boolean)
+}

@@ -91,6 +91,14 @@ export default function PublicFeed({ onOpenProfile, onOpenPost }) {
           authors={active === 'following' ? following : null}
           onOpenProfile={onOpenProfile}
           onOpenPost={onOpenPost}
+          /*
+           * Only "For you" may be ranked.
+           *
+           * "Following" stays in time order on purpose: somebody who chose who
+           * to follow has already done the ranking, and reordering it
+           * overrides the one explicit instruction they gave this feed.
+           */
+          rankable={active === 'for-you'}
         />
       )}
     </div>

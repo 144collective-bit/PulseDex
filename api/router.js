@@ -7,6 +7,7 @@ import follows from './_routes/follows.js'
 import notifications from './_routes/notifications.js'
 import health from './_routes/health.js'
 import linksPreview from './_routes/links/preview.js'
+import meAffinity from './_routes/me/affinity.js'
 import meLimits from './_routes/me/limits.js'
 import moderationHide from './_routes/moderation/hide.js'
 import moderationLog from './_routes/moderation/log.js'
@@ -76,6 +77,7 @@ const ROUTES = {
   follows,
   health,
   'links/preview': linksPreview,
+  'me/affinity': meAffinity,
   'me/limits': meLimits,
   'moderation/hide': moderationHide,
   'moderation/log': moderationLog,

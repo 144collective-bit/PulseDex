@@ -5,6 +5,7 @@ import {
   Compass,
   LogIn,
   MessageSquare,
+  Flame,
   MessagesSquare,
   Rss,
   ShieldAlert,
@@ -21,14 +22,15 @@ import PostPage from './social/PostPage'
 import ShareButton from './social/ShareButton'
 import RoomAdmin from './social/RoomAdmin'
 import ModerationPanel from './social/ModerationPanel'
+import TrendingPanel from './social/TrendingPanel'
 import { useSiweAuth } from '../context/SiweAuthContext'
 import { useRoomUnread } from '../hooks/useRoomUnread'
 import { useGroups } from '../hooks/useGroups'
-import { DEFAULT_ROOM, findRoom, isGroupRoom, roomToken, tokenRoomLabel } from '../config/rooms'
+import { DEFAULT_ROOM, findRoom, isGroupRoom, roomToken, tokenRoom, tokenRoomLabel } from '../config/rooms'
 import '../styles/social.css'
 
 /**
- * The social section: three places to go, and two surfaces that are about you.
+ * The social section: four places to go, and the surfaces that are about you.
  *
  * It was five tabs, which was two too many and the wrong two. Your own
  * profile and your own inbox are not places to browse - they are things you
@@ -36,18 +38,20 @@ import '../styles/social.css'
  * on. Leaving them in the row made the row an account screen with a feed
  * attached.
  *
- * So the tabs are the three that are about the site: the feed, the rooms, and
- * finding people. Your profile is in the account menu. The unread count is a
+ * So the tabs are the ones that are about the site rather than about you: the
+ * feed, the rooms, finding people, and what is trading unusually fast. That
+ * was three until Batch 6 added Trending, and the test the row has to pass is
+ * not a count - it is whether a tab is about the site or about you. Your profile is in the account menu. The unread count is a
  * bell beside it, visible from the screener rather than only once you are
  * already here - which was the whole problem with it being a badge on a
  * sub-tab.
  *
  * Both of those surfaces still exist and still have URLs, at /me and
  * /notifications. They render here without a tab selected, which is honest:
- * you are in the section, on something that is not one of the three.
+ * you are in the section, on something that is not in the row.
  */
-/** The three the row offers. Ordered outward: everything, then the rooms,
- *  then the people you have not met. */
+/** What the row offers. Ordered outward: everything, then the rooms, then the
+ *  people you have not met, then the market. */
 const TABS = [
   {
     id: 'feed',
@@ -66,6 +70,21 @@ const TABS = [
     name: 'Discover',
     icon: Compass,
     lede: 'Find people worth following.',
+  },
+  /*
+   * Trending, in the row rather than hidden behind a link, and last.
+   *
+   * In the row because it is about the site rather than about you, which is
+   * what the three above have in common. Last because it is the only one that
+   * is about tokens rather than people - somebody in the social section is
+   * usually here for the people, and this is the door back out to what is
+   * moving.
+   */
+  {
+    id: 'trending',
+    name: 'Trending',
+    icon: Flame,
+    lede: 'Pairs running above their own normal rate, and whether anybody is discussing them.',
   },
 ]
 
@@ -113,7 +132,7 @@ const SURFACES = {
   },
 }
 
-export default function SocialView({ route, onNavigate, onOpenProfile, onOpenToken }) {
+export default function SocialView({ route, onNavigate, onOpenProfile, onOpenToken, pairs }) {
   /*
    * Opening one post from inside the section.
    *
@@ -197,7 +216,7 @@ export default function SocialView({ route, onNavigate, onOpenProfile, onOpenTok
   )
 
   /*
-   * What is on screen, whether or not it is one of the three.
+   * What is on screen, whether or not it is in the row.
    *
    * `TABS` first, then the two that are reached from the chrome, then the
    * feed - which is where the section opens and what an unrecognised route
@@ -321,6 +340,27 @@ export default function SocialView({ route, onNavigate, onOpenProfile, onOpenTok
 
       {tab === 'notifications' && (
         <NotificationsPanel onOpenProfile={onOpenProfile} onOpen={onNavigate} />
+      )}
+
+      {tab === 'trending' && (
+        <TrendingPanel
+          pairs={pairs}
+          onOpenToken={onOpenToken}
+          /*
+           * A token's room, by the same slug the screener uses for it, so a
+           * press here lands exactly where pressing through from the token
+           * page would.
+           *
+           * The null check is `tokenRoom`'s: it returns null for anything that
+           * is not an address, and navigating to `room: null` would put
+           * somebody in the default room with no explanation. The same guard
+           * `openTokenRoom` in App.jsx applies.
+           */
+          onOpenRoom={(address) => {
+            const slug = tokenRoom(address)
+            if (slug) onNavigate?.({ tab: 'rooms', room: slug })
+          }}
+        />
       )}
 
       {tab === 'moderation' && (

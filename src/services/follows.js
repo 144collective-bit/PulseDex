@@ -141,3 +141,60 @@ export async function fetchFollowingAmong(follower, addresses) {
   if (error) return new Set()
   return new Set((data || []).map((row) => row.followee))
 }
+
+/**
+ * Who the people this reader follows also follow.
+ *
+ * The follow graph one step out, as a count per candidate: how many of the
+ * reader's followees follow each account. `followSuggestions` treats it as the
+ * weaker of its two signals and caps it, and the cap is the point - this is
+ * the signal that in aggregate turns a young network into a clique around
+ * whoever arrived first.
+ *
+ * One query rather than one per followee. Somebody following forty accounts
+ * would otherwise be forty round trips before a single suggestion could be
+ * drawn, on a browser that runs six at a time.
+ *
+ * The reader's own followees are bounded first. The query is an `in` over
+ * them, so it is their list that sets the URL length rather than the result -
+ * and a request too long to send fails as a network error, which would read
+ * as the database being down. Somebody following more than a hundred accounts
+ * gets suggestions from a hundred of them, which is plenty to find a pattern.
+ *
+ * Counts only, never the pairs. Who follows whom is public here, so returning
+ * the pairs would leak nothing - but a suggestion that names which of your
+ * friends follow somebody is social pressure rather than information, and the
+ * interface is better off without the option.
+ *
+ * @param {string[]|Set<string>} followees the reader's own following list
+ * @returns {Promise<Map<string, number>>} candidate address to shared count
+ */
+export async function fetchFollowOverlap(followees) {
+  const from = [...new Set([...(followees || [])].filter(Boolean).map((a) => a.toLowerCase()))]
+  if (!hasSupabase || from.length === 0) return new Map()
+
+  const { data, error } = await supabase
+    .from('follows')
+    .select('followee')
+    .in('follower', from.slice(0, 100))
+    /*
+     * Bounded, because this is a fan-out: a hundred followees each following a
+     * hundred accounts is ten thousand rows to count client-side. Two thousand
+     * is more than enough to find the handful that several of them share.
+     */
+    .limit(2000)
+
+  // An empty map rather than a throw. This is the weaker of two suggestion
+  // signals; losing it leaves the stronger one, which is the reader's own
+  // behaviour and needs no graph at all.
+  if (error) return new Map()
+
+  const counts = new Map()
+  for (const row of data || []) {
+    const address = row.followee
+    if (!address) continue
+    counts.set(address, (counts.get(address) || 0) + 1)
+  }
+
+  return counts
+}

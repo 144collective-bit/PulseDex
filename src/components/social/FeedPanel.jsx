@@ -11,6 +11,7 @@ import { usePostActions } from '../../hooks/usePostActions'
 import { usePostReactions } from '../../hooks/usePostReactions'
 import { useBookmarks } from '../../hooks/useBookmarks'
 import { useMutes } from '../../hooks/useMutes'
+import { useFeedRanking } from '../../hooks/useFeedRanking'
 import { setPostHidden } from '../../services/moderation'
 
 /**
@@ -42,6 +43,18 @@ export default function FeedPanel({
   /** Whether this list offers a Media filter. Only a profile's Media tab
    *  passes it; the main feed shows everything. */
   media = false,
+  /*
+   * Whether this list may be ranked rather than put in time order.
+   *
+   * Only "For you" passes it. A profile is a record of what one account wrote
+   * and has to be in the order they wrote it - ranking somebody's own page by
+   * what the reader engaged with would make their timeline a different shape
+   * for every visitor, which is not a profile. "Following" is deliberately
+   * left chronological too: somebody who went to the trouble of choosing who
+   * to follow has already done the ranking, and reordering it is overriding
+   * the one explicit instruction they gave.
+   */
+  rankable = false,
 }) {
   const { account } = useSiweAuth()
   const isModerator = useIsModerator()
@@ -177,7 +190,16 @@ export default function FeedPanel({
    * somebody's pinned post is still an ordinary post there, because there is
    * nothing on that page for it to be pinned to.
    */
-  const shownPosts = pinnedPostId ? posts.filter((post) => post.id !== pinnedPostId) : posts
+  const withoutPinned = pinnedPostId ? posts.filter((post) => post.id !== pinnedPostId) : posts
+
+  /*
+   * The order, which only "For you" lets out of time order.
+   *
+   * Applied after the pinned post is removed rather than before, so the pin
+   * cannot be scored and re-inserted into a list it is already drawn above.
+   */
+  const ranking = useFeedRanking(rankable ? withoutPinned : null)
+  const shownPosts = rankable ? ranking.posts || withoutPinned : withoutPinned
 
   /*
    * Reply counts for whatever is on screen.
@@ -243,6 +265,51 @@ export default function FeedPanel({
         </p>
       )}
 
+      {/*
+        The order, and the way out of it.
+
+        Drawn only where ranking is possible and only for somebody signed in -
+        there is nothing to rank on otherwise, and a control that cannot change
+        anything is a control that lies about what the feed is doing.
+
+        This is the part that makes ranking defensible on this site rather than
+        merely conventional: the order decides which claims about money get
+        read first, and a reader who cannot refuse it has to take it on trust.
+        So the switch says plainly which order it is in, and the choice is
+        remembered.
+      */}
+      {rankable && ranking.canRank && (
+        <div className="feed-order">
+          {/*
+            The label and the button read the PREFERENCE, not whether ranking
+            is currently doing anything. Those differ for a moment on every
+            cold load while the reading history arrives, and a control that
+            described the transient state instead of the setting did nothing
+            when pressed during it.
+          */}
+          <span className="feed-order-label">
+            {ranking.prefers ? 'Ranked for you' : 'Newest first'}
+          </span>
+          <button
+            type="button"
+            className="feed-order-switch"
+            onClick={() => ranking.choose(!ranking.prefers)}
+          >
+            {ranking.prefers ? 'Show newest first' : 'Rank for me'}
+          </button>
+          {/* The method, only once ranking is actually in effect: describing
+              how the order is computed while the feed is still in time order
+              would be explaining something that has not happened. */}
+          {ranking.ranked && (
+            <p className="feed-order-note">
+              Posts from accounts you read come first, then posts established
+              accounts engaged with. Recency outweighs both. Nothing is hidden —
+              this only changes the order.
+            </p>
+          )}
+        </div>
+      )}
+
       {shownPosts.length === 0 ? (
         /*
          * Nothing to say when the only post is the one pinned above. An
@@ -300,6 +367,9 @@ export default function FeedPanel({
              */
             onMute={mutes.toggle ? (address) => mutes.toggle(address, true) : undefined}
             onToggleHide={isModeratorView ? onToggleHide : undefined}
+            /* Why this post is here, when something other than time put it
+               there. Null for most posts, and the card draws nothing. */
+            rankReason={post.rank?.reason || null}
           />
 
           {openThread === post.id && (

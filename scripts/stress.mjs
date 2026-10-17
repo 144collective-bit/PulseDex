@@ -34,6 +34,17 @@ const browser = await chromium.launch({
   args: ['--no-sandbox'],
 })
 
+/*
+ * The tabs the social row offers, in order.
+ *
+ * Named here because two scenarios assert against it and both went stale the
+ * day Trending shipped - they checked a magic 3. The rule each of them is
+ * really about survived the change (the row is the surfaces that are about the
+ * site; the inbox and your own profile are not in it), so the list is stated
+ * once and the next tab updates one place.
+ */
+const SOCIAL_TABS = ['Feed', 'Rooms', 'Discover', 'Trending']
+
 const ADDRESS = '0x1111111111111111111111111111111111111111'
 const DESKTOP = { width: 1440, height: 900 }
 const PHONE = { width: 390, height: 844 }
@@ -612,6 +623,43 @@ const FIXTURES = {
     return FIXTURES.healthy(table)
   },
   /*
+   * Somebody worth suggesting: a profile row for FRIEND, and an empty follow
+   * graph.
+   *
+   * Both halves are needed and neither is obvious. `healthy` answers every
+   * `follows` query with an edge whose follower is FRIEND, so
+   * `fetchFollowing` reports that the reader already follows them - and an
+   * already-followed account is correctly never suggested. And `healthy`'s
+   * `profiles` returns ADDRESS, so a candidate of FRIEND has no profile row
+   * and is dropped, which is also correct: a card with nothing on it but an
+   * address and a Follow button is a worse suggestion than one fewer.
+   *
+   * So this fixture is the only state in which a suggestion can legitimately
+   * appear. Getting there took two corrections, both of them the code being
+   * right and the fixture being wrong.
+   */
+  suggestable: (table) => {
+    if (table === 'profiles')
+      return [
+        {
+          ...NASTY_PROFILE,
+          address: FRIEND,
+          handle: 'whale',
+          bio: 'buys dips',
+          links: [],
+          created_at: '2026-01-01T00:00:00Z',
+          pinned_post_id: null,
+          first_seen_at: '2021-06-01T00:00:00Z',
+          show_holdings: false,
+        },
+      ]
+    // Nobody followed, so a candidate is not excluded for being followed
+    // already - and so the overlap signal contributes nothing, which leaves
+    // the reader's own behaviour as the only thing being tested.
+    if (table === 'follows') return []
+    return FIXTURES.healthy(table)
+  },
+  /*
    * A post by somebody other than the reader.
    *
    * Needed because every other fixture's posts are written by ADDRESS, which
@@ -746,7 +794,44 @@ async function wire(page, {
    * open would be a worse outcome than a missing line.
    */
   limitsDown = false,
+  /*
+   * What this reader's history says they read.
+   *
+   * Empty by default, so every scenario that does not ask for it is checking
+   * the feed an account with no history gets - which is chronological, and is
+   * the view it would be easiest to stop testing by making this populated
+   * everywhere.
+   */
+  affinity = null,
+  /*
+   * Whether the feed starts ranked.
+   *
+   * The hook reads this from localStorage during its first render, so a
+   * scenario cannot press the switch before the first paint - it has to be
+   * seeded. Null leaves storage alone, which is the first-visit state.
+   */
+  feedOrder = null,
 } = {}) {
+  /*
+   * Seed the reader's choice of feed order before anything runs.
+   *
+   * `useFeedRanking` reads localStorage synchronously during its first render -
+   * deliberately, so the feed does not draw in one order and reorder itself a
+   * frame later - which means a scenario cannot press the switch before the
+   * first paint. `addInitScript` runs before the page's own scripts on every
+   * navigation, which is the only point early enough.
+   */
+  if (feedOrder) {
+    await page.addInitScript((order) => {
+      try {
+        window.localStorage.setItem('pulsedex:feed-order', order)
+      } catch {
+        // A browser refusing storage is the hook's own fallback path, which
+        // defaults to ranked. Nothing to do here.
+      }
+    }, feedOrder)
+  }
+
   // Nothing leaves localhost, so the run says the same thing everywhere.
   await page.route('**/*', (route) =>
     route.request().url().startsWith(BASE) ? route.continue() : route.abort()
@@ -870,6 +955,27 @@ async function wire(page, {
    * window partway through the matrix, and a fixture whose validity expires
    * mid-run is a flake that looks like a bug.
    */
+  /*
+   * The reader's own reading history, which "For you" is ranked on.
+   *
+   * Read through an endpoint rather than from the database because part of it
+   * is `post_bookmarks`, which has no read policy for any browser-facing role
+   * - so a mock of the endpoint is the only way to fixture affinity at all.
+   *
+   * 200 with empty lists when a scenario asks for nothing, which is what the
+   * real route answers a signed-out reader: it is an answer rather than an
+   * error, and the feed asks before it knows whether anybody is signed in.
+   */
+  await page.route('**/api/me/affinity**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        affinity || { follows: [], bookmarked: [], replied: [], reacted: [] },
+      ),
+    }),
+  )
+
   await page.route('**/api/me/limits**', (route) =>
     limitsDown
       ? route.fulfill({ status: 503, contentType: 'application/json', body: '{"error":"Your limits could not be loaded."}' })
@@ -2826,12 +2932,12 @@ for (const [path, expected] of CHROME_SURFACES) {
       if (title !== expected) throw new Error(`the header says "${title}"`)
 
       if (await page.locator('.social-tabs .xp-tab.active').count()) {
-        throw new Error('a tab is selected on a surface that is not one of the three')
+        throw new Error('a tab is selected on a surface that is not in the row')
       }
 
       // The row stays so there is a way back in. Without it, somebody on
       // their own inbox has only the browser's Back button.
-      if ((await page.locator('.social-tabs .xp-tab').count()) !== 3) {
+      if ((await page.locator('.social-tabs .xp-tab').count()) !== SOCIAL_TABS.length) {
         throw new Error('the tab row is missing or the wrong size')
       }
     },
@@ -2945,13 +3051,31 @@ await run('chrome / no bell when signed out', {
   },
 })
 
-await run('chat / the row is three, and none of them is the inbox', {
+/*
+ * The row is the surfaces that are about the site, and nothing that is about
+ * you.
+ *
+ * This asserted a count of three until Trending shipped, which is the second
+ * time a tab-count assertion in this file has gone stale - the first was
+ * Batch 2's "exactly two tabs" on a profile, which Batch 3 broke by adding
+ * Media and Reacted. Edited rather than deleted both times: what the scenario
+ * is for is that the inbox and your own profile stay OUT of the row, and that
+ * no unread badge lives on a sub-tab. Neither of those changed.
+ */
+await run('chat / the row is the site, and none of it is the inbox', {
   steps: async (page) => {
     await socialTab('Rooms')(page)
 
     const names = (await page.locator('.social-tabs .xp-tab').allInnerTexts()).map((n) => n.trim())
-    if (names.length !== 3) throw new Error(`the row has ${names.length} tabs: ${names.join('/')}`)
-    if (names.join('|') !== 'Feed|Rooms|Discover') throw new Error(names.join('|'))
+    if (names.join('|') !== SOCIAL_TABS.join('|')) {
+      throw new Error(`the row is ${names.join('/')}, expected ${SOCIAL_TABS.join('/')}`)
+    }
+
+    // The two that are about you are reached from the chrome and by URL, and
+    // must not appear here - that was the whole point of taking them out.
+    for (const absent of ['Notifications', 'My Profile', 'Moderation']) {
+      if (names.includes(absent)) throw new Error(`${absent} is back in the row`)
+    }
 
     // The badge moved to the chrome. One left behind here would mean two
     // places claiming to be the count, which is how they drift apart.
@@ -4096,6 +4220,293 @@ await run('direct / a hidden post’s own page withholds it rather than 404ing',
     }
     if (!/hidden/i.test(text)) {
       throw new Error(`the post page says nothing about the post being withheld - ${JSON.stringify(text.replace(/\s+/g, ' ').slice(0, 220))}`)
+    }
+  },
+})
+
+/* ----------------------------------------------------- feed quality -- */
+
+/*
+ * Batch 6. The order of the feed, suggestions from behaviour, and trending.
+ *
+ * The scenarios that matter here are the ones about what the ranking must NOT
+ * do: show up for somebody signed out, refuse to be turned off, or claim a
+ * reason it cannot support. A ranked feed on a site about which tokens to buy
+ * decides which claims about money get read first, so "it can be refused" is
+ * as much a requirement as "it ranks".
+ */
+
+await run('feed / is in time order for somebody with no history', {
+  path: '/feed',
+  fixture: 'richPosts',
+  steps: async (page) => {
+    await page.waitForSelector('.feed-post', { timeout: 8000 })
+    await page.waitForTimeout(900)
+
+    /*
+     * The switch is offered - they are signed in - but nothing claims to have
+     * ranked anything, because with no affinity there is nothing to rank on
+     * and the hook reports itself as not ranked.
+     */
+    const why = await page.locator('.feed-post-why').count()
+    if (why > 0) {
+      throw new Error('a reader with no history was given reasons for the order')
+    }
+  },
+})
+
+await run('feed / offers no ranking at all to somebody signed out', {
+  path: '/feed',
+  fixture: 'richPosts',
+  signedIn: false,
+  steps: async (page) => {
+    await page.waitForTimeout(1600)
+
+    /*
+     * Not merely "the switch is off" - absent. Affinity is the primary signal
+     * and a signed-out reader has none, so what would be left is engagement
+     * and recency: a feed ordered by what strangers reacted to, which is the
+     * pump amplifier the whole design exists to avoid.
+     */
+    const order = await page.locator('.feed-order').count()
+    if (order > 0) {
+      throw new Error('a signed-out reader was offered a ranking with nothing to rank on')
+    }
+  },
+})
+
+/*
+ * Ranked, with a history that names the author of one of the fixture's posts.
+ *
+ * `strangerPosts` is written by FRIEND, so affinity naming FRIEND is a reader
+ * who reads that account - which is the signal, and the one thing that cannot
+ * be bought.
+ */
+await run('feed / says why a post is where it is, when something put it there', {
+  path: '/feed',
+  fixture: 'strangerPosts',
+  affinity: { follows: [FRIEND], bookmarked: [], replied: [], reacted: [] },
+  steps: async (page) => {
+    await page.waitForSelector('.feed-post', { timeout: 8000 })
+    await page.waitForTimeout(1200)
+
+    const why = await page.locator('.feed-post-why').first().innerText()
+    if (!/somebody you read/i.test(why)) {
+      throw new Error(`no reason given for a ranked post - ${JSON.stringify(why)}`)
+    }
+
+    // And it never names who engaged: a ranked feed must not become a way of
+    // working out who is reading whom.
+    if (/0x/i.test(why)) throw new Error(`the reason names an address - ${JSON.stringify(why)}`)
+  },
+})
+
+/*
+ * The requirement that makes ranking defensible here rather than merely
+ * conventional: it can be refused, in one press, and the choice is kept.
+ */
+await run('feed / can be put back into time order, and remembers that', {
+  path: '/feed',
+  fixture: 'strangerPosts',
+  affinity: { follows: [FRIEND], bookmarked: [], replied: [], reacted: [] },
+  steps: async (page) => {
+    await page.waitForSelector('.feed-order', { timeout: 8000 })
+    await page.waitForTimeout(1200)
+
+    const label = await page.locator('.feed-order-label').innerText()
+    if (!/ranked/i.test(label)) {
+      throw new Error(`the feed did not start ranked - ${JSON.stringify(label)}`)
+    }
+
+    await page.locator('.feed-order-switch').click()
+    await page.waitForTimeout(700)
+
+    const after = await page.locator('.feed-order-label').innerText()
+    if (!/newest/i.test(after)) {
+      throw new Error(`pressing the switch did not change the order - ${JSON.stringify(after)}`)
+    }
+
+    // The reasons go with it: in time order nothing other than time put a post
+    // anywhere, so a label would be a claim the feed is no longer making.
+    const why = await page.locator('.feed-post-why').count()
+    if (why > 0) throw new Error('a chronological feed still explained its order')
+
+    // And the choice survives a reload, which is what makes it a preference
+    // rather than a gesture.
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await page.waitForSelector('.feed-order', { timeout: 8000 })
+    await page.waitForTimeout(900)
+
+    const kept = await page.locator('.feed-order-label').innerText()
+    if (!/newest/i.test(kept)) {
+      throw new Error(`the choice was not remembered - ${JSON.stringify(kept)}`)
+    }
+  },
+})
+
+// Seeded the other way: somebody who chose time order last week does not get
+// silently re-ranked on their next visit.
+await run('feed / honours a stored choice of time order on a cold load', {
+  path: '/feed',
+  fixture: 'strangerPosts',
+  affinity: { follows: [FRIEND], bookmarked: [], replied: [], reacted: [] },
+  feedOrder: 'time',
+  steps: async (page) => {
+    await page.waitForSelector('.feed-order', { timeout: 8000 })
+    await page.waitForTimeout(1000)
+
+    const label = await page.locator('.feed-order-label').innerText()
+    if (!/newest/i.test(label)) {
+      throw new Error(`a stored preference was ignored - ${JSON.stringify(label)}`)
+    }
+  },
+})
+
+/*
+ * "Following" is deliberately never ranked: somebody who chose who to follow
+ * has already done the ranking, and reordering it overrides the one explicit
+ * instruction they gave this feed.
+ */
+await run('feed / the Following tab is not reordered', {
+  path: '/feed',
+  fixture: 'strangerPosts',
+  affinity: { follows: [FRIEND], bookmarked: [], replied: [], reacted: [] },
+  steps: async (page) => {
+    await page.locator('.xp-tab', { hasText: /following/i }).click()
+    await page.waitForTimeout(1600)
+
+    const order = await page.locator('.feed-order').count()
+    if (order > 0) throw new Error('the Following tab offered to reorder itself')
+  },
+})
+
+/*
+ * A profile is a record of what one account wrote and has to be in the order
+ * they wrote it. Ranking somebody's own page by what the reader engaged with
+ * would make their timeline a different shape for every visitor.
+ */
+await run('profile / a page is never reordered for the person reading it', {
+  path: `/u/${ADDRESS}`,
+  fixture: 'richPosts',
+  affinity: { follows: [ADDRESS], bookmarked: [ADDRESS], replied: [], reacted: [] },
+  steps: async (page) => {
+    await page.waitForSelector('.feed-post', { timeout: 8000 })
+
+    if ((await page.locator('.feed-order').count()) > 0) {
+      throw new Error('a profile offered to reorder itself')
+    }
+    if ((await page.locator('.feed-post-why').count()) > 0) {
+      throw new Error('a profile explained an order it is not in')
+    }
+  },
+})
+
+/* ---- suggestions from behaviour ---- */
+
+await run('discover / suggests somebody the reader read and never followed', {
+  path: '/discover',
+  fixture: 'suggestable',
+  affinity: { follows: [], bookmarked: [], replied: [], reacted: [FRIEND] },
+  steps: async (page) => {
+    await page.waitForTimeout(1800)
+
+    const text = await page.locator('main').innerText()
+    if (!/because of what you read/i.test(text)) {
+      throw new Error(`no behaviour-based suggestions - ${JSON.stringify(text.replace(/\s+/g, ' ').slice(0, 240))}`)
+    }
+
+    // A suggestion that cannot say why is one nobody should act on - the
+    // opposite call from a ranked post, where time explains most of them.
+    if (!/reacted to their posts/i.test(text)) {
+      throw new Error('a suggestion was made with no reason attached')
+    }
+  },
+})
+
+await run('discover / suggests nothing to somebody with no history', {
+  path: '/discover',
+  fixture: 'healthy',
+  steps: async (page) => {
+    await page.waitForTimeout(1800)
+
+    const text = await page.locator('main').innerText()
+    if (/because of what you read/i.test(text)) {
+      throw new Error('suggestions were invented for a reader with no history')
+    }
+
+    /*
+     * And the list of who is here is still there, which is what a new account
+     * actually needs - see src/services/discover.js, which argues recency over
+     * popularity on a site this young.
+     */
+    if (!/recently active/i.test(text)) {
+      throw new Error('the discovery list disappeared behind the suggestions')
+    }
+  },
+})
+
+/*
+ * The exclusion that matters most. Suggesting an account somebody deliberately
+ * silenced tells them the mute did not take - and a mute is the one thing the
+ * reader has said unambiguously.
+ */
+await run('discover / never suggests somebody the reader muted', {
+  path: '/discover',
+  fixture: 'suggestable',
+  affinity: { follows: [], bookmarked: [FRIEND], replied: [FRIEND], reacted: [FRIEND] },
+  muted: [FRIEND],
+  steps: async (page) => {
+    await page.waitForTimeout(1800)
+
+    const text = await page.locator('main').innerText()
+    if (/because of what you read/i.test(text)) {
+      throw new Error('a muted account was suggested as somebody to follow')
+    }
+  },
+})
+
+/* ---- trending ---- */
+
+await run('trending / says what it measures, on the surface', {
+  path: '/trending',
+  fixture: 'healthy',
+  steps: async (page) => {
+    await page.waitForSelector('.trending-panel', { timeout: 8000 })
+
+    const text = await page.locator('.trending-panel').innerText()
+
+    /*
+     * The method, in words, above the list. The whole defensibility of a list
+     * like this on a site about which tokens to buy is that a reader can tell
+     * what put something in front of them.
+     */
+    if (!/daily average/i.test(text)) {
+      throw new Error(`trending does not say what it measures - ${JSON.stringify(text.replace(/\s+/g, ' ').slice(0, 240))}`)
+    }
+
+    // And says plainly that posting cannot move it, which is the difference
+    // between this and a pump button.
+    if (!/posting about a token does not/i.test(text)) {
+      throw new Error('trending does not say that posting cannot move it')
+    }
+  },
+})
+
+/*
+ * Nothing qualifying is a real answer about the market and must not look like
+ * a broken surface. The harness aborts every outbound request, so the screener
+ * has no pairs unless a scenario fixtures them - which makes this the ordinary
+ * case here.
+ */
+await run('trending / says nothing is running fast rather than drawing nothing', {
+  path: '/trending',
+  fixture: 'healthy',
+  steps: async (page) => {
+    await page.waitForSelector('.trending-panel', { timeout: 8000 })
+
+    const text = await page.locator('.trending-panel').innerText()
+    if (!/nothing is trading unusually fast/i.test(text)) {
+      throw new Error(`an empty trending list says nothing - ${JSON.stringify(text.replace(/\s+/g, ' ').slice(0, 200))}`)
     }
   },
 })

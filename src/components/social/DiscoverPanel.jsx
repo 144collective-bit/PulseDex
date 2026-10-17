@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Loader2, Search, Users } from 'lucide-react'
+import { AlertTriangle, Loader2, Search, Sparkles, Users } from 'lucide-react'
 import PersonCard from './PersonCard'
 import { searchProfiles, fetchActiveProfiles } from '../../services/discover'
+import { useFollowSuggestions } from '../../hooks/useFollowSuggestions'
 import { useFollowSet } from '../../hooks/useFollowSet'
 
 /**
@@ -112,6 +113,8 @@ export default function DiscoverPanel({ onOpenProfile, initialTerm = null, onUse
     }
   }, [initialTerm, onUsedInitialTerm])
 
+  const { suggestions } = useFollowSuggestions()
+
   return (
     <div className="discover">
       <form className="discover-search" onSubmit={search}>
@@ -170,6 +173,45 @@ export default function DiscoverPanel({ onOpenProfile, initialTerm = null, onUse
           )}
         </section>
       ) : (
+        <>
+        {/*
+          Suggestions from what this reader has actually done, above the list
+          of who is here.
+
+          Above, because it is the better answer when there is one - somebody
+          whose posts you reacted to and never followed is a fact about you
+          rather than a guess. And absent entirely rather than padded when
+          there is nothing: a reader with no history gets no suggestions and
+          the list below, which is what a new account needs. See
+          src/services/discover.js, which argues that recency beats popularity
+          on a site this young, and src/utils/followSuggestions.js, which
+          reads no popularity signal at all for the same reason.
+        */}
+        {suggestions.length > 0 && (
+          <section className="discover-section">
+            <h2 className="discover-title font-mono">
+              <Sparkles size={12} />
+              Because of what you read
+            </h2>
+
+            {suggestions.map(({ address, profile, reason }) => (
+              <PersonCard
+                key={address}
+                profile={profile}
+                onOpenProfile={onOpenProfile}
+                following={follow.isFollowing(address)}
+                canFollow={follow.canFollow(address)}
+                busy={follow.isBusy(address)}
+                onToggle={follow.toggle}
+                /* Why this person, in words. A suggestion that cannot say why
+                   is one nobody should act on - which is the opposite call
+                   from a ranked post, where time explains most of them. */
+                note={reason}
+              />
+            ))}
+          </section>
+        )}
+
         <section className="discover-section">
           <h2 className="discover-title font-mono">
             <Users size={12} />
@@ -209,6 +251,7 @@ export default function DiscoverPanel({ onOpenProfile, initialTerm = null, onUse
               />
             ))}
         </section>
+        </>
       )}
     </div>
   )

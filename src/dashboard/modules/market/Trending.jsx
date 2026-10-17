@@ -3,6 +3,7 @@ import { useTopPairs } from '../../services/marketData'
 import { isStablecoin } from '../../../services/dexscreener'
 import { ModuleError, ModuleLoading } from '../../components/ModuleStates'
 import PairRowList from '../../components/PairRowList'
+import { trendingPairs } from '../../../utils/trending'
 
 /**
  * What is unusually busy right now.
@@ -11,45 +12,25 @@ import PairRowList from '../../components/PairRowList'
  * than borrowed - and computed only from figures DexScreener actually returns:
  * the last hour's volume against the last day's average hour.
  *
- * A pair trading at its normal rate scores 1. A pair doing five times its usual
- * hourly volume scores 5. That is a real measurement of acceleration, which is
- * what the word is meant to convey - as opposed to ranking by raw volume,
- * which would just be the same large pairs every hour of every day.
+ * The computation used to be inline here and is now src/utils/trending.js,
+ * because the social section needs the same answer and two trending
+ * definitions in one app is a number that disagrees with itself depending on
+ * which page you are looking at. Moving it also gave it tests, which it did
+ * not have - including the one that matters: a pool created an hour ago has
+ * almost no daily volume, so without the floors its ratio is enormous and the
+ * top of this list is permanently whatever was deployed most recently.
  */
-
-/** Below this, an hour of volume is a couple of trades and the ratio is noise. */
-const MIN_HOUR_VOLUME = 5_000
-const MIN_LIQUIDITY = 25_000
-
 export default function Trending({ config }) {
   const { data: pairs, isLoading, isError, refetch } = useTopPairs()
 
-  const trending = useMemo(() => {
-    if (!pairs?.length) return []
-
-    return pairs
-      .map((p) => {
-        const hour = Number(p.volume?.h1 ?? 0)
-        const day = Number(p.volume?.h24 ?? 0)
-        const liquidity = Number(p.liquidity?.usd ?? 0)
-        const averageHour = day / 24
-
-        if (
-          hour < MIN_HOUR_VOLUME ||
-          averageHour <= 0 ||
-          liquidity < MIN_LIQUIDITY ||
-          isStablecoin(p.baseToken?.symbol)
-        ) {
-          return null
-        }
-
-        return { pair: p, score: hour / averageHour }
-      })
-      .filter(Boolean)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, config.limit ?? 10)
-      .map((row) => row.pair)
-  }, [pairs, config.limit])
+  const trending = useMemo(
+    () =>
+      trendingPairs(pairs, {
+        limit: config.limit ?? 10,
+        exclude: (p) => isStablecoin(p.baseToken?.symbol),
+      }).map((row) => row.pair),
+    [pairs, config.limit],
+  )
 
   if (isLoading && !pairs) return <ModuleLoading />
   if (isError) return <ModuleError onRetry={refetch} />
