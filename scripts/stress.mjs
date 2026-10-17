@@ -34,6 +34,17 @@ const browser = await chromium.launch({
   args: ['--no-sandbox'],
 })
 
+/*
+ * The tabs the social row offers, in order.
+ *
+ * Named here because two scenarios assert against it and both went stale the
+ * day Trending shipped - they checked a magic 3. The rule each of them is
+ * really about survived the change (the row is the surfaces that are about the
+ * site; the inbox and your own profile are not in it), so the list is stated
+ * once and the next tab updates one place.
+ */
+const SOCIAL_TABS = ['Feed', 'Rooms', 'Discover', 'Trending']
+
 const ADDRESS = '0x1111111111111111111111111111111111111111'
 const DESKTOP = { width: 1440, height: 900 }
 const PHONE = { width: 390, height: 844 }
@@ -2921,12 +2932,12 @@ for (const [path, expected] of CHROME_SURFACES) {
       if (title !== expected) throw new Error(`the header says "${title}"`)
 
       if (await page.locator('.social-tabs .xp-tab.active').count()) {
-        throw new Error('a tab is selected on a surface that is not one of the three')
+        throw new Error('a tab is selected on a surface that is not in the row')
       }
 
       // The row stays so there is a way back in. Without it, somebody on
       // their own inbox has only the browser's Back button.
-      if ((await page.locator('.social-tabs .xp-tab').count()) !== 3) {
+      if ((await page.locator('.social-tabs .xp-tab').count()) !== SOCIAL_TABS.length) {
         throw new Error('the tab row is missing or the wrong size')
       }
     },
@@ -3040,13 +3051,31 @@ await run('chrome / no bell when signed out', {
   },
 })
 
-await run('chat / the row is three, and none of them is the inbox', {
+/*
+ * The row is the surfaces that are about the site, and nothing that is about
+ * you.
+ *
+ * This asserted a count of three until Trending shipped, which is the second
+ * time a tab-count assertion in this file has gone stale - the first was
+ * Batch 2's "exactly two tabs" on a profile, which Batch 3 broke by adding
+ * Media and Reacted. Edited rather than deleted both times: what the scenario
+ * is for is that the inbox and your own profile stay OUT of the row, and that
+ * no unread badge lives on a sub-tab. Neither of those changed.
+ */
+await run('chat / the row is the site, and none of it is the inbox', {
   steps: async (page) => {
     await socialTab('Rooms')(page)
 
     const names = (await page.locator('.social-tabs .xp-tab').allInnerTexts()).map((n) => n.trim())
-    if (names.length !== 3) throw new Error(`the row has ${names.length} tabs: ${names.join('/')}`)
-    if (names.join('|') !== 'Feed|Rooms|Discover') throw new Error(names.join('|'))
+    if (names.join('|') !== SOCIAL_TABS.join('|')) {
+      throw new Error(`the row is ${names.join('/')}, expected ${SOCIAL_TABS.join('/')}`)
+    }
+
+    // The two that are about you are reached from the chrome and by URL, and
+    // must not appear here - that was the whole point of taking them out.
+    for (const absent of ['Notifications', 'My Profile', 'Moderation']) {
+      if (names.includes(absent)) throw new Error(`${absent} is back in the row`)
+    }
 
     // The badge moved to the chrome. One left behind here would mean two
     // places claiming to be the count, which is how they drift apart.

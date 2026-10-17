@@ -30,7 +30,7 @@ import { DEFAULT_ROOM, findRoom, isGroupRoom, roomToken, tokenRoom, tokenRoomLab
 import '../styles/social.css'
 
 /**
- * The social section: three places to go, and two surfaces that are about you.
+ * The social section: four places to go, and the surfaces that are about you.
  *
  * It was five tabs, which was two too many and the wrong two. Your own
  * profile and your own inbox are not places to browse - they are things you
@@ -38,18 +38,20 @@ import '../styles/social.css'
  * on. Leaving them in the row made the row an account screen with a feed
  * attached.
  *
- * So the tabs are the three that are about the site: the feed, the rooms, and
- * finding people. Your profile is in the account menu. The unread count is a
+ * So the tabs are the ones that are about the site rather than about you: the
+ * feed, the rooms, finding people, and what is trading unusually fast. That
+ * was three until Batch 6 added Trending, and the test the row has to pass is
+ * not a count - it is whether a tab is about the site or about you. Your profile is in the account menu. The unread count is a
  * bell beside it, visible from the screener rather than only once you are
  * already here - which was the whole problem with it being a badge on a
  * sub-tab.
  *
  * Both of those surfaces still exist and still have URLs, at /me and
  * /notifications. They render here without a tab selected, which is honest:
- * you are in the section, on something that is not one of the three.
+ * you are in the section, on something that is not in the row.
  */
-/** The three the row offers. Ordered outward: everything, then the rooms,
- *  then the people you have not met. */
+/** What the row offers. Ordered outward: everything, then the rooms, then the
+ *  people you have not met, then the market. */
 const TABS = [
   {
     id: 'feed',
@@ -214,7 +216,7 @@ export default function SocialView({ route, onNavigate, onOpenProfile, onOpenTok
   )
 
   /*
-   * What is on screen, whether or not it is one of the three.
+   * What is on screen, whether or not it is in the row.
    *
    * `TABS` first, then the two that are reached from the chrome, then the
    * feed - which is where the section opens and what an unrecognised route
